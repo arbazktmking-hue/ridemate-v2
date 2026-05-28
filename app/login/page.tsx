@@ -1,5 +1,7 @@
 export default function LoginPage() {
   return (
-    <h1>LOGIN PAGE WORKING 🔥</h1>
+    <div style={{color:"white",background:"black",height:"100vh"}}>
+      LOGIN PAGE LIVE 🔥
+    </div>
   );
 }
