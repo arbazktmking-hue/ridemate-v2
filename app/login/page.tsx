@@ -1,7 +1,7 @@
 "use client";
 
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
-import { auth } from "../../firebase";
+import { auth } from "../firebase";
 
 export default function LoginPage() {
 
