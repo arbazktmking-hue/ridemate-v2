@@ -1,9 +1,17 @@
 "use client";
 
-import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import {
+  GoogleAuthProvider,
+  signInWithPopup
+} from "firebase/auth";
+
 import { auth } from "../firebase";
 
+import { useRouter } from "next/navigation";
+
 export default function LoginPage() {
+
+  const router = useRouter();
 
   const loginWithGoogle = async () => {
 
@@ -16,9 +24,20 @@ export default function LoginPage() {
         provider
       );
 
-      alert(
-        `Welcome ${result.user.displayName} 🔥`
+      const user = {
+        name: result.user.displayName,
+        email: result.user.email,
+        image: result.user.photoURL,
+      };
+
+      localStorage.setItem(
+        "ridemateUser",
+        JSON.stringify(user)
       );
+
+      alert(`Welcome ${user.name} 🔥`);
+
+      router.push("/profile");
 
     } catch (error) {
 

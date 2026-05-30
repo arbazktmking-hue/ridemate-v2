@@ -2,15 +2,61 @@
 
 import { useState } from "react";
 
+import {
+  collection,
+  addDoc
+} from "firebase/firestore";
+
+import { db } from "../firebase";
+
 export default function CreateTripPage() {
 
-  const [destination, setDestination] = useState("");
-  const [bike, setBike] = useState("");
-  const [caption, setCaption] = useState("");
+const [destination, setDestination] = useState("");
+const [bike, setBike] = useState("");
+const [caption, setCaption] = useState("");
 
-  const [tripImage, setTripImage] = useState(
-    "https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=1200&auto=format&fit=crop"
-  );
+const [tripImage, setTripImage] = useState(
+  "https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=1200&auto=format&fit=crop"
+);
+
+const postTrip = async () => {
+
+  try {
+
+    const user = JSON.parse(
+      localStorage.getItem("ridemateUser") || "{}"
+    );
+
+    await addDoc(
+      collection(db, "trips"),
+      {
+        destination,
+        bike,
+        caption,
+        image: tripImage,
+        userName: user.name,
+        userImage: user.image,
+        createdAt: new Date(),
+        likes: 0,
+        comments: [],
+      }
+    );
+
+    alert("Trip Posted Successfully 🔥");
+
+    setDestination("");
+    setBike("");
+    setCaption("");
+
+  } catch (error) {
+
+    console.error("FIRESTORE ERROR:", error);
+
+    alert("Failed to post trip");
+
+  }
+
+};
 
   return (
     <main className="min-h-screen bg-black text-white px-6 py-10">
@@ -74,7 +120,7 @@ export default function CreateTripPage() {
           />
 
           <button
-            onClick={() => alert("Trip Posted Successfully 🔥")}
+            onClick={postTrip}
             className="w-full bg-orange-500 py-4 rounded-2xl text-xl font-black hover:scale-105 transition"
           >
             Post Trip

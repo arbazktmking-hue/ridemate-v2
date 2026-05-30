@@ -1,24 +1,138 @@
-const trips = [
-  {
-    rider: "Arbhaz Pasha",
-    bike: "KTM Duke 390",
-    destination: "Tawang",
-    caption: "Conquering mountains one ride at a time 🏔🔥",
-    image:
-      "https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=1200&auto=format&fit=crop",
-  },
+"use client";
 
-  {
-    rider: "Rahul Rider",
-    bike: "Royal Enfield Himalayan",
-    destination: "Leh Ladakh",
-    caption: "Roads test the rider, mountains reward the soul ❤️",
-    image:
-      "https://images.unsplash.com/photo-1511919884226-fd3cad34687c?q=80&w=1200&auto=format&fit=crop",
-  },
-];
+import { useEffect, useState } from "react";
+
+import {
+  collection,
+  getDocs,
+  query,
+  orderBy,
+  doc,
+  updateDoc,
+  arrayUnion
+} from "firebase/firestore";
+
+import { db } from "../firebase";
 
 export default function FeedPage() {
+  
+
+  const [trips, setTrips] = useState<any[]>([]);
+
+  useEffect(() => {
+
+    const fetchTrips = async () => {
+
+      try {
+
+        const q = query(
+  collection(db, "trips")
+);
+
+        const querySnapshot = await getDocs(q);
+
+        const loadedTrips: any[] = [];
+
+        querySnapshot.forEach((doc) => {
+
+          loadedTrips.push({
+            id: doc.id,
+            ...doc.data(),
+          });
+
+        });
+
+        setTrips(loadedTrips);
+
+      } catch (error) {
+
+        console.log(error);
+
+      }
+
+    };
+
+    fetchTrips();
+
+  }, []);
+  const likeTrip = async (
+  id: string,
+  currentLikes: number
+) => {
+
+  try {
+
+    const tripRef = doc(db, "trips", id);
+
+    await updateDoc(tripRef, {
+      likes: currentLikes + 1,
+    });
+
+    setTrips((prevTrips) =>
+      prevTrips.map((trip) =>
+        trip.id === id
+          ? {
+              ...trip,
+              likes: currentLikes + 1,
+            }
+          : trip
+      )
+    );
+
+  } catch (error) {
+
+    console.log(error);
+
+  }
+
+};
+const addComment = async (
+  tripId: string,
+  commentText: string
+) => {
+
+  if (!commentText.trim()) return;
+
+  try {
+
+    const tripRef = doc(db, "trips", tripId);
+
+    const user = JSON.parse(
+  localStorage.getItem("ridemateUser") || "{}"
+);
+
+await updateDoc(tripRef, {
+  comments: arrayUnion({
+    user: user.name,
+    image: user.image,
+    text: commentText,
+  }),
+});
+
+    setTrips((prevTrips) =>
+  prevTrips.map((trip) =>
+    trip.id === tripId
+      ? {
+          ...trip,
+          comments: [
+            ...(trip.comments || []),
+            {
+              user: user.name,
+              image: user.image,
+              text: commentText,
+            },
+          ],
+        }
+      : trip
+  )
+);
+} catch (error) {
+
+  console.log(error);
+
+}
+
+};
   return (
     <main className="min-h-screen bg-black text-white px-6 py-10">
 
@@ -30,9 +144,9 @@ export default function FeedPage() {
 
         <div className="space-y-10">
 
-          {trips.map((trip, index) => (
+          {trips.map((trip) => (
             <div
-              key={index}
+              key={trip.id}
               className="bg-zinc-900 rounded-3xl overflow-hidden border border-zinc-800"
             >
 
@@ -58,13 +172,88 @@ export default function FeedPage() {
 
                 <div className="mt-6 flex items-center justify-between">
 
-                  <p className="font-bold">
-                    👤 {trip.rider}
-                  </p>
+                  <div className="flex items-center gap-3">
 
-                  <button className="bg-orange-500 px-5 py-2 rounded-xl font-bold hover:scale-105 transition">
-                    ❤️ Like
-                  </button>
+                    <img
+                      src={trip.userImage}
+                      alt="Rider"
+                      className="w-12 h-12 rounded-full"
+                    />
+
+                    <p className="font-bold">
+                      {trip.userName}
+                    </p>
+
+                  </div>
+
+                  <button
+  onClick={() =>
+    likeTrip(
+      trip.id,
+      trip.likes || 0
+    )
+  }
+  className="bg-orange-500 px-5 py-2 rounded-xl font-bold hover:scale-105 transition"
+>
+  ❤️ {trip.likes || 0}
+</button>
+<div className="mt-6">
+  <input
+    type="text"
+    placeholder="Write a comment..."
+    className="w-full p-3 rounded-xl bg-black border border-zinc-700"
+    onKeyDown={(e) => {
+
+      if (e.key === "Enter") {
+
+        addComment(
+          trip.id,
+          e.currentTarget.value
+        );
+
+        e.currentTarget.value = "";
+
+      }
+
+    }}
+  />
+
+  <div className="mt-4 space-y-2">
+
+    {(trip.comments || []).map(
+      (comment: any, index: number) => (
+
+        <div
+          key={index}
+          className="bg-black p-3 rounded-xl border border-zinc-800"
+        >
+
+          <div className="flex items-center gap-3 mb-2">
+
+  <img
+    src={comment.image}
+    alt="User"
+    className="w-8 h-8 rounded-full"
+  />
+
+  <p className="font-bold text-orange-500">
+    {comment.user}
+  </p>
+
+</div>
+
+          <p className="text-zinc-300">
+            {comment.text}
+          </p>
+
+        </div>
+
+      )
+    )}
+
+  </div>
+
+</div>
 
                 </div>
 
