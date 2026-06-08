@@ -1,5 +1,7 @@
 "use client";
-
+<h1 className="text-red-500 text-5xl">
+  PROFILE VERSION JUNE 2026
+</h1>
 import { useEffect, useState } from "react";
 
 import { useRouter } from "next/navigation";
