@@ -9,7 +9,11 @@ import {
   orderBy,
   doc,
   updateDoc,
-  arrayUnion
+  arrayUnion,
+  addDoc,
+  setDoc,
+  deleteDoc,
+  getDoc
 } from "firebase/firestore";
 
 import { db } from "../firebase";
@@ -18,6 +22,7 @@ export default function FeedPage() {
   
 
   const [trips, setTrips] = useState<any[]>([]);
+  const [savedTrips, setSavedTrips] = useState<string[]>([]);
 
   useEffect(() => {
 
@@ -28,22 +33,53 @@ export default function FeedPage() {
         const q = query(
   collection(db, "trips")
 );
+const currentUser = JSON.parse(
+  localStorage.getItem("ridemateUser") || "{}"
+);
 
+const followsSnapshot = await getDocs(
+  collection(db, "follows")
+);
+
+const following: string[] = [];
+
+followsSnapshot.forEach((doc) => {
+
+  const follow = doc.data();
+
+  if (
+    follow.follower === currentUser.name
+  ) {
+    following.push(
+      follow.following
+    );
+  }
+
+});
         const querySnapshot = await getDocs(q);
 
         const loadedTrips: any[] = [];
 
         querySnapshot.forEach((doc) => {
 
-          loadedTrips.push({
-            id: doc.id,
-            ...doc.data(),
-          });
+         const trip = doc.data();
+
+if (
+  trip.userName === currentUser.name ||
+  following.includes(trip.userName)
+) {
+
+  loadedTrips.push({
+    id: doc.id,
+    ...trip,
+  });
+
+}
 
         });
 
         setTrips(loadedTrips);
-
+loadedTrips.reverse();
       } catch (error) {
 
         console.log(error);
@@ -55,6 +91,82 @@ export default function FeedPage() {
     fetchTrips();
 
   }, []);
+  useEffect(() => {
+
+  const loadSavedTrips = async () => {
+
+    const user = JSON.parse(
+      localStorage.getItem("ridemateUser") || "{}"
+    );
+
+    if (!user.name) return;
+
+    const snapshot = await getDocs(
+      collection(db, "savedTrips")
+    );
+
+    const saved: string[] = [];
+
+    snapshot.forEach((doc) => {
+
+      const data = doc.data();
+
+      if (data.user === user.name) {
+        saved.push(data.tripId);
+      }
+
+    });
+
+    setSavedTrips(saved);
+
+  };
+
+  loadSavedTrips();
+
+}, []);
+const toggleSaveTrip = async (
+  tripId: string
+) => {
+
+  const user = JSON.parse(
+    localStorage.getItem("ridemateUser") || "{}"
+  );
+
+  const saveId =
+    `${user.name}_${tripId}`;
+
+  if (
+    savedTrips.includes(tripId)
+  ) {
+
+    await deleteDoc(
+      doc(db, "savedTrips", saveId)
+    );
+
+    setSavedTrips((prev) =>
+      prev.filter(
+        (id) => id !== tripId
+      )
+    );
+
+  } else {
+
+    await setDoc(
+      doc(db, "savedTrips", saveId),
+      {
+        user: user.name,
+        tripId,
+      }
+    );
+
+    setSavedTrips((prev) => [
+      ...prev,
+      tripId,
+    ]);
+
+  }
+
+};
   const likeTrip = async (
   id: string,
   currentLikes: number
@@ -67,7 +179,29 @@ export default function FeedPage() {
     await updateDoc(tripRef, {
       likes: currentLikes + 1,
     });
+const currentUser = JSON.parse(
+  localStorage.getItem("ridemateUser") || "{}"
+);
 
+const trip = trips.find(
+  (t) => t.id === id
+);
+
+if (
+  trip &&
+  trip.userName !== currentUser.name
+) {
+
+  await addDoc(
+    collection(db, "notifications"),
+    {
+      user: trip.userName,
+      text: `${currentUser.name} liked your trip ❤️`,
+      createdAt: Date.now(),
+    }
+  );
+
+}
     setTrips((prevTrips) =>
       prevTrips.map((trip) =>
         trip.id === id
@@ -108,7 +242,25 @@ await updateDoc(tripRef, {
     text: commentText,
   }),
 });
+const trip = trips.find(
+  (t) => t.id === tripId
+);
 
+if (
+  trip &&
+  trip.userName !== user.name
+) {
+
+  await addDoc(
+    collection(db, "notifications"),
+    {
+      user: trip.userName,
+      text: `${user.name} commented on your trip 💬`,
+      createdAt: Date.now(),
+    }
+  );
+
+}
     setTrips((prevTrips) =>
   prevTrips.map((trip) =>
     trip.id === tripId
@@ -131,6 +283,33 @@ await updateDoc(tripRef, {
   console.log(error);
 
 }
+
+};
+const requestToJoin = async (trip: any) => {
+
+  const currentUser = JSON.parse(
+    localStorage.getItem("ridemateUser") || "{}"
+  );
+
+  if (currentUser.name === trip.userName) {
+    alert("You cannot join your own ride.");
+    return;
+  }
+
+  await addDoc(
+    collection(db, "rideRequests"),
+    {
+      tripId: trip.id,
+      tripOwner: trip.userName,
+      requester: currentUser.name,
+      requesterImage: currentUser.image || "",
+      destination: trip.destination,
+      createdAt: Date.now(),
+      status: "pending",
+    }
+  );
+
+  alert("Ride request sent 🚀");
 
 };
   return (
@@ -165,7 +344,12 @@ await updateDoc(tripRef, {
                 <p className="text-orange-500 mt-2 font-bold">
                   {trip.bike}
                 </p>
-
+<p className="text-zinc-400">
+  📍 {trip.startLocation} → {trip.endLocation}
+</p>
+<p className="text-orange-400 font-bold">
+  🛣️ {trip.distance || 0} KM
+</p>
                 <p className="text-zinc-300 mt-4">
                   {trip.caption}
                 </p>
@@ -174,17 +358,30 @@ await updateDoc(tripRef, {
 
                   <div className="flex items-center gap-3">
 
-                    <img
-                      src={trip.userImage}
-                      alt="Rider"
-                      className="w-12 h-12 rounded-full"
-                    />
+  <img
+    src={trip.userImage}
+    alt="Rider"
+    className="w-12 h-12 rounded-full"
+  />
 
-                    <p className="font-bold">
-                      {trip.userName}
-                    </p>
+  <p className="font-bold">
+    {trip.userName}
+  </p>
 
-                  </div>
+  {JSON.parse(
+    localStorage.getItem("ridemateUser") || "{}"
+  ).name !== trip.userName && (
+
+    <button
+      onClick={() => requestToJoin(trip)}
+      className="bg-green-600 px-4 py-2 rounded-xl font-bold hover:scale-105 transition"
+    >
+      Join Ride 🚀
+    </button>
+
+  )}
+
+</div>
 
                   <button
   onClick={() =>
@@ -195,6 +392,18 @@ await updateDoc(tripRef, {
   }
   className="bg-orange-500 px-5 py-2 rounded-xl font-bold hover:scale-105 transition"
 >
+  <button
+  onClick={() =>
+    toggleSaveTrip(
+      trip.id
+    )
+  }
+  className="bg-zinc-700 px-5 py-2 rounded-xl font-bold hover:scale-105 transition"
+>
+  {savedTrips.includes(trip.id)
+    ? "⭐ Saved"
+    : "⭐ Save"}
+</button>
   ❤️ {trip.likes || 0}
 </button>
 <div className="mt-6">

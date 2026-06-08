@@ -14,7 +14,9 @@ export default function CreateTripPage() {
 const [destination, setDestination] = useState("");
 const [bike, setBike] = useState("");
 const [caption, setCaption] = useState("");
-
+const [startLocation, setStartLocation] = useState("");
+const [endLocation, setEndLocation] = useState("");
+const [distance, setDistance] = useState("");
 const [tripImage, setTripImage] = useState(
   "https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=1200&auto=format&fit=crop"
 );
@@ -28,25 +30,31 @@ const postTrip = async () => {
     );
 
     await addDoc(
-      collection(db, "trips"),
-      {
-        destination,
-        bike,
-        caption,
-        image: tripImage,
-        userName: user.name,
-        userImage: user.image,
-        createdAt: new Date(),
-        likes: 0,
-        comments: [],
-      }
-    );
+  collection(db, "trips"),
+  {
+  destination,
+  startLocation,
+  endLocation,
+  distance,
+  bike,
+  caption,
+    image: tripImage,
+    userName: user.name,
+    userImage: user.image,
+    createdAt: new Date(),
+    likes: 0,
+    comments: [],
+  }
+);
 
     alert("Trip Posted Successfully 🔥");
 
-    setDestination("");
-    setBike("");
-    setCaption("");
+   setDestination("");
+setStartLocation("");
+setEndLocation("");
+setDistance("");
+setBike("");
+setCaption("");
 
   } catch (error) {
 
@@ -103,7 +111,28 @@ const postTrip = async () => {
             onChange={(e) => setDestination(e.target.value)}
             className="w-full p-4 rounded-2xl bg-black border border-zinc-700"
           />
+<input
+  type="text"
+  placeholder="Start Location"
+  value={startLocation}
+  onChange={(e) => setStartLocation(e.target.value)}
+  className="w-full p-4 rounded-2xl bg-black border border-zinc-700"
+/>
 
+<input
+  type="text"
+  placeholder="End Location"
+  value={endLocation}
+  onChange={(e) => setEndLocation(e.target.value)}
+  className="w-full p-4 rounded-2xl bg-black border border-zinc-700"
+/>
+<input
+  type="number"
+  placeholder="Distance (KM)"
+  value={distance}
+  onChange={(e) => setDistance(e.target.value)}
+  className="w-full p-4 rounded-2xl bg-black border border-zinc-700"
+/>
           <input
             type="text"
             placeholder="Bike Name"
