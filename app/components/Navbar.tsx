@@ -10,28 +10,28 @@ export default function Navbar() {
 
         <a
           href="/"
-          className="hover:text-orange-500 transition"
+        className="text-white hover:text-orange-500 transition"
         >
           Home
         </a>
 
         <a
           href="/feed"
-          className="hover:text-orange-500 transition"
+        className="text-white hover:text-orange-500 transition"
         >
           Feed
         </a>
 
         <a
           href="/create-trip"
-          className="hover:text-orange-500 transition"
+        className="text-white hover:text-orange-500 transition"
         >
           Create Trip
         </a>
 
         <a
           href="/profile"
-          className="hover:text-orange-500 transition"
+        className="text-white hover:text-orange-500 transition"
         >
           Profile
         </a>
