@@ -1,12 +1,12 @@
 export default function Navbar() {
   return (
-    <nav className="w-full bg-zinc-900 text-white border-b border-zinc-800 px-6 py-4 flex items-center justify-between">
+    <nav className="w-full bg-zinc-900 text-white border-b border-zinc-800 px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
 
       <h1 className="text-3xl font-black text-orange-500">
         RideMate 🏍🔥
       </h1>
 
-      <div className="flex gap-4">
+      <div className="flex flex-wrap gap-3 text-sm md:text-base">
 
         <a
           href="/"
