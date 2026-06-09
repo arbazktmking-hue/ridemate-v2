@@ -383,29 +383,32 @@ const requestToJoin = async (trip: any) => {
 
 </div>
 
-                  <button
-  onClick={() =>
-    likeTrip(
-      trip.id,
-      trip.likes || 0
-    )
-  }
-  className="bg-orange-500 px-5 py-2 rounded-xl font-bold hover:scale-105 transition"
->
+  <div className="flex gap-3">
+
   <button
-  onClick={() =>
-    toggleSaveTrip(
-      trip.id
-    )
-  }
-  className="bg-zinc-700 px-5 py-2 rounded-xl font-bold hover:scale-105 transition"
->
-  {savedTrips.includes(trip.id)
-    ? "⭐ Saved"
-    : "⭐ Save"}
-</button>
-  ❤️ {trip.likes || 0}
-</button>
+    onClick={() =>
+      toggleSaveTrip(trip.id)
+    }
+    className="bg-zinc-700 px-5 py-2 rounded-xl font-bold hover:scale-105 transition"
+  >
+    {savedTrips.includes(trip.id)
+      ? "⭐ Saved"
+      : "⭐ Save"}
+  </button>
+
+  <button
+    onClick={() =>
+      likeTrip(
+        trip.id,
+        trip.likes || 0
+      )
+    }
+    className="bg-orange-500 px-5 py-2 rounded-xl font-bold hover:scale-105 transition"
+  >
+    ❤️ {trip.likes || 0}
+  </button>
+
+</div>
 <div className="mt-6">
   <input
     type="text"

@@ -1,7 +1,4 @@
 "use client";
-<h1 className="text-red-500 text-5xl">
-  PROFILE VERSION JUNE 2026
-</h1>
 import { useEffect, useState } from "react";
 
 import { useRouter } from "next/navigation";
@@ -33,9 +30,11 @@ const [newCaption, setNewCaption] = useState("");
 
     if (!savedUser) {
 
-      router.push("/login");
+  router.replace("/login");
 
-    } else {
+  return;
+
+} else {
 
     const currentUser = JSON.parse(savedUser);
 
@@ -170,7 +169,7 @@ const deleteTrip = async (tripId: string) => {
 
   <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
 
-    <div className="bg-zinc-900 p-6 rounded-3xl w-[500px] border border-zinc-700">
+    <div className="bg-zinc-900 p-6 rounded-3xl w-[95%] max-w-[500px] border border-zinc-700">
 
       <h2 className="text-3xl font-black text-orange-500 mb-4">
         Edit Trip ✏️
