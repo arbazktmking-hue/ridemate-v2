@@ -64,22 +64,16 @@ followsSnapshot.forEach((doc) => {
 
          const trip = doc.data();
 
-if (
-  trip.userName === currentUser.name ||
-  following.includes(trip.userName)
-) {
-
-  loadedTrips.push({
-    id: doc.id,
-    ...trip,
-  });
-
-}
+loadedTrips.push({
+  id: doc.id,
+  ...trip,
+});
 
         });
 
-        setTrips(loadedTrips);
-loadedTrips.reverse();
+      setTrips(
+  loadedTrips.reverse()
+);
       } catch (error) {
 
         console.log(error);
