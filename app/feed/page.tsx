@@ -31,31 +31,9 @@ export default function FeedPage() {
       try {
 
         const q = query(
-  collection(db, "trips")
+  collection(db, "trips"),
+  orderBy("createdAt", "desc")
 );
-const currentUser = JSON.parse(
-  localStorage.getItem("ridemateUser") || "{}"
-);
-
-const followsSnapshot = await getDocs(
-  collection(db, "follows")
-);
-
-const following: string[] = [];
-
-followsSnapshot.forEach((doc) => {
-
-  const follow = doc.data();
-
-  if (
-    follow.follower === currentUser.name
-  ) {
-    following.push(
-      follow.following
-    );
-  }
-
-});
         const querySnapshot = await getDocs(q);
 
         const loadedTrips: any[] = [];
@@ -71,9 +49,7 @@ loadedTrips.push({
 
         });
 
-      setTrips(
-  loadedTrips.reverse()
-);
+      setTrips(loadedTrips);
       } catch (error) {
 
         console.log(error);
@@ -312,8 +288,8 @@ const requestToJoin = async (trip: any) => {
       <div className="max-w-5xl mx-auto">
 
         <h1 className="text-5xl font-black text-orange-500 mb-10">
-          Ride Feed 🔥
-        </h1>
+  Ride Feed 🔥 ({trips.length})
+</h1>
 
         <div className="space-y-10">
 
@@ -358,9 +334,12 @@ const requestToJoin = async (trip: any) => {
     className="w-12 h-12 rounded-full"
   />
 
-  <p className="font-bold">
-    {trip.userName}
-  </p>
+  <a
+  href={`/rider/${trip.userName}`}
+  className="font-bold text-orange-500 hover:underline"
+>
+  {trip.userName}
+</a>
 
   {JSON.parse(
     localStorage.getItem("ridemateUser") || "{}"
@@ -401,7 +380,6 @@ const requestToJoin = async (trip: any) => {
   >
     ❤️ {trip.likes || 0}
   </button>
-
 </div>
 <div className="mt-6">
   <input

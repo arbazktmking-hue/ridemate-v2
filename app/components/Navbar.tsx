@@ -42,7 +42,12 @@ export default function Navbar() {
   >
     Create Trip
   </a>
-
+<a
+  href="/requests"
+  className="px-5 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-white hover:bg-orange-500 hover:border-orange-500 transition"
+>
+  Requests
+</a>
   <a
     href="/profile"
     className="px-5 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-white hover:bg-orange-500 hover:border-orange-500 transition"
