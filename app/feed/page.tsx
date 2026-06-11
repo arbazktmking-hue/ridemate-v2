@@ -266,20 +266,30 @@ const requestToJoin = async (trip: any) => {
     return;
   }
 
-  await addDoc(
-    collection(db, "rideRequests"),
-    {
-      tripId: trip.id,
-      tripOwner: trip.userName,
-      requester: currentUser.name,
-      requesterImage: currentUser.image || "",
-      destination: trip.destination,
-      createdAt: Date.now(),
-      status: "pending",
-    }
-  );
+await addDoc(
+  collection(db, "rideRequests"),
+  {
+    tripId: trip.id,
+    tripOwner: trip.userName,
+    requester: currentUser.name,
+    requesterImage: currentUser.image || "",
+    destination: trip.destination,
+    createdAt: Date.now(),
+    status: "pending",
+  }
+);
 
-  alert("Ride request sent 🚀");
+// 🔥 Send notification to ride owner
+await addDoc(
+  collection(db, "notifications"),
+  {
+    user: trip.userName,
+    text: `${currentUser.name} wants to join your ride 🚀`,
+    createdAt: Date.now(),
+  }
+);
+
+alert("Ride request sent 🚀");
 
 };
   return (
