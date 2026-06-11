@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
 import {
   collection,
   getDocs
@@ -10,112 +9,125 @@ import {
 import { db } from "../firebase";
 
 export default function Navbar() {
+
+  const [menuOpen, setMenuOpen] = useState(false);
   const [notificationCount, setNotificationCount] =
-  useState(0);
+    useState(0);
+
   useEffect(() => {
 
-  const loadNotifications = async () => {
+    const loadNotifications = async () => {
 
-    const user = JSON.parse(
-      localStorage.getItem("ridemateUser") || "{}"
-    );
+      const user = JSON.parse(
+        localStorage.getItem("ridemateUser") || "{}"
+      );
 
-    if (!user.name) return;
+      if (!user.name) return;
 
-    const snapshot = await getDocs(
-      collection(db, "notifications")
-    );
+      const snapshot = await getDocs(
+        collection(db, "notifications")
+      );
 
-    let count = 0;
+      let count = 0;
 
-    snapshot.forEach((doc) => {
+      snapshot.forEach((doc) => {
 
-      const notification = doc.data();
+        const notification = doc.data();
 
-      if (
-        notification.user === user.name
-      ) {
-        count++;
-      }
+        if (
+          notification.user === user.name
+        ) {
+          count++;
+        }
 
-    });
+      });
 
-    setNotificationCount(count);
+      setNotificationCount(count);
 
-  };
+    };
 
-  loadNotifications();
+    loadNotifications();
 
-}, []);
+  }, []);
+
   return (
-    <nav className="w-full bg-zinc-900 text-white border-b border-zinc-800 px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+    <>
+      <nav className="bg-zinc-900 text-white border-b border-zinc-800 px-4 py-4 flex items-center justify-between">
 
-      <h1 className="text-3xl font-black text-orange-500">
-        RideMate 🏍🔥
-      </h1>
+        <button
+          onClick={() =>
+            setMenuOpen(!menuOpen)
+          }
+          className="text-3xl font-black"
+        >
+          ☰
+        </button>
 
-      <div className="flex flex-wrap justify-center gap-3 text-sm md:text-base">
+        <h1 className="text-3xl font-black text-orange-500">
+          RideMate 🏍🔥
+        </h1>
 
-  <a
-    href="/"
-    className="px-5 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-white hover:bg-orange-500 hover:border-orange-500 transition"
-  >
-    Home
-  </a>
+      </nav>
 
-  <a
-    href="/feed"
-    className="px-5 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-white hover:bg-orange-500 hover:border-orange-500 transition"
-  >
-    Feed
-  </a>
+      {menuOpen && (
 
-  <a
-    href="/leaderboard"
-    className="px-5 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-white hover:bg-orange-500 hover:border-orange-500 transition"
-  >
-    Leaderboard
-  </a>
+        <div className="fixed left-0 top-0 h-screen w-72 bg-zinc-950 border-r border-zinc-800 p-6 z-50">
 
-  <a
-    href="/inbox"
-    className="px-5 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-white hover:bg-orange-500 hover:border-orange-500 transition"
-  >
-    Inbox
-  </a>
+          <button
+            onClick={() =>
+              setMenuOpen(false)
+            }
+            className="text-3xl mb-8"
+          >
+            ✕
+          </button>
 
-  <a
-    href="/create-trip"
-    className="px-5 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-white hover:bg-orange-500 hover:border-orange-500 transition"
-  >
-    Create Trip
-  </a>
-<a
-  href="/requests"
-  className="px-5 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-white hover:bg-orange-500 hover:border-orange-500 transition"
->
-  Requests
-</a>
-  <a
-    href="/profile"
-    className="px-5 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-white hover:bg-orange-500 hover:border-orange-500 transition"
-  >
-    Profile
-  </a>
-<a
-  href="/notifications"
-  className="relative px-5 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-white hover:bg-orange-500 hover:border-orange-500 transition"
->
-  🔔 Notifications
+          <div className="flex flex-col gap-4 text-lg">
 
-  {notificationCount > 0 && (
-    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-black rounded-full px-2 py-1">
-      {notificationCount}
-    </span>
-  )}
-</a>
-</div>
+            <a href="/">🏠 Home</a>
 
-    </nav>
+            <a href="/feed">
+              🔥 Feed
+            </a>
+
+            <a href="/leaderboard">
+              🏆 Leaderboard
+            </a>
+
+            <a href="/inbox">
+              💬 Inbox
+            </a>
+
+            <a href="/create-trip">
+              🏍 Create Trip
+            </a>
+
+            <a href="/requests">
+              🚀 Requests
+            </a>
+
+            <a
+              href="/notifications"
+              className="relative"
+            >
+              🔔 Notifications
+
+              {notificationCount > 0 && (
+                <span className="ml-2 bg-red-500 text-white text-xs font-black rounded-full px-2 py-1">
+                  {notificationCount}
+                </span>
+              )}
+            </a>
+
+            <a href="/profile">
+              👤 Profile
+            </a>
+
+          </div>
+
+        </div>
+
+      )}
+    </>
   );
 }
