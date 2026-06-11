@@ -87,9 +87,11 @@ export default function Navbar() {
 
       {menuOpen && (
 
-        <div className="
+      <div className="
 fixed left-0 top-0 h-screen w-72
 bg-zinc-950 border-r border-zinc-800 p-6 z-50
+overflow-y-auto
+pb-20
 animate-[slideIn_0.25s_ease-out]
 ">
 
