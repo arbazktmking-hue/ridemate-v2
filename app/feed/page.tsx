@@ -12,8 +12,7 @@ import {
   arrayUnion,
   addDoc,
   setDoc,
-  deleteDoc,
-  getDoc
+  deleteDoc
 } from "firebase/firestore";
 
 import { db } from "../firebase";
@@ -265,7 +264,28 @@ const requestToJoin = async (trip: any) => {
     alert("You cannot join your own ride.");
     return;
   }
+const existingRequests = await getDocs(
+  collection(db, "rideRequests")
+);
 
+let alreadyRequested = false;
+
+existingRequests.forEach((doc) => {
+  const request = doc.data();
+
+  if (
+    request.tripId === trip.id &&
+    request.requester === currentUser.name &&
+    request.status === "pending"
+  ) {
+    alreadyRequested = true;
+  }
+});
+
+if (alreadyRequested) {
+  alert("Request already sent 🚀");
+  return;
+}
 await addDoc(
   collection(db, "rideRequests"),
   {
@@ -312,7 +332,7 @@ alert("Ride request sent 🚀");
               <img
                 src={trip.image}
                 alt="Trip"
-                className="w-full h-[400px] object-cover"
+               className="w-full h-[250px] md:h-[400px] object-cover"
               />
 
               <div className="p-6">
@@ -334,9 +354,9 @@ alert("Ride request sent 🚀");
                   {trip.caption}
                 </p>
 
-                <div className="mt-6 flex items-center justify-between">
+                <div className="mt-6 space-y-4">
 
-                  <div className="flex items-center gap-3">
+                 <div className="flex flex-wrap items-center gap-3">
 
   <img
     src={trip.userImage}
@@ -346,7 +366,7 @@ alert("Ride request sent 🚀");
 
   <a
   href={`/rider/${trip.userName}`}
-  className="font-bold text-orange-500 hover:underline"
+  className="font-bold text-orange-500 hover:underline text-lg"
 >
   {trip.userName}
 </a>
@@ -355,24 +375,26 @@ alert("Ride request sent 🚀");
     localStorage.getItem("ridemateUser") || "{}"
   ).name !== trip.userName && (
 
-    <button
-      onClick={() => requestToJoin(trip)}
-      className="bg-green-600 px-4 py-2 rounded-xl font-bold hover:scale-105 transition"
-    >
-      Join Ride 🚀
-    </button>
+    <div>
+  <button
+    onClick={() => requestToJoin(trip)}
+    className="w-full md:w-auto bg-green-600 px-4 py-3 rounded-xl font-bold hover:scale-105 transition"
+  >
+    Join Ride 🚀
+  </button>
+</div>
 
   )}
 
 </div>
 
-  <div className="flex gap-3">
+ <div className="grid grid-cols-2 gap-3">
 
   <button
     onClick={() =>
       toggleSaveTrip(trip.id)
     }
-    className="bg-zinc-700 px-5 py-2 rounded-xl font-bold hover:scale-105 transition"
+    className="w-full bg-zinc-700 py-3 rounded-xl font-bold hover:scale-105 transition"
   >
     {savedTrips.includes(trip.id)
       ? "⭐ Saved"
@@ -386,16 +408,20 @@ alert("Ride request sent 🚀");
         trip.likes || 0
       )
     }
-    className="bg-orange-500 px-5 py-2 rounded-xl font-bold hover:scale-105 transition"
+    className="w-full bg-orange-500 py-3 rounded-xl font-bold hover:scale-105 transition"
   >
     ❤️ {trip.likes || 0}
   </button>
+
 </div>
+<p className="text-zinc-400 text-sm text-center mt-2">
+  💬 {(trip.comments || []).length} comments
+</p>
 <div className="mt-6">
   <input
     type="text"
     placeholder="Write a comment..."
-    className="w-full p-3 rounded-xl bg-black border border-zinc-700"
+   className="w-full p-4 rounded-xl bg-black border border-zinc-700 text-base"
     onKeyDown={(e) => {
 
       if (e.key === "Enter") {
