@@ -10,9 +10,25 @@ import { db } from "../firebase";
 
 export default function Navbar() {
 
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpen, setMenuOpen] =
+    useState(false);
+
   const [notificationCount, setNotificationCount] =
     useState(0);
+
+  const [user, setUser] =
+    useState<any>(null);
+
+  useEffect(() => {
+
+    const savedUser =
+      localStorage.getItem("ridemateUser");
+
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+
+  }, []);
 
   useEffect(() => {
 
@@ -49,6 +65,27 @@ export default function Navbar() {
     loadNotifications();
 
   }, []);
+  {user && (
+
+  <div className="mb-8 flex flex-col items-center">
+
+    <img
+      src={user.image}
+      alt="Profile"
+      className="w-20 h-20 rounded-full border-4 border-orange-500"
+    />
+
+    <h2 className="mt-3 font-black text-lg">
+      {user.name}
+    </h2>
+
+    <p className="text-zinc-400 text-sm">
+      {user.email}
+    </p>
+
+  </div>
+
+)}
 
   return (
     <>
@@ -71,7 +108,11 @@ export default function Navbar() {
 
       {menuOpen && (
 
-        <div className="fixed left-0 top-0 h-screen w-72 bg-zinc-950 border-r border-zinc-800 p-6 z-50">
+        <div className="
+fixed left-0 top-0 h-screen w-72
+bg-zinc-950 border-r border-zinc-800 p-6 z-50
+animate-[slideIn_0.25s_ease-out]
+">
 
           <button
             onClick={() =>
