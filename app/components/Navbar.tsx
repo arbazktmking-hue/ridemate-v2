@@ -65,27 +65,6 @@ export default function Navbar() {
     loadNotifications();
 
   }, []);
-  {user && (
-
-  <div className="mb-8 flex flex-col items-center">
-
-    <img
-      src={user.image}
-      alt="Profile"
-      className="w-20 h-20 rounded-full border-4 border-orange-500"
-    />
-
-    <h2 className="mt-3 font-black text-lg">
-      {user.name}
-    </h2>
-
-    <p className="text-zinc-400 text-sm">
-      {user.email}
-    </p>
-
-  </div>
-
-)}
 
   return (
     <>
@@ -122,6 +101,27 @@ animate-[slideIn_0.25s_ease-out]
           >
             ✕
           </button>
+{user && (
+
+  <div className="mb-8 flex flex-col items-center">
+
+    <img
+      src={user.image}
+      alt="Profile"
+      className="w-20 h-20 rounded-full border-4 border-orange-500"
+    />
+
+    <h2 className="mt-3 font-black text-lg">
+      {user.name}
+    </h2>
+
+    <p className="text-zinc-400 text-sm">
+      {user.email}
+    </p>
+
+  </div>
+
+)}
 
           <div className="flex flex-col gap-4 text-lg">
 
