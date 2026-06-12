@@ -22,7 +22,8 @@ export default function FeedPage() {
 
   const [trips, setTrips] = useState<any[]>([]);
   const [savedTrips, setSavedTrips] = useState<string[]>([]);
-
+const [openComments, setOpenComments] =
+  useState<string[]>([]);
   useEffect(() => {
 
     const fetchTrips = async () => {
@@ -329,13 +330,30 @@ alert("Ride request sent 🚀");
               className="bg-zinc-900 rounded-3xl overflow-hidden border border-zinc-800"
             >
 
-              <img
-                src={trip.image}
-                alt="Trip"
-               className="w-full h-[250px] md:h-[400px] object-cover"
-              />
+              <div className="p-4 flex items-center gap-3 border-b border-zinc-800">
 
-              <div className="p-6">
+  <img
+    src={trip.userImage}
+    alt="Rider"
+    className="w-12 h-12 rounded-full"
+  />
+
+  <a
+    href={`/rider/${trip.userName}`}
+    className="font-bold text-orange-500 text-lg hover:underline"
+  >
+    {trip.userName}
+  </a>
+
+</div>
+
+<img
+  src={trip.image}
+  alt="Trip"
+  className="w-full h-[250px] md:h-[400px] object-cover"
+/>
+
+<div className="p-6">
 
                 <h2 className="text-3xl font-black">
                   {trip.destination}
@@ -356,67 +374,98 @@ alert("Ride request sent 🚀");
 
                 <div className="mt-6 space-y-4">
 
-                 <div className="flex flex-wrap items-center gap-3">
+<div className="flex justify-around border-t border-zinc-800 pt-4 mt-4">
 
-  <img
-    src={trip.userImage}
-    alt="Rider"
-    className="w-12 h-12 rounded-full"
-  />
-
-  <a
-  href={`/rider/${trip.userName}`}
-  className="font-bold text-orange-500 hover:underline text-lg"
->
-  {trip.userName}
-</a>
-
-  {JSON.parse(
-    localStorage.getItem("ridemateUser") || "{}"
-  ).name !== trip.userName && (
-
-    <div>
   <button
-    onClick={() => requestToJoin(trip)}
-    className="w-full md:w-auto bg-green-600 px-4 py-3 rounded-xl font-bold hover:scale-105 transition"
+    onClick={() =>
+      likeTrip(trip.id, trip.likes || 0)
+    }
+    className="flex flex-col items-center gap-1"
   >
-    Join Ride 🚀
+    <span className="text-2xl">❤️</span>
+    <span className="text-xs text-zinc-400">
+      {trip.likes || 0} Likes
+    </span>
   </button>
-</div>
 
-  )}
+  <button
+    onClick={() => {
 
-</div>
+      if (
+        openComments.includes(trip.id)
+      ) {
 
- <div className="grid grid-cols-2 gap-3">
+        setOpenComments(prev =>
+          prev.filter(
+            id => id !== trip.id
+          )
+        );
+
+      } else {
+
+        setOpenComments(prev => [
+          ...prev,
+          trip.id
+        ]);
+
+      }
+
+    }}
+    className="flex flex-col items-center gap-1"
+  >
+    <span className="text-2xl">💬</span>
+    <span className="text-xs text-zinc-400">
+      {(trip.comments || []).length} Comments
+    </span>
+  </button>
 
   <button
     onClick={() =>
       toggleSaveTrip(trip.id)
     }
-    className="w-full bg-zinc-700 py-3 rounded-xl font-bold hover:scale-105 transition"
+    className="flex flex-col items-center gap-1"
   >
-    {savedTrips.includes(trip.id)
-      ? "⭐ Saved"
-      : "⭐ Save"}
+    <span className="text-2xl">
+      {savedTrips.includes(trip.id)
+        ? "⭐"
+        : "📌"}
+    </span>
+    <span className="text-xs text-zinc-400">
+      Save
+    </span>
   </button>
 
-  <button
-    onClick={() =>
-      likeTrip(
-        trip.id,
-        trip.likes || 0
-      )
-    }
-    className="w-full bg-orange-500 py-3 rounded-xl font-bold hover:scale-105 transition"
-  >
-    ❤️ {trip.likes || 0}
-  </button>
+  {JSON.parse(
+    localStorage.getItem("ridemateUser") || "{}"
+  ).name !== trip.userName && (
+
+    <button
+      onClick={() =>
+        requestToJoin(trip)
+      }
+      className="flex flex-col items-center gap-1"
+    >
+      <span className="text-2xl">🚀</span>
+      <span className="text-xs text-zinc-400">
+        Join
+      </span>
+    </button>
+
+  )}
 
 </div>
-<p className="text-zinc-400 text-sm text-center mt-2">
-  💬 {(trip.comments || []).length} comments
-</p>
+
+<div
+  className={`
+    overflow-hidden transition-all duration-300
+    ${
+      openComments.includes(trip.id)
+        ? "max-h-[1000px] opacity-100 mt-6"
+        : "max-h-0 opacity-0"
+    }
+  `}
+>
+
 <div className="mt-6">
   <input
     type="text"
@@ -440,52 +489,60 @@ alert("Ride request sent 🚀");
 
   <div className="mt-4 space-y-2">
 
-    {(trip.comments || []).map(
-      (comment: any, index: number) => (
+  {(trip.comments || []).map(
+    (comment: any, index: number) => (
 
-        <div
-          key={index}
-          className="bg-black p-3 rounded-xl border border-zinc-800"
-        >
+      <div
+        key={index}
+        className="
+bg-black
+p-4
+rounded-2xl
+border
+border-zinc-800
+hover:border-orange-500
+transition
+"
+      >
 
-          <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-center gap-3 mb-2">
 
-  <img
-    src={comment.image}
-    alt="User"
-    className="w-8 h-8 rounded-full"
-  />
+          <img
+            src={comment.image}
+            alt="User"
+            className="w-8 h-8 rounded-full"
+          />
 
-  <p className="font-bold text-orange-500">
-    {comment.user}
-  </p>
-
-</div>
-
-          <p className="text-zinc-300">
-            {comment.text}
+          <p className="font-bold text-orange-500">
+            {comment.user}
           </p>
 
         </div>
 
-      )
-    )}
-
-  </div>
-
-</div>
-
-                </div>
-
-              </div>
-
-            </div>
-          ))}
-
-        </div>
+        <p className="text-zinc-300">
+          {comment.text}
+        </p>
 
       </div>
 
+    )
+  )}
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+          ))}
+        </div>
+      </div>
     </main>
   );
 }
