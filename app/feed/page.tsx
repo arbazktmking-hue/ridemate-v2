@@ -350,7 +350,7 @@ alert("Ride request sent 🚀");
 <img
   src={trip.image}
   alt="Trip"
-  className="w-full h-[250px] md:h-[400px] object-cover"
+ className="w-full aspect-[4/3] md:h-[400px] object-cover"
 />
 
 <div className="p-6">
@@ -374,7 +374,7 @@ alert("Ride request sent 🚀");
 
                 <div className="mt-6 space-y-4">
 
-<div className="flex justify-around border-t border-zinc-800 pt-4 mt-4">
+<div className="flex justify-around items-center border-t border-zinc-800 pt-5 mt-5">
 
   <button
     onClick={() =>
@@ -443,7 +443,7 @@ alert("Ride request sent 🚀");
       onClick={() =>
         requestToJoin(trip)
       }
-      className="flex flex-col items-center gap-1"
+      className="flex flex-col items-center gap-1 hover:scale-110 transition duration-200"
     >
       <span className="text-2xl">🚀</span>
       <span className="text-xs text-zinc-400">
@@ -457,7 +457,7 @@ alert("Ride request sent 🚀");
 
 <div
   className={`
-    overflow-hidden transition-all duration-300
+    overflow-hidden transition-all duration-500 ease-in-out
     ${
       openComments.includes(trip.id)
         ? "max-h-[1000px] opacity-100 mt-6"
