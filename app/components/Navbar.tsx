@@ -130,8 +130,8 @@ animate-[slideIn_0.25s_ease-out]
             <a href="/">🏠 Home</a>
 
             <a href="/feed">
-              🔥 Feed
-            </a>
+  🧭 Explore Trips
+</a>
 
             <a href="/leaderboard">
               🏆 Leaderboard
