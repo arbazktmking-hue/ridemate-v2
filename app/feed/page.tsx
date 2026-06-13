@@ -342,26 +342,8 @@ flex
 flex-col
 "
 >
-
-              <div className="p-4 flex items-center gap-3 border-b border-zinc-800">
-
-  <img
-    src={trip.userImage}
-    alt="Rider"
-    className="w-12 h-12 rounded-full"
-  />
-
-  <a
-    href={`/rider/${trip.userName}`}
-    className="font-bold text-orange-500 text-lg hover:underline"
-  >
-    {trip.userName}
-  </a>
-
-</div>
-
 <div
-  className="relative"
+  className="relative h-full"
   onDoubleClick={() => {
     likeTrip(
       trip.id,
@@ -375,139 +357,181 @@ flex-col
     }, 800);
   }}
 >
+
   <img
   src={trip.image}
   alt="Trip"
   className="
-w-full
-h-[60vh]
-object-cover
-"
+      w-full
+      h-full
+      object-cover
+    "
 />
+
+  {/* Rider Info */}
+  <div
+    className="
+      absolute
+      top-4
+      left-4
+      flex
+      items-center
+      gap-3
+      bg-black/50
+      backdrop-blur-sm
+      px-3
+      py-2
+      rounded-full
+    "
+  >
+    <img
+      src={trip.userImage}
+      alt="Rider"
+      className="w-10 h-10 rounded-full"
+    />
+
+    <span className="font-bold text-white">
+      {trip.userName}
+    </span>
+  </div>
+
+  {/* Trip Details */}
+  <div
+    className="
+      absolute
+      bottom-24
+      left-0
+      right-0
+      px-5
+      text-white
+      bg-gradient-to-t
+      from-black/80
+      to-transparent
+      pb-8
+    "
+  >
+    <h2 className="text-3xl font-black">
+      {trip.destination}
+    </h2>
+
+    <p className="text-orange-400 font-bold">
+      {trip.bike}
+    </p>
+
+    <p>
+      📍 {trip.startLocation} → {trip.endLocation}
+    </p>
+
+    <p>
+      🛣️ {trip.distance || 0} KM
+    </p>
+
+    <p className="mt-2">
+      {trip.caption}
+    </p>
+  </div>
+
+  {/* Bottom Action Bar */}
+  <div
+    className="
+      absolute
+      bottom-0
+      left-0
+      right-0
+      flex
+      justify-around
+      items-center
+      bg-black/70
+      backdrop-blur-md
+      py-4
+    "
+  >
+    <button
+      onClick={() =>
+        likeTrip(trip.id, trip.likes || 0)
+      }
+      className="flex flex-col items-center"
+    >
+      <span className="text-2xl">❤️</span>
+      <span className="text-xs">
+        {trip.likes || 0}
+      </span>
+    </button>
+
+    <button
+      onClick={() => {
+        if (
+          openComments.includes(trip.id)
+        ) {
+          setOpenComments(prev =>
+            prev.filter(
+              id => id !== trip.id
+            )
+          );
+        } else {
+          setOpenComments(prev => [
+            ...prev,
+            trip.id
+          ]);
+        }
+      }}
+      className="flex flex-col items-center"
+    >
+      <span className="text-2xl">💬</span>
+      <span className="text-xs">
+        {(trip.comments || []).length}
+      </span>
+    </button>
+
+    <button
+      onClick={() =>
+        toggleSaveTrip(trip.id)
+      }
+      className="flex flex-col items-center"
+    >
+      <span className="text-2xl">
+        {savedTrips.includes(trip.id)
+          ? "⭐"
+          : "📌"}
+      </span>
+      <span className="text-xs">
+        Save
+      </span>
+    </button>
+
+    {JSON.parse(
+      localStorage.getItem("ridemateUser") || "{}"
+    ).name !== trip.userName && (
+      <button
+        onClick={() =>
+          requestToJoin(trip)
+        }
+        className="flex flex-col items-center"
+      >
+        <span className="text-2xl">🚀</span>
+        <span className="text-xs">
+          Join
+        </span>
+      </button>
+    )}
+  </div>
 
   {heartAnimation === trip.id && (
     <div
       className="
-      absolute
-      inset-0
-      flex
-      items-center
-      justify-center
-      pointer-events-none
-      animate-bounce
-    "
+        absolute
+        inset-0
+        flex
+        items-center
+        justify-center
+        pointer-events-none
+        animate-bounce
+      "
     >
       <span className="text-8xl">
         ❤️
       </span>
     </div>
-  )}
-</div>
-
-<div
-  className="
-  p-4
-  flex-1
-  overflow-y-auto
-  "
->
-
-                <h2 className="text-3xl font-black">
-                  {trip.destination}
-                </h2>
-
-                <p className="text-orange-500 mt-2 font-bold">
-                  {trip.bike}
-                </p>
-<p className="text-zinc-400">
-  📍 {trip.startLocation} → {trip.endLocation}
-</p>
-<p className="text-orange-400 font-bold">
-  🛣️ {trip.distance || 0} KM
-</p>
-                <p className="text-zinc-300 mt-4">
-                  {trip.caption}
-                </p>
-
-                <div className="mt-4">
-
-<div className="flex justify-around items-center border-t border-zinc-800 pt-5 mt-5">
-
-  <button
-    onClick={() =>
-      likeTrip(trip.id, trip.likes || 0)
-    }
-    className="flex flex-col items-center gap-1"
-  >
-    <span className="text-2xl">❤️</span>
-    <span className="text-xs text-zinc-400">
-      {trip.likes || 0} Likes
-    </span>
-  </button>
-
-  <button
-    onClick={() => {
-
-      if (
-        openComments.includes(trip.id)
-      ) {
-
-        setOpenComments(prev =>
-          prev.filter(
-            id => id !== trip.id
-          )
-        );
-
-      } else {
-
-        setOpenComments(prev => [
-          ...prev,
-          trip.id
-        ]);
-
-      }
-
-    }}
-    className="flex flex-col items-center gap-1"
-  >
-    <span className="text-2xl">💬</span>
-    <span className="text-xs text-zinc-400">
-      {(trip.comments || []).length} Comments
-    </span>
-  </button>
-
-  <button
-    onClick={() =>
-      toggleSaveTrip(trip.id)
-    }
-    className="flex flex-col items-center gap-1"
-  >
-    <span className="text-2xl">
-      {savedTrips.includes(trip.id)
-        ? "⭐"
-        : "📌"}
-    </span>
-    <span className="text-xs text-zinc-400">
-      Save
-    </span>
-  </button>
-
-  {JSON.parse(
-    localStorage.getItem("ridemateUser") || "{}"
-  ).name !== trip.userName && (
-
-    <button
-      onClick={() =>
-        requestToJoin(trip)
-      }
-      className="flex flex-col items-center gap-1 hover:scale-110 transition duration-200"
-    >
-      <span className="text-2xl">🚀</span>
-      <span className="text-xs text-zinc-400">
-        Join
-      </span>
-    </button>
-
   )}
 
 </div>
