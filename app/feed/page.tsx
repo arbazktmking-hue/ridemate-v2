@@ -324,13 +324,14 @@ alert("Ride request sent 🚀");
   Available Rides ({trips.length})
 </h1>
 
-        <div
+       <div
   className="
   space-y-10
   snap-y
   snap-mandatory
-  h-screen
-  overflow-y-scroll
+  overflow-y-auto
+  h-[calc(100vh-120px)]
+  scroll-smooth
   "
 >
 
@@ -338,14 +339,14 @@ alert("Ride request sent 🚀");
             <div
   key={trip.id}
   className="
-  bg-zinc-900
-  rounded-3xl
-  overflow-hidden
-  border
-  border-zinc-800
-  snap-start
-  min-h-[85vh]
-  "
+bg-zinc-900
+rounded-3xl
+overflow-hidden
+border
+border-zinc-800
+snap-center
+min-h-[80vh]
+"
 >
 
               <div className="p-4 flex items-center gap-3 border-b border-zinc-800">
