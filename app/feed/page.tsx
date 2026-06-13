@@ -324,13 +324,29 @@ alert("Ride request sent 🚀");
   Available Rides ({trips.length})
 </h1>
 
-        <div className="space-y-10">
+        <div
+  className="
+  space-y-10
+  snap-y
+  snap-mandatory
+  h-screen
+  overflow-y-scroll
+  "
+>
 
           {trips.map((trip) => (
             <div
-              key={trip.id}
-              className="bg-zinc-900 rounded-3xl overflow-hidden border border-zinc-800"
-            >
+  key={trip.id}
+  className="
+  bg-zinc-900
+  rounded-3xl
+  overflow-hidden
+  border
+  border-zinc-800
+  snap-start
+  min-h-[85vh]
+  "
+>
 
               <div className="p-4 flex items-center gap-3 border-b border-zinc-800">
 
@@ -367,7 +383,7 @@ alert("Ride request sent 🚀");
   <img
     src={trip.image}
     alt="Trip"
-    className="w-full aspect-[4/3] md:h-[400px] object-cover"
+    className="w-full aspect-[4/3] md:h-[500px] object-cover"
   />
 
   {heartAnimation === trip.id && (
