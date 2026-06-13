@@ -316,25 +316,30 @@ alert("Ride request sent 🚀");
 
 };
   return (
-    <main className="min-h-screen bg-black text-white px-6 py-10">
+    <main className="h-screen bg-black text-white overflow-hidden">
 
-      <div className="max-w-5xl mx-auto">
-
-        <h1 className="text-2xl md:text-3xl font-bold text-orange-500 mb-4">
-  Available Rides ({trips.length})
-</h1>
-
-  <div className="space-y-10">
+      <div
+  className="
+  w-full
+  h-full
+  overflow-y-scroll
+  snap-y
+  snap-mandatory
+  "
+>
+  <div>
 
           {trips.map((trip) => (
             <div
   key={trip.id}
   className="
+snap-start
+h-screen
+w-full
 bg-zinc-900
-rounded-3xl
 overflow-hidden
-border
-border-zinc-800
+flex
+flex-col
 "
 >
 
@@ -373,7 +378,11 @@ border-zinc-800
   <img
     src={trip.image}
     alt="Trip"
-    className="w-full aspect-[4/3] md:h-[500px] object-cover"
+    className="
+w-full
+h-[75vh]
+object-cover
+"
   />
 
   {heartAnimation === trip.id && (
@@ -395,7 +404,7 @@ border-zinc-800
   )}
 </div>
 
-<div className="p-6">
+<div className="p-4 flex-1">
 
                 <h2 className="text-3xl font-black">
                   {trip.destination}
