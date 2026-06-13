@@ -320,20 +320,11 @@ alert("Ride request sent 🚀");
 
       <div className="max-w-5xl mx-auto">
 
-        <h1 className="text-5xl font-black text-orange-500 mb-10">
+        <h1 className="text-2xl md:text-3xl font-bold text-orange-500 mb-4">
   Available Rides ({trips.length})
 </h1>
 
-       <div
-  className="
-  space-y-10
-  snap-y
-  snap-mandatory
-  overflow-y-auto
-  h-[calc(100vh-120px)]
-  scroll-smooth
-  "
->
+  <div className="space-y-10">
 
           {trips.map((trip) => (
             <div
@@ -344,8 +335,6 @@ rounded-3xl
 overflow-hidden
 border
 border-zinc-800
-snap-center
-min-h-[80vh]
 "
 >
 
