@@ -24,6 +24,8 @@ export default function FeedPage() {
   const [savedTrips, setSavedTrips] = useState<string[]>([]);
 const [openComments, setOpenComments] =
   useState<string[]>([]);
+  const [heartAnimation, setHeartAnimation] =
+  useState<string | null>(null);
   useEffect(() => {
 
     const fetchTrips = async () => {
@@ -347,11 +349,45 @@ alert("Ride request sent 🚀");
 
 </div>
 
-<img
-  src={trip.image}
-  alt="Trip"
- className="w-full aspect-[4/3] md:h-[400px] object-cover"
-/>
+<div
+  className="relative"
+  onDoubleClick={() => {
+    likeTrip(
+      trip.id,
+      trip.likes || 0
+    );
+
+    setHeartAnimation(trip.id);
+
+    setTimeout(() => {
+      setHeartAnimation(null);
+    }, 800);
+  }}
+>
+  <img
+    src={trip.image}
+    alt="Trip"
+    className="w-full aspect-[4/3] md:h-[400px] object-cover"
+  />
+
+  {heartAnimation === trip.id && (
+    <div
+      className="
+      absolute
+      inset-0
+      flex
+      items-center
+      justify-center
+      pointer-events-none
+      animate-bounce
+    "
+    >
+      <span className="text-8xl">
+        ❤️
+      </span>
+    </div>
+  )}
+</div>
 
 <div className="p-6">
 
