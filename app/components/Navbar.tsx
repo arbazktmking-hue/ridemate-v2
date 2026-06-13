@@ -15,7 +15,7 @@ export default function Navbar() {
 
   const [notificationCount, setNotificationCount] =
     useState(0);
-
+const [rideCount, setRideCount] = useState(0);
   const [user, setUser] =
     useState<any>(null);
 
@@ -65,7 +65,21 @@ export default function Navbar() {
     loadNotifications();
 
   }, []);
+useEffect(() => {
 
+  const loadRideCount = async () => {
+
+    const snapshot = await getDocs(
+      collection(db, "trips")
+    );
+
+    setRideCount(snapshot.size);
+
+  };
+
+  loadRideCount();
+
+}, []);
   return (
     <>
       <nav className="bg-zinc-900 text-white border-b border-zinc-800 px-4 py-4 flex items-center justify-between">
@@ -79,9 +93,17 @@ export default function Navbar() {
           ☰
         </button>
 
-        <h1 className="text-3xl font-black text-orange-500">
-          RideMate 🏍🔥
-        </h1>
+        <div className="flex items-center gap-3">
+
+  <h1 className="text-2xl font-black text-orange-500">
+    RideMate 🏍
+  </h1>
+
+  <span className="bg-orange-500 text-black px-2 py-1 rounded-full text-xs font-black">
+    {rideCount} Trips
+  </span>
+
+</div>
 
       </nav>
 
