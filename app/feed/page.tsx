@@ -321,7 +321,7 @@ alert("Ride request sent 🚀");
       <div className="max-w-5xl mx-auto">
 
         <h1 className="text-5xl font-black text-orange-500 mb-10">
-  Ride Feed 🔥 ({trips.length})
+  Available Rides ({trips.length})
 </h1>
 
         <div className="space-y-10">
