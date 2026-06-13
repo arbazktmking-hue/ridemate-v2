@@ -376,14 +376,14 @@ flex-col
   }}
 >
   <img
-    src={trip.image}
-    alt="Trip"
-    className="
+  src={trip.image}
+  alt="Trip"
+  className="
 w-full
-h-[75vh]
+h-[60vh]
 object-cover
 "
-  />
+/>
 
   {heartAnimation === trip.id && (
     <div
@@ -404,7 +404,13 @@ object-cover
   )}
 </div>
 
-<div className="p-4 flex-1">
+<div
+  className="
+  p-4
+  flex-1
+  overflow-y-auto
+  "
+>
 
                 <h2 className="text-3xl font-black">
                   {trip.destination}
@@ -423,7 +429,7 @@ object-cover
                   {trip.caption}
                 </p>
 
-                <div className="mt-6 space-y-4">
+                <div className="mt-4">
 
 <div className="flex justify-around items-center border-t border-zinc-800 pt-5 mt-5">
 
