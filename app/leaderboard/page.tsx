@@ -28,31 +28,32 @@ const followsSnapshot = await getDocs(
 
       snapshot.forEach((doc) => {
 
-        const trip = doc.data();
+  const trip = doc.data();
 
-        if (!riderMap[trip.userName]) {
+  if (trip.status !== "completed") return;
 
-        riderMap[trip.userName] = {
-  name: trip.userName,
-  likes: 0,
-  distance: 0,
-  trips: 0,
-  followers: 0,
-  image: trip.userImage,
-};
+  if (!riderMap[trip.userName]) {
 
-        }
+    riderMap[trip.userName] = {
+      name: trip.userName,
+      likes: 0,
+      distance: 0,
+      trips: 0,
+      followers: 0,
+      image: trip.userImage,
+    };
 
-       riderMap[trip.userName].likes +=
-  trip.likes || 0;
+  }
 
-riderMap[trip.userName].distance +=
-  Number(trip.distance || 0);
+  riderMap[trip.userName].likes +=
+    trip.likes || 0;
 
-riderMap[trip.userName].trips += 1;
+  riderMap[trip.userName].distance +=
+    Number(trip.distance || 0);
 
-      });
+  riderMap[trip.userName].trips += 1;
 
+});
     followsSnapshot.forEach((doc) => {
 
   const follow = doc.data();
