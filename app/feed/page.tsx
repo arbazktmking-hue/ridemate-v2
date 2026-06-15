@@ -18,14 +18,14 @@ import {
 import { db } from "../firebase";
 
 export default function FeedPage() {
-  
+
 
   const [trips, setTrips] = useState<any[]>([]);
   const [savedTrips, setSavedTrips] = useState<string[]>([]);
-const [openComments, setOpenComments] =
-  useState<string[]>([]);
+  const [openComments, setOpenComments] =
+    useState<string[]>([]);
   const [heartAnimation, setHeartAnimation] =
-  useState<string | null>(null);
+    useState<string | null>(null);
   useEffect(() => {
 
     const fetchTrips = async () => {
@@ -33,25 +33,25 @@ const [openComments, setOpenComments] =
       try {
 
         const q = query(
-  collection(db, "trips"),
-  orderBy("createdAt", "desc")
-);
+          collection(db, "trips"),
+          orderBy("createdAt", "desc")
+        );
         const querySnapshot = await getDocs(q);
 
         const loadedTrips: any[] = [];
 
         querySnapshot.forEach((doc) => {
 
-         const trip = doc.data();
+          const trip = doc.data();
 
-loadedTrips.push({
-  id: doc.id,
-  ...trip,
-});
+          loadedTrips.push({
+            id: doc.id,
+            ...trip,
+          });
 
         });
 
-      setTrips(loadedTrips);
+        setTrips(loadedTrips);
       } catch (error) {
 
         console.log(error);
@@ -65,274 +65,274 @@ loadedTrips.push({
   }, []);
   useEffect(() => {
 
-  const loadSavedTrips = async () => {
+    const loadSavedTrips = async () => {
+
+      const user = JSON.parse(
+        localStorage.getItem("ridemateUser") || "{}"
+      );
+
+      if (!user.name) return;
+
+      const snapshot = await getDocs(
+        collection(db, "savedTrips")
+      );
+
+      const saved: string[] = [];
+
+      snapshot.forEach((doc) => {
+
+        const data = doc.data();
+
+        if (data.user === user.name) {
+          saved.push(data.tripId);
+        }
+
+      });
+
+      setSavedTrips(saved);
+
+    };
+
+    loadSavedTrips();
+
+  }, []);
+  const toggleSaveTrip = async (
+    tripId: string
+  ) => {
 
     const user = JSON.parse(
       localStorage.getItem("ridemateUser") || "{}"
     );
 
-    if (!user.name) return;
+    const saveId =
+      `${user.name}_${tripId}`;
 
-    const snapshot = await getDocs(
-      collection(db, "savedTrips")
-    );
+    if (
+      savedTrips.includes(tripId)
+    ) {
 
-    const saved: string[] = [];
+      await deleteDoc(
+        doc(db, "savedTrips", saveId)
+      );
 
-    snapshot.forEach((doc) => {
+      setSavedTrips((prev) =>
+        prev.filter(
+          (id) => id !== tripId
+        )
+      );
 
-      const data = doc.data();
+    } else {
 
-      if (data.user === user.name) {
-        saved.push(data.tripId);
-      }
+      await setDoc(
+        doc(db, "savedTrips", saveId),
+        {
+          user: user.name,
+          tripId,
+        }
+      );
 
-    });
+      setSavedTrips((prev) => [
+        ...prev,
+        tripId,
+      ]);
 
-    setSavedTrips(saved);
+    }
 
   };
-
-  loadSavedTrips();
-
-}, []);
-const toggleSaveTrip = async (
-  tripId: string
-) => {
-
-  const user = JSON.parse(
-    localStorage.getItem("ridemateUser") || "{}"
-  );
-
-  const saveId =
-    `${user.name}_${tripId}`;
-
-  if (
-    savedTrips.includes(tripId)
-  ) {
-
-    await deleteDoc(
-      doc(db, "savedTrips", saveId)
-    );
-
-    setSavedTrips((prev) =>
-      prev.filter(
-        (id) => id !== tripId
-      )
-    );
-
-  } else {
-
-    await setDoc(
-      doc(db, "savedTrips", saveId),
-      {
-        user: user.name,
-        tripId,
-      }
-    );
-
-    setSavedTrips((prev) => [
-      ...prev,
-      tripId,
-    ]);
-
-  }
-
-};
   const likeTrip = async (
-  id: string,
-  currentLikes: number
-) => {
+    id: string,
+    currentLikes: number
+  ) => {
 
-  try {
+    try {
 
-    const tripRef = doc(db, "trips", id);
+      const tripRef = doc(db, "trips", id);
 
-    await updateDoc(tripRef, {
-      likes: currentLikes + 1,
-    });
-const currentUser = JSON.parse(
-  localStorage.getItem("ridemateUser") || "{}"
-);
+      await updateDoc(tripRef, {
+        likes: currentLikes + 1,
+      });
+      const currentUser = JSON.parse(
+        localStorage.getItem("ridemateUser") || "{}"
+      );
 
-const trip = trips.find(
-  (t) => t.id === id
-);
+      const trip = trips.find(
+        (t) => t.id === id
+      );
 
-if (
-  trip &&
-  trip.userName !== currentUser.name
-) {
+      if (
+        trip &&
+        trip.userName !== currentUser.name
+      ) {
 
-  await addDoc(
-    collection(db, "notifications"),
-    {
-      user: trip.userName,
-      text: `${currentUser.name} liked your trip ❤️`,
-      createdAt: Date.now(),
-    }
-  );
+        await addDoc(
+          collection(db, "notifications"),
+          {
+            user: trip.userName,
+            text: `${currentUser.name} liked your trip ❤️`,
+            createdAt: Date.now(),
+          }
+        );
 
-}
-    setTrips((prevTrips) =>
-      prevTrips.map((trip) =>
-        trip.id === id
-          ? {
+      }
+      setTrips((prevTrips) =>
+        prevTrips.map((trip) =>
+          trip.id === id
+            ? {
               ...trip,
               likes: currentLikes + 1,
             }
-          : trip
-      )
+            : trip
+        )
+      );
+
+    } catch (error) {
+
+      console.log(error);
+
+    }
+
+  };
+  const addComment = async (
+    tripId: string,
+    commentText: string
+  ) => {
+
+    if (!commentText.trim()) return;
+
+    try {
+
+      const tripRef = doc(db, "trips", tripId);
+
+      const user = JSON.parse(
+        localStorage.getItem("ridemateUser") || "{}"
+      );
+
+      await updateDoc(tripRef, {
+        comments: arrayUnion({
+          user: user.name,
+          image: user.image,
+          text: commentText,
+        }),
+      });
+      const trip = trips.find(
+        (t) => t.id === tripId
+      );
+
+      if (
+        trip &&
+        trip.userName !== user.name
+      ) {
+
+        await addDoc(
+          collection(db, "notifications"),
+          {
+            user: trip.userName,
+            text: `${user.name} commented on your trip 💬`,
+            createdAt: Date.now(),
+          }
+        );
+
+      }
+      setTrips((prevTrips) =>
+        prevTrips.map((trip) =>
+          trip.id === tripId
+            ? {
+              ...trip,
+              comments: [
+                ...(trip.comments || []),
+                {
+                  user: user.name,
+                  image: user.image,
+                  text: commentText,
+                },
+              ],
+            }
+            : trip
+        )
+      );
+    } catch (error) {
+
+      console.log(error);
+
+    }
+
+  };
+  const requestToJoin = async (trip: any) => {
+
+    const currentUser = JSON.parse(
+      localStorage.getItem("ridemateUser") || "{}"
     );
 
-  } catch (error) {
-
-    console.log(error);
-
-  }
-
-};
-const addComment = async (
-  tripId: string,
-  commentText: string
-) => {
-
-  if (!commentText.trim()) return;
-
-  try {
-
-    const tripRef = doc(db, "trips", tripId);
-
-    const user = JSON.parse(
-  localStorage.getItem("ridemateUser") || "{}"
-);
-
-await updateDoc(tripRef, {
-  comments: arrayUnion({
-    user: user.name,
-    image: user.image,
-    text: commentText,
-  }),
-});
-const trip = trips.find(
-  (t) => t.id === tripId
-);
-
-if (
-  trip &&
-  trip.userName !== user.name
-) {
-
-  await addDoc(
-    collection(db, "notifications"),
-    {
-      user: trip.userName,
-      text: `${user.name} commented on your trip 💬`,
-      createdAt: Date.now(),
+    if (currentUser.name === trip.userName) {
+      alert("You cannot join your own ride.");
+      return;
     }
-  );
+    const existingRequests = await getDocs(
+      collection(db, "rideRequests")
+    );
 
-}
-    setTrips((prevTrips) =>
-  prevTrips.map((trip) =>
-    trip.id === tripId
-      ? {
-          ...trip,
-          comments: [
-            ...(trip.comments || []),
-            {
-              user: user.name,
-              image: user.image,
-              text: commentText,
-            },
-          ],
-        }
-      : trip
-  )
-);
-} catch (error) {
+    let alreadyRequested = false;
 
-  console.log(error);
+    existingRequests.forEach((doc) => {
+      const request = doc.data();
 
-}
+      if (
+        request.tripId === trip.id &&
+        request.requester === currentUser.name &&
+        request.status === "pending"
+      ) {
+        alreadyRequested = true;
+      }
+    });
 
-};
-const requestToJoin = async (trip: any) => {
+    if (alreadyRequested) {
+      alert("Request already sent 🚀");
+      return;
+    }
+    await addDoc(
+      collection(db, "rideRequests"),
+      {
+        tripId: trip.id,
+        tripOwner: trip.userName,
+        requester: currentUser.name,
+        requesterImage: currentUser.image || "",
+        destination: trip.destination,
+        createdAt: Date.now(),
+        status: "pending",
+      }
+    );
 
-  const currentUser = JSON.parse(
-    localStorage.getItem("ridemateUser") || "{}"
-  );
+    // 🔥 Send notification to ride owner
+    await addDoc(
+      collection(db, "notifications"),
+      {
+        user: trip.userName,
+        text: `${currentUser.name} wants to join your ride 🚀`,
+        createdAt: Date.now(),
+      }
+    );
 
-  if (currentUser.name === trip.userName) {
-    alert("You cannot join your own ride.");
-    return;
-  }
-const existingRequests = await getDocs(
-  collection(db, "rideRequests")
-);
+    alert("Ride request sent 🚀");
 
-let alreadyRequested = false;
-
-existingRequests.forEach((doc) => {
-  const request = doc.data();
-
-  if (
-    request.tripId === trip.id &&
-    request.requester === currentUser.name &&
-    request.status === "pending"
-  ) {
-    alreadyRequested = true;
-  }
-});
-
-if (alreadyRequested) {
-  alert("Request already sent 🚀");
-  return;
-}
-await addDoc(
-  collection(db, "rideRequests"),
-  {
-    tripId: trip.id,
-    tripOwner: trip.userName,
-    requester: currentUser.name,
-    requesterImage: currentUser.image || "",
-    destination: trip.destination,
-    createdAt: Date.now(),
-    status: "pending",
-  }
-);
-
-// 🔥 Send notification to ride owner
-await addDoc(
-  collection(db, "notifications"),
-  {
-    user: trip.userName,
-    text: `${currentUser.name} wants to join your ride 🚀`,
-    createdAt: Date.now(),
-  }
-);
-
-alert("Ride request sent 🚀");
-
-};
+  };
   return (
     <main className="h-screen bg-black text-white overflow-hidden">
 
       <div
-  className="
+        className="
   w-full
   h-full
   overflow-y-scroll
   snap-y
   snap-mandatory
   "
->
-  <div>
+      >
+        <div>
 
           {trips.map((trip) => (
             <div
-  key={trip.id}
-  className="
+              key={trip.id}
+              className="
 snap-start
 h-screen
 w-full
@@ -341,36 +341,36 @@ overflow-hidden
 flex
 flex-col
 "
->
-<div
-  className="relative h-full"
-  onDoubleClick={() => {
-    likeTrip(
-      trip.id,
-      trip.likes || 0
-    );
+            >
+              <div
+                className="relative h-full"
+                onDoubleClick={() => {
+                  likeTrip(
+                    trip.id,
+                    trip.likes || 0
+                  );
 
-    setHeartAnimation(trip.id);
+                  setHeartAnimation(trip.id);
 
-    setTimeout(() => {
-      setHeartAnimation(null);
-    }, 800);
-  }}
->
+                  setTimeout(() => {
+                    setHeartAnimation(null);
+                  }, 800);
+                }}
+              >
 
-  <img
-  src={trip.image}
-  alt="Trip"
-  className="
+                <img
+                  src={trip.image}
+                  alt="Trip"
+                  className="
       w-full
       h-full
       object-cover
     "
-/>
+                />
 
-  {/* Rider Info */}
-  <div
-    className="
+                {/* Rider Info */}
+                <div
+                  className="
       absolute
       top-4
       left-4
@@ -383,21 +383,21 @@ flex-col
       py-2
       rounded-full
     "
-  >
-    <img
-      src={trip.userImage}
-      alt="Rider"
-      className="w-10 h-10 rounded-full"
-    />
+                >
+                  <img
+                    src={trip.userImage}
+                    alt="Rider"
+                    className="w-10 h-10 rounded-full"
+                  />
 
-    <span className="font-bold text-white">
-      {trip.userName}
-    </span>
-  </div>
+                  <span className="font-bold text-white">
+                    {trip.userName}
+                  </span>
+                </div>
 
-  {/* Trip Details */}
-  <div
-    className="
+                {/* Trip Details */}
+                <div
+                  className="
       absolute
       bottom-24
       left-0
@@ -409,31 +409,31 @@ flex-col
       to-transparent
       pb-8
     "
-  >
-    <h2 className="text-3xl font-black">
-      {trip.destination}
-    </h2>
+                >
+                  <h2 className="text-3xl font-black">
+                    {trip.destination}
+                  </h2>
 
-    <p className="text-orange-400 font-bold">
-      {trip.bike}
-    </p>
+                  <p className="text-orange-400 font-bold">
+                    {trip.bike}
+                  </p>
 
-    <p>
-      📍 {trip.startLocation} → {trip.endLocation}
-    </p>
+                  <p>
+                    📍 {trip.startLocation} → {trip.endLocation}
+                  </p>
 
-    <p>
-      🛣️ {trip.distance || 0} KM
-    </p>
+                  <p>
+                    🛣️ {trip.distance || 0} KM
+                  </p>
 
-    <p className="mt-2">
-      {trip.caption}
-    </p>
-  </div>
+                  <p className="mt-2">
+                    {trip.caption}
+                  </p>
+                </div>
 
-  {/* Bottom Action Bar */}
-  <div
-    className="
+                {/* Bottom Action Bar */}
+                <div
+                  className="
       absolute
       bottom-0
       left-0
@@ -445,80 +445,80 @@ flex-col
       backdrop-blur-md
       py-4
     "
-  >
-    <button
-      onClick={() =>
-        likeTrip(trip.id, trip.likes || 0)
-      }
-      className="flex flex-col items-center"
-    >
-      <span className="text-2xl">❤️</span>
-      <span className="text-xs">
-        {trip.likes || 0}
-      </span>
-    </button>
+                >
+                  <button
+                    onClick={() =>
+                      likeTrip(trip.id, trip.likes || 0)
+                    }
+                    className="flex flex-col items-center"
+                  >
+                    <span className="text-2xl">❤️</span>
+                    <span className="text-xs">
+                      {trip.likes || 0}
+                    </span>
+                  </button>
 
-    <button
-      onClick={() => {
-        if (
-          openComments.includes(trip.id)
-        ) {
-          setOpenComments(prev =>
-            prev.filter(
-              id => id !== trip.id
-            )
-          );
-        } else {
-          setOpenComments(prev => [
-            ...prev,
-            trip.id
-          ]);
-        }
-      }}
-      className="flex flex-col items-center"
-    >
-      <span className="text-2xl">💬</span>
-      <span className="text-xs">
-        {(trip.comments || []).length}
-      </span>
-    </button>
+                  <button
+                    onClick={() => {
+                      if (
+                        openComments.includes(trip.id)
+                      ) {
+                        setOpenComments(prev =>
+                          prev.filter(
+                            id => id !== trip.id
+                          )
+                        );
+                      } else {
+                        setOpenComments(prev => [
+                          ...prev,
+                          trip.id
+                        ]);
+                      }
+                    }}
+                    className="flex flex-col items-center"
+                  >
+                    <span className="text-2xl">💬</span>
+                    <span className="text-xs">
+                      {(trip.comments || []).length}
+                    </span>
+                  </button>
 
-    <button
-      onClick={() =>
-        toggleSaveTrip(trip.id)
-      }
-      className="flex flex-col items-center"
-    >
-      <span className="text-2xl">
-        {savedTrips.includes(trip.id)
-          ? "⭐"
-          : "📌"}
-      </span>
-      <span className="text-xs">
-        Save
-      </span>
-    </button>
+                  <button
+                    onClick={() =>
+                      toggleSaveTrip(trip.id)
+                    }
+                    className="flex flex-col items-center"
+                  >
+                    <span className="text-2xl">
+                      {savedTrips.includes(trip.id)
+                        ? "⭐"
+                        : "📌"}
+                    </span>
 
-    {JSON.parse(
-      localStorage.getItem("ridemateUser") || "{}"
-    ).name !== trip.userName && (
-      <button
-        onClick={() =>
-          requestToJoin(trip)
-        }
-        className="flex flex-col items-center"
-      >
-        <span className="text-2xl">🚀</span>
-        <span className="text-xs">
-          Join
-        </span>
-      </button>
-    )}
-  </div>
+                    <span className="text-xs">
+                      Save
+                    </span>
+                  </button>
+                  {JSON.parse(
+                    localStorage.getItem("ridemateUser") || "{}"
+                  ).name !== trip.userName && (
+                      <button
+                        onClick={() =>
+                          requestToJoin(trip)
+                        }
+                        className="flex flex-col items-center"
+                      >
+                        <span className="text-2xl">🚀</span>
+                        <span className="text-xs">
+                          Join
+                        </span>
+                      </button>
+                    )}
+                </div>
 
-  {heartAnimation === trip.id && (
-    <div
-      className="
+                {heartAnimation === trip.id && (
+                  <div
+                    className="
         absolute
         inset-0
         flex
@@ -527,55 +527,54 @@ flex-col
         pointer-events-none
         animate-bounce
       "
-    >
-      <span className="text-8xl">
-        ❤️
-      </span>
-    </div>
-  )}
+                  >
+                    <span className="text-8xl">
+                      ❤️
+                    </span>
+                  </div>
+                )}
 
-</div>
+              </div>
 
-<div
-  className={`
+              <div
+                className={`
     overflow-hidden transition-all duration-500 ease-in-out
-    ${
-      openComments.includes(trip.id)
-        ? "max-h-[1000px] opacity-100 mt-6"
-        : "max-h-0 opacity-0"
-    }
+    ${openComments.includes(trip.id)
+                    ? "max-h-[1000px] opacity-100 mt-6"
+                    : "max-h-0 opacity-0"
+                  }
   `}
->
+              >
 
-<div className="mt-6">
-  <input
-    type="text"
-    placeholder="Write a comment..."
-   className="w-full p-4 rounded-xl bg-black border border-zinc-700 text-base"
-    onKeyDown={(e) => {
+                <div className="mt-6">
+                  <input
+                    type="text"
+                    placeholder="Write a comment..."
+                    className="w-full p-4 rounded-xl bg-black border border-zinc-700 text-base"
+                    onKeyDown={(e) => {
 
-      if (e.key === "Enter") {
+                      if (e.key === "Enter") {
 
-        addComment(
-          trip.id,
-          e.currentTarget.value
-        );
+                        addComment(
+                          trip.id,
+                          e.currentTarget.value
+                        );
 
-        e.currentTarget.value = "";
+                        e.currentTarget.value = "";
 
-      }
+                      }
 
-    }}
-  />
+                    }}
+                  />
 
-  <div className="mt-4 space-y-2">
+                  <div className="mt-4 space-y-2">
 
-  {(trip.comments || []).map(
-    (comment: any, index: number) => (
+                    {(trip.comments || []).map(
+                      (comment: any, index: number) => (
 
-      <div
-        key={index}
-        className="
+                        <div
+                          key={index}
+                          className="
 bg-black
 p-4
 rounded-2xl
@@ -584,42 +583,38 @@ border-zinc-800
 hover:border-orange-500
 transition
 "
-      >
+                        >
 
-        <div className="flex items-center gap-3 mb-2">
+                          <div className="flex items-center gap-3 mb-2">
 
-          <img
-            src={comment.image}
-            alt="User"
-            className="w-8 h-8 rounded-full"
-          />
+                            <img
+                              src={comment.image}
+                              alt="User"
+                              className="w-8 h-8 rounded-full"
+                            />
 
-          <p className="font-bold text-orange-500">
-            {comment.user}
-          </p>
+                            <p className="font-bold text-orange-500">
+                              {comment.user}
+                            </p>
 
-        </div>
+                          </div>
 
-        <p className="text-zinc-300">
-          {comment.text}
-        </p>
+                          <p className="text-zinc-300">
+                            {comment.text}
+                          </p>
 
-      </div>
+                        </div>
 
-    )
-  )}
+                      )
+                    )}
 
-</div>
+                  </div>
 
-</div>
+                </div>
 
-</div>
+              </div>
 
-</div>
-
-</div>
-
-</div>
+            </div>
 
           ))}
         </div>
