@@ -316,7 +316,7 @@ export default function FeedPage() {
 
   };
   return (
-    <main className="h-screen bg-black text-white overflow-hidden">
+    <main className="h-[calc(100dvh-64px)] bg-black text-white overflow-hidden">
 
       <div
         className="
@@ -333,11 +333,12 @@ export default function FeedPage() {
             <div
   key={trip.id}
   className="
-    snap-start
-    h-[100dvh]
-    w-full
-    relative
-  "
+snap-start
+h-[calc(100dvh-64px)]
+w-full
+relative
+overflow-hidden
+"
 >
               <div
                 className="relative h-full"
