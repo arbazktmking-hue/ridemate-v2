@@ -54,25 +54,28 @@ export default function RequestsPage() {
   }, []);
 
   const updateRequest = async (
-    requestId: string,
-    status: string
-  ) => {
+  requestId: string,
+  status: string,
+  tripId: string
+) => {
 
-    await updateDoc(
-      doc(db, "rideRequests", requestId),
-      {
-        status,
-      }
-    );
+  await updateDoc(
+  doc(db, "rideRequests", requestId),
+  {
+    status,
+    tripCompleted: false,
+    tripId,
+  }
+);
 
-    setRequests((prev) =>
-      prev.filter(
-        (request) =>
-          request.id !== requestId
-      )
-    );
+  setRequests((prev) =>
+    prev.filter(
+      (request) =>
+        request.id !== requestId
+    )
+  );
 
-  };
+};
 
   return (
     <main className="min-h-screen bg-black text-white px-6 py-10">
@@ -126,11 +129,12 @@ export default function RequestsPage() {
 
                   <button
                     onClick={() =>
-                      updateRequest(
-                        request.id,
-                        "approved"
-                      )
-                    }
+  updateRequest(
+    request.id,
+    "approved",
+    request.tripId
+  )
+}
                     className="bg-green-600 px-5 py-2 rounded-xl font-bold"
                   >
                     Approve ✅
@@ -138,11 +142,12 @@ export default function RequestsPage() {
 
                   <button
                     onClick={() =>
-                      updateRequest(
-                        request.id,
-                        "rejected"
-                      )
-                    }
+  updateRequest(
+    request.id,
+    "rejected",
+    request.tripId
+  )
+}
                     className="bg-red-600 px-5 py-2 rounded-xl font-bold"
                   >
                     Reject ❌

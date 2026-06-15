@@ -163,6 +163,43 @@ const deleteTrip = async (tripId: string) => {
   }
 
 };
+const completeTrip = async (tripId: string) => {
+
+  const confirmed = confirm(
+    "Mark this trip as completed?"
+  );
+
+  if (!confirmed) return;
+
+  try {
+
+    await updateDoc(
+      doc(db, "trips", tripId),
+      {
+        status: "completed",
+      }
+    );
+
+    setMyTrips((prev) =>
+      prev.map((trip) =>
+        trip.id === tripId
+          ? {
+              ...trip,
+              status: "completed",
+            }
+          : trip
+      )
+    );
+
+    alert("🏁 Trip completed!");
+
+  } catch (error) {
+
+    console.log(error);
+
+  }
+
+};
   return (
     <main className="min-h-screen bg-black text-white px-6 py-10">
 {editingTrip && (
@@ -272,7 +309,7 @@ const deleteTrip = async (tripId: string) => {
           <p className="text-zinc-400 mt-2">
             ❤️ {trip.likes || 0}
           </p>
-<div className="mt-3 flex gap-3">
+<div className="mt-3 flex gap-3 flex-wrap">
 
   <button
     onClick={() => editTrip(trip)}
@@ -287,6 +324,23 @@ const deleteTrip = async (tripId: string) => {
   >
     🗑 Delete
   </button>
+
+  {trip.status !== "completed" && (
+    <button
+      onClick={() =>
+        completeTrip(trip.id)
+      }
+      className="bg-green-600 px-4 py-2 rounded-xl font-bold"
+    >
+      🏁 Complete Trip
+    </button>
+  )}
+
+  {trip.status === "completed" && (
+    <span className="bg-green-900 px-4 py-2 rounded-xl font-bold text-green-300">
+      ✅ Completed
+    </span>
+  )}
 
 </div>
         </div>
