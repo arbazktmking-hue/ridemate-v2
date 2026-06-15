@@ -406,19 +406,19 @@ overflow-hidden
 
                 {/* Trip Details */}
                 <div
-                  className="
+  className="
       absolute
-      bottom-24
+      bottom-32
       left-0
       right-0
       px-5
       text-white
       bg-gradient-to-t
-      from-black/80
+      from-black/90
       to-transparent
-      pb-8
+      pb-20
     "
-                >
+>
                   <h2 className="text-3xl font-black">
                     {trip.destination}
                   </h2>
@@ -432,8 +432,18 @@ overflow-hidden
                   </p>
 
                   <p>
-                    🛣️ {trip.distance || 0} KM
-                  </p>
+  🛣️ {trip.distance || 0} KM
+</p>
+
+<p className="mt-1">
+  📅 {trip.tripDate
+    ? new Date(trip.tripDate).toLocaleString()
+    : "Date TBA"}
+</p>
+
+<p className="mt-1 text-green-400 font-semibold">
+  💰 ₹{trip.tripPrice || 0}
+</p>
 
                   <p className="mt-2">
                     {trip.caption}
