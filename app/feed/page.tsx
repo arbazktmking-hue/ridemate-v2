@@ -492,22 +492,30 @@ overflow-hidden
                     </span>
                   </button>
 
-                  <button
-                    onClick={() =>
-                      toggleSaveTrip(trip.id)
-                    }
-                    className="flex flex-col items-center"
-                  >
-                    <span className="text-2xl">
-                      {savedTrips.includes(trip.id)
-                        ? "⭐"
-                        : "📌"}
-                    </span>
+ <button
+  onClick={() =>
+    toggleSaveTrip(trip.id)
+  }
+  className="flex flex-col items-center"
+>
+  <span className="text-2xl">
+    {savedTrips.includes(trip.id)
+      ? "⭐"
+      : "📌"}
+  </span>
 
-                    <span className="text-xs">
-                      Save
-                    </span>
-                  </button>
+  <span
+    className={`text-xs ${
+      savedTrips.includes(trip.id)
+        ? "text-yellow-400 font-semibold"
+        : ""
+    }`}
+  >
+    {savedTrips.includes(trip.id)
+      ? "Saved"
+      : "Save"}
+  </span>
+</button>
                   <button
   onClick={() => {
     const currentUser = JSON.parse(
