@@ -17,6 +17,8 @@ const [caption, setCaption] = useState("");
 const [startLocation, setStartLocation] = useState("");
 const [endLocation, setEndLocation] = useState("");
 const [distance, setDistance] = useState("");
+const [tripDate, setTripDate] = useState("");
+const [tripPrice, setTripPrice] = useState("");
 const [tripImage, setTripImage] = useState(
   "https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=1200&auto=format&fit=crop"
 );
@@ -32,11 +34,14 @@ const postTrip = async () => {
     await addDoc(
   collection(db, "trips"),
   {
+    status: "upcoming",
   destination,
   startLocation,
   endLocation,
   distance,
   bike,
+  tripDate,
+tripPrice,
   caption,
     image: tripImage,
     userName: user.name,
@@ -55,7 +60,8 @@ setEndLocation("");
 setDistance("");
 setBike("");
 setCaption("");
-
+setTripDate("");
+setTripPrice("");
   } catch (error) {
 
     console.error("FIRESTORE ERROR:", error);
@@ -131,6 +137,24 @@ setCaption("");
   placeholder="Distance (KM)"
   value={distance}
   onChange={(e) => setDistance(e.target.value)}
+  className="w-full p-4 rounded-2xl bg-black border border-zinc-700"
+/>
+<input
+  type="datetime-local"
+  value={tripDate}
+  onChange={(e) =>
+    setTripDate(e.target.value)
+  }
+  className="w-full p-4 rounded-2xl bg-black border border-zinc-700"
+/>
+
+<input
+  type="number"
+  placeholder="Trip Price (₹)"
+  value={tripPrice}
+  onChange={(e) =>
+    setTripPrice(e.target.value)
+  }
   className="w-full p-4 rounded-2xl bg-black border border-zinc-700"
 />
           <input

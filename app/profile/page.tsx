@@ -301,7 +301,17 @@ const completeTrip = async (tripId: string) => {
           <p className="text-orange-500">
             {trip.bike}
           </p>
+<p className="text-zinc-400">
+  📅 {trip.tripDate
+    ? new Date(
+        trip.tripDate
+      ).toLocaleString()
+    : "Date TBA"}
+</p>
 
+<p className="text-green-400">
+  💰 ₹{trip.tripPrice || 0}
+</p>
 <p className="text-zinc-300 mt-2">
   {trip.caption}
 </p>
