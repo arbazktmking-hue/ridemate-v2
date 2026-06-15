@@ -331,17 +331,15 @@ export default function FeedPage() {
 
           {trips.map((trip) => (
             <div
-              key={trip.id}
-              className="
+  key={trip.id}
+  className="
 snap-start
 h-screen
 w-full
-bg-zinc-900
+relative
 overflow-hidden
-flex
-flex-col
 "
-            >
+>
               <div
                 className="relative h-full"
                 onDoubleClick={() => {
@@ -435,7 +433,7 @@ flex-col
                 <div
                   className="
       absolute
-      bottom-0
+      bottom-4
       left-0
       right-0
       flex
@@ -534,17 +532,25 @@ flex-col
                   </div>
                 )}
 
-              </div>
-
               <div
-                className={`
-    overflow-hidden transition-all duration-500 ease-in-out
-    ${openComments.includes(trip.id)
-                    ? "max-h-[1000px] opacity-100 mt-6"
-                    : "max-h-0 opacity-0"
-                  }
+  className={`
+    absolute
+    bottom-24
+    left-0
+    right-0
+    bg-black/90
+    backdrop-blur-md
+    z-50
+    overflow-y-auto
+    transition-all
+    duration-300
+    ${
+      openComments.includes(trip.id)
+        ? "max-h-[300px] opacity-100"
+        : "max-h-0 opacity-0"
+    }
   `}
-              >
+>
 
                 <div className="mt-6">
                   <input
@@ -614,7 +620,9 @@ transition
 
               </div>
 
-            </div>
+</div>
+
+</div>
 
           ))}
         </div>
