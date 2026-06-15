@@ -333,12 +333,11 @@ export default function FeedPage() {
             <div
   key={trip.id}
   className="
-snap-start
-h-screen
-w-full
-relative
-overflow-hidden
-"
+    snap-start
+    h-[100dvh]
+    w-full
+    relative
+  "
 >
               <div
                 className="relative h-full"
@@ -431,19 +430,19 @@ overflow-hidden
 
                 {/* Bottom Action Bar */}
                 <div
-                  className="
-      absolute
-      bottom-4
-      left-0
-      right-0
-      flex
-      justify-around
-      items-center
-      bg-black/70
-      backdrop-blur-md
-      py-4
-    "
-                >
+  className="
+    absolute
+    bottom-4
+    left-0
+    right-0
+    flex
+    justify-around
+    items-center
+    bg-red-500
+    py-4
+    z-[999]
+  "
+>
                   <button
                     onClick={() =>
                       likeTrip(trip.id, trip.likes || 0)
