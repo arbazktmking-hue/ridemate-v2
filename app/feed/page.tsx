@@ -51,7 +51,18 @@ export default function FeedPage() {
 
         });
 
-        setTrips(loadedTrips);
+        const uniqueTrips = loadedTrips.filter(
+  (trip, index, self) =>
+    index === self.findIndex((t) => t.id === trip.id)
+);
+
+setTrips(uniqueTrips);
+
+console.log(
+  "Trips loaded:",
+  uniqueTrips.length,
+  uniqueTrips
+);
       } catch (error) {
 
         console.log(error);
@@ -439,7 +450,7 @@ overflow-hidden
     flex
     justify-around
     items-center
-    bg-red-500
+    bg-black/70 backdrop-blur-md
     py-4
     z-[999]
   "
@@ -497,21 +508,26 @@ overflow-hidden
                       Save
                     </span>
                   </button>
-                  {JSON.parse(
-                    localStorage.getItem("ridemateUser") || "{}"
-                  ).name !== trip.userName && (
-                      <button
-                        onClick={() =>
-                          requestToJoin(trip)
-                        }
-                        className="flex flex-col items-center"
-                      >
-                        <span className="text-2xl">🚀</span>
-                        <span className="text-xs">
-                          Join
-                        </span>
-                      </button>
-                    )}
+                  <button
+  onClick={() => {
+    const currentUser = JSON.parse(
+      localStorage.getItem("ridemateUser") || "{}"
+    );
+
+    if (currentUser.name === trip.userName) {
+      alert("This is your ride");
+      return;
+    }
+
+    requestToJoin(trip);
+  }}
+  className="flex flex-col items-center"
+>
+  <span className="text-2xl">🚀</span>
+  <span className="text-xs">
+    Join
+  </span>
+</button>
                 </div>
 
                 {heartAnimation === trip.id && (
