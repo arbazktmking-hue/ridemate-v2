@@ -16,12 +16,18 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../firebase";
-
+import {
+  Heart,
+  MessageCircle,
+  Bookmark,
+  Rocket,
+} from "lucide-react";
 export default function FeedPage() {
 
 
   const [trips, setTrips] = useState<any[]>([]);
   const [savedTrips, setSavedTrips] = useState<string[]>([]);
+  const [selectedTrip, setSelectedTrip] = useState<any>(null);
   const [openComments, setOpenComments] =
     useState<string[]>([]);
   const [heartAnimation, setHeartAnimation] =
@@ -352,20 +358,21 @@ overflow-hidden
 "
 >
               <div
-                className="relative h-full"
-                onDoubleClick={() => {
-                  likeTrip(
-                    trip.id,
-                    trip.likes || 0
-                  );
+  className="relative h-full"
+  onClick={() => setSelectedTrip(trip)}
+  onDoubleClick={() => {
+    likeTrip(
+      trip.id,
+      trip.likes || 0
+    );
 
-                  setHeartAnimation(trip.id);
+    setHeartAnimation(trip.id);
 
-                  setTimeout(() => {
-                    setHeartAnimation(null);
-                  }, 800);
-                }}
-              >
+    setTimeout(() => {
+      setHeartAnimation(null);
+    }, 800);
+  }}
+>
 
                 <img
                   src={trip.image}
@@ -421,11 +428,11 @@ overflow-hidden
       shadow-2xl
     "
 >
-                  <h2 className="text-4xl font-extrabold tracking-wide">
-  🏔 {trip.destination}
+                  <h2 className="text-4xl font-black tracking-tight drop-shadow-lg">
+  {trip.destination}
 </h2>
 
-                  <p className="inline-block mt-2 bg-orange-500/20 border border-orange-400/30 px-3 py-1 rounded-full text-orange-300 font-semibold text-sm">
+                  <p className="inline-flex items-center gap-2 mt-3 bg-orange-500/20 border border-orange-500/40 px-4 py-2 rounded-full text-orange-300 font-bold text-sm backdrop-blur-md">
   🏍 {trip.bike}
 </p>
 
@@ -455,84 +462,98 @@ overflow-hidden
 </p>
                 </div>
 
-                {/* Bottom Action Bar */}
-                <div
+               {/* Bottom Action Bar */}
+<div
   className="
     absolute
     bottom-4
-    left-0
-    right-0
+    left-4
+    right-4
     flex
     justify-around
     items-center
-    bg-black/40 backdrop-blur-xl border-t border-white/10
-    py-4
+    bg-black/40
+    backdrop-blur-xl
+    border
+    border-white/10
+    rounded-3xl
+    py-3
     z-[999]
+    shadow-2xl
   "
 >
-                  <button
-                    onClick={() =>
-                      likeTrip(trip.id, trip.likes || 0)
-                    }
-                    className="flex flex-col items-center"
-                  >
-                    <span className="text-2xl">❤️</span>
-                    <span className="text-xs">
-                      {trip.likes || 0}
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      if (
-                        openComments.includes(trip.id)
-                      ) {
-                        setOpenComments(prev =>
-                          prev.filter(
-                            id => id !== trip.id
-                          )
-                        );
-                      } else {
-                        setOpenComments(prev => [
-                          ...prev,
-                          trip.id
-                        ]);
-                      }
-                    }}
-                    className="flex flex-col items-center"
-                  >
-                    <span className="text-2xl">💬</span>
-                    <span className="text-xs">
-                      {(trip.comments || []).length}
-                    </span>
-                  </button>
-
- <button
-  onClick={() =>
-    toggleSaveTrip(trip.id)
-  }
-  className="flex flex-col items-center"
+  {/* Like */}
+  <button
+  onClick={(e) => {
+    e.stopPropagation();
+    likeTrip(trip.id, trip.likes || 0);
+  }}
+  className="..."
 >
-  <span className="text-2xl">
-    {savedTrips.includes(trip.id)
-      ? "⭐"
-      : "📌"}
-  </span>
+    <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-red-500/20 transition">
+      <Heart className="w-6 h-6 text-red-400" />
+    </div>
 
-  <span
-    className={`text-xs ${
-      savedTrips.includes(trip.id)
-        ? "text-yellow-400 font-semibold"
-        : ""
-    }`}
-  >
-    {savedTrips.includes(trip.id)
-      ? "Saved"
-      : "Save"}
-  </span>
-</button>
-                  <button
-  onClick={() => {
+    <span className="text-xs">
+      {trip.likes || 0}
+    </span>
+  </button>
+
+  {/* Comments */}
+  <button
+  onClick={(e) => {
+    e.stopPropagation();
+
+    if (openComments.includes(trip.id)) {
+      setOpenComments(prev =>
+        prev.filter(id => id !== trip.id)
+      );
+    } else {
+      setOpenComments(prev => [
+        ...prev,
+        trip.id,
+      ]);
+    }
+  }}
+>
+    <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-blue-500/20 transition">
+      <MessageCircle className="w-6 h-6 text-sky-400" />
+    </div>
+
+    <span className="text-xs">
+      {(trip.comments || []).length}
+    </span>
+  </button>
+
+  {/* Save */}
+  <button
+  onClick={(e) => {
+    e.stopPropagation();
+    toggleSaveTrip(trip.id);
+  }}
+>
+    <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-yellow-500/20 transition">
+      <Bookmark
+        className={`w-6 h-6 ${
+          savedTrips.includes(trip.id)
+            ? "fill-yellow-400 text-yellow-400"
+            : "text-white"
+        }`}
+      />
+    </div>
+
+    <span className="text-xs">
+      {savedTrips.includes(trip.id)
+        ? "Saved"
+        : "Save"}
+    </span>
+  </button>
+
+  {/* Join */}
+  <button
+  onClick={(e) => {
+    e.stopPropagation();
+
     const currentUser = JSON.parse(
       localStorage.getItem("ridemateUser") || "{}"
     );
@@ -544,15 +565,16 @@ overflow-hidden
 
     requestToJoin(trip);
   }}
-  className="flex flex-col items-center"
 >
-  <span className="text-2xl">🚀</span>
-  <span className="text-xs">
-    Join
-  </span>
-</button>
-                </div>
+    <div className="w-12 h-12 rounded-full bg-orange-500 flex items-center justify-center hover:scale-110 transition">
+      <Rocket className="w-6 h-6 text-white" />
+    </div>
 
+    <span className="text-xs">
+      Join
+    </span>
+  </button>
+</div>
                 {heartAnimation === trip.id && (
                   <div
                     className="
@@ -666,6 +688,87 @@ transition
           ))}
         </div>
       </div>
+      {selectedTrip && (
+  <div className="fixed inset-0 z-[2000] bg-black/60 backdrop-blur-sm flex items-end">
+    <div className="w-full bg-zinc-950 rounded-t-3xl p-6 border-t border-orange-500 max-h-[85vh] overflow-y-auto">
+
+      <div className="flex justify-between items-center mb-5">
+        <h2 className="text-3xl font-black text-orange-400">
+          🏔 {selectedTrip.destination}
+        </h2>
+
+        <button
+          onClick={() => setSelectedTrip(null)}
+          className="text-3xl"
+        >
+          ✕
+        </button>
+      </div>
+
+      <img
+        src={selectedTrip.image}
+        alt="Trip"
+        className="w-full h-56 object-cover rounded-2xl mb-5"
+      />
+
+      <div className="space-y-3 text-zinc-200">
+
+        <p>
+          🏍 <strong>Bike:</strong> {selectedTrip.bike}
+        </p>
+
+        <p>
+          📍 <strong>Route:</strong>{" "}
+          {selectedTrip.startLocation} → {selectedTrip.endLocation}
+        </p>
+
+        <p>
+          🛣️ <strong>Distance:</strong>{" "}
+          {selectedTrip.distance} KM
+        </p>
+
+        <p>
+          📅 <strong>Departure:</strong>{" "}
+          {selectedTrip.tripDate
+            ? new Date(selectedTrip.tripDate).toLocaleString()
+            : "TBA"}
+        </p>
+
+        <p>
+          💰 <strong>Contribution:</strong> ₹
+          {selectedTrip.tripPrice || 0}
+        </p>
+
+        <p>
+          👤 <strong>Host:</strong>{" "}
+          {selectedTrip.userName}
+        </p>
+
+        <div className="mt-4 bg-black/40 rounded-2xl p-4 border border-zinc-800">
+          <h3 className="font-bold mb-2 text-orange-300">
+            Trip Description
+          </h3>
+
+          <p className="italic">
+            {selectedTrip.caption}
+          </p>
+        </div>
+
+      </div>
+
+      <button
+        onClick={() => {
+          requestToJoin(selectedTrip);
+          setSelectedTrip(null);
+        }}
+        className="mt-6 w-full bg-orange-500 text-black font-black py-4 rounded-2xl hover:scale-[1.02] transition"
+      >
+        🚀 Request Seat
+      </button>
+
+    </div>
+  </div>
+)}
     </main>
   );
 }
