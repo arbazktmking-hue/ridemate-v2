@@ -7,7 +7,18 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../firebase";
-
+import {
+  Menu,
+  X,
+  House,
+  Compass,
+  Trophy,
+  MessageCircle,
+  Bike,
+  Bell,
+  User,
+  Route,
+} from "lucide-react";
 export default function Navbar() {
 
   const [menuOpen, setMenuOpen] =
@@ -82,26 +93,28 @@ useEffect(() => {
 }, []);
   return (
     <>
-      <nav className="bg-zinc-900 text-white border-b border-zinc-800 px-4 py-4 flex items-center justify-between">
+      <nav className="bg-black/80 backdrop-blur-xl text-white border-b border-white/10 px-4 py-4 flex items-center justify-between sticky top-0 z-50">
 
         <button
-          onClick={() =>
-            setMenuOpen(!menuOpen)
-          }
-          className="text-3xl font-black"
-        >
-          ☰
-        </button>
+  onClick={() => setMenuOpen(!menuOpen)}
+  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 transition"
+>
+  <Menu size={28} />
+</button>
 
         <div className="flex items-center gap-3">
 
-  <h1 className="text-2xl font-black text-orange-500">
-    RideMate 🏍
-  </h1>
+  <Route className="text-orange-500" size={28} />
 
-  <span className="bg-orange-500 text-black px-2 py-1 rounded-full text-xs font-black">
-    {rideCount} Trips
-  </span>
+  <div>
+    <h1 className="text-2xl font-black text-orange-500">
+      RideMate
+    </h1>
+
+    <p className="text-xs text-zinc-400">
+      Adventure starts here
+    </p>
+  </div>
 
 </div>
 
@@ -123,7 +136,7 @@ animate-[slideIn_0.25s_ease-out]
             }
             className="text-3xl mb-8"
           >
-            ✕
+            <X size={28} />
           </button>
 {user && (
 
@@ -147,48 +160,58 @@ animate-[slideIn_0.25s_ease-out]
 
 )}
 
-          <div className="flex flex-col gap-4 text-lg">
+          <div className="flex flex-col gap-3 text-lg">
 
-            <a href="/">🏠 Home</a>
+  <a href="/" className="flex items-center gap-3 hover:text-orange-500 transition">
+    <House size={20} />
+    Home
+  </a>
 
-            <a href="/feed">
-  🧭 Explore Trips
-</a>
+  <a href="/feed" className="flex items-center gap-3 hover:text-orange-500 transition">
+    <Compass size={20} />
+    Explore Trips
+  </a>
 
-            <a href="/leaderboard">
-              🏆 Leaderboard
-            </a>
+  <a href="/leaderboard" className="flex items-center gap-3 hover:text-orange-500 transition">
+    <Trophy size={20} />
+    Hall of Riders
+  </a>
 
-            <a href="/inbox">
-              💬 Inbox
-            </a>
+  <a href="/inbox" className="flex items-center gap-3 hover:text-orange-500 transition">
+    <MessageCircle size={20} />
+    Crew Chat
+  </a>
 
-            <a href="/create-trip">
-              🏍 Create Trip
-            </a>
+  <a href="/create-trip" className="flex items-center gap-3 hover:text-orange-500 transition">
+    <Bike size={20} />
+    Plan Expedition
+  </a>
 
-            <a href="/requests">
-              🚀 Requests
-            </a>
+  <a href="/requests" className="flex items-center gap-3 hover:text-orange-500 transition">
+    🚀
+    Ride Requests
+  </a>
 
-            <a
-              href="/notifications"
-              className="relative"
-            >
-              🔔 Notifications
+  <a
+    href="/notifications"
+    className="flex items-center gap-3 hover:text-orange-500 transition"
+  >
+    <Bell size={20} />
+    Notifications
 
-              {notificationCount > 0 && (
-                <span className="ml-2 bg-red-500 text-white text-xs font-black rounded-full px-2 py-1">
-                  {notificationCount}
-                </span>
-              )}
-            </a>
+    {notificationCount > 0 && (
+      <span className="ml-auto bg-red-500 text-white text-xs font-black rounded-full px-2 py-1">
+        {notificationCount}
+      </span>
+    )}
+  </a>
 
-            <a href="/profile">
-              👤 Profile
-            </a>
+  <a href="/profile" className="flex items-center gap-3 hover:text-orange-500 transition">
+    <User size={20} />
+    Rider Profile
+  </a>
 
-          </div>
+</div>
 
         </div>
 

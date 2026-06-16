@@ -407,46 +407,51 @@ overflow-hidden
                 {/* Trip Details */}
                 <div
   className="
-    absolute
-    bottom-16
-    left-0
-    right-0
-    px-5
-    text-white
-    bg-gradient-to-t
-    from-black/80
-    to-transparent
-    pb-3
-  "
+      absolute
+      bottom-28
+      left-4
+      right-4
+      rounded-3xl
+      bg-black/35
+      backdrop-blur-xl
+      border
+      border-white/10
+      p-5
+      text-white
+      shadow-2xl
+    "
 >
-                  <h2 className="text-3xl font-black">
-                    {trip.destination}
-                  </h2>
+                  <h2 className="text-4xl font-extrabold tracking-wide">
+  🏔 {trip.destination}
+</h2>
 
-                  <p className="text-orange-400 font-bold">
-                    {trip.bike}
-                  </p>
-
-                  <p>
-                    📍 {trip.startLocation} → {trip.endLocation}
-                  </p>
-
-                  <p>
-  🛣️ {trip.distance || 0} KM
+                  <p className="inline-block mt-2 bg-orange-500/20 border border-orange-400/30 px-3 py-1 rounded-full text-orange-300 font-semibold text-sm">
+  🏍 {trip.bike}
 </p>
 
-<p className="text-sm">
-  📅 {trip.tripDate
-    ? new Date(trip.tripDate).toLocaleString()
-    : "Date TBA"}
-</p>
+                  <div className="mt-5 space-y-2 text-sm">
 
-<p className="text-sm">
-  💰 ₹{trip.tripPrice || 0}
-</p>
+  <p>
+    📍 {trip.startLocation} → {trip.endLocation}
+  </p>
 
-                  <p className="mt-1 text-sm">
-  {trip.caption}
+  <p>
+    🛣️ {trip.distance || 0} KM
+  </p>
+
+  <p>
+    📅 {trip.tripDate
+      ? new Date(trip.tripDate).toLocaleString()
+      : "Date TBA"}
+  </p>
+
+  <p>
+    💰 ₹{trip.tripPrice || 0}
+  </p>
+
+</div>
+                  <p className="mt-4 italic text-zinc-200">
+  “{trip.caption}”
 </p>
                 </div>
 
@@ -460,7 +465,7 @@ overflow-hidden
     flex
     justify-around
     items-center
-    bg-black/70 backdrop-blur-md
+    bg-black/40 backdrop-blur-xl border-t border-white/10
     py-4
     z-[999]
   "
