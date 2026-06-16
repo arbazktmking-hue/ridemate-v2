@@ -1,37 +1,31 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+"use client";
+
 import "./globals.css";
 import Navbar from "./components/Navbar";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-export const metadata: Metadata = {
-  title: "RideMate",
-  description: "RideMate Platform",
-};
+import { usePathname } from "next/navigation";
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+
+  const hideNavbar =
+    pathname === "/login";
+
   return (
     <html lang="en">
-      <body>
+  <head>
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#f97316" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+  </head>
 
-  <Navbar />
-
-  {children}
-
-</body>
-    </html>
+  <body>
+    {!hideNavbar && <Navbar />}
+    {children}
+  </body>
+</html>
   );
 }
