@@ -434,36 +434,15 @@ overflow-hidden
     "
 >
                   <h2 className="text-4xl font-black tracking-tight drop-shadow-lg">
-  {trip.destination}
+  🏔 {trip.destination}
 </h2>
 
-                  <p className="inline-flex items-center gap-2 mt-3 bg-orange-500/20 border border-orange-500/40 px-4 py-2 rounded-full text-orange-300 font-bold text-sm backdrop-blur-md">
-  🏍 {trip.bike}
+<p className="mt-3 text-lg text-white/90 font-semibold">
+  📍 {trip.startLocation}
 </p>
 
-                  <div className="mt-5 space-y-2 text-sm">
-
-  <p>
-    📍 {trip.startLocation} → {trip.endLocation}
-  </p>
-
-  <p>
-    🛣️ {trip.distance || 0} KM
-  </p>
-
-  <p>
-    📅 {trip.tripDate
-      ? new Date(trip.tripDate).toLocaleString()
-      : "Date TBA"}
-  </p>
-
-  <p>
-    💰 ₹{trip.tripPrice || 0}
-  </p>
-
-</div>
-                  <p className="mt-4 italic text-zinc-200">
-  “{trip.caption}”
+<p className="inline-flex items-center gap-2 mt-3 bg-orange-500/20 border border-orange-500/40 px-4 py-2 rounded-full text-orange-300 font-bold text-sm backdrop-blur-md">
+  🏍 {trip.bike}
 </p>
                 </div>
 
@@ -599,6 +578,7 @@ overflow-hidden
                 )}
 
               <div
+  onClick={(e) => e.stopPropagation()}
   className={`
     absolute
     bottom-24
