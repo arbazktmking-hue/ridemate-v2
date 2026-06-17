@@ -18,6 +18,7 @@ const [startLocation, setStartLocation] = useState("");
 const [endLocation, setEndLocation] = useState("");
 const [distance, setDistance] = useState("");
 const [tripDate, setTripDate] = useState("");
+const [itinerary, setItinerary] = useState("");
 const [tripPrice, setTripPrice] = useState("");
 const [tripImage, setTripImage] = useState(
   "https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=1200&auto=format&fit=crop"
@@ -41,6 +42,7 @@ const postTrip = async () => {
   distance,
   bike,
   tripDate,
+  itinerary: itinerary.trim(),
 tripPrice,
   caption,
     image: tripImage,
@@ -62,6 +64,10 @@ setBike("");
 setCaption("");
 setTripDate("");
 setTripPrice("");
+setItinerary("");
+setTripImage(
+  "https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=1200&auto=format&fit=crop"
+);
   } catch (error) {
 
     console.error("FIRESTORE ERROR:", error);
@@ -107,7 +113,6 @@ setTripPrice("");
           />
 
         </label>
-
         <div className="space-y-6 mt-8">
 
           <input
@@ -165,13 +170,39 @@ setTripPrice("");
             className="w-full p-4 rounded-2xl bg-black border border-zinc-700"
           />
 
-          <textarea
-            placeholder="Write your ride story..."
-            value={caption}
-            onChange={(e) => setCaption(e.target.value)}
-            className="w-full h-40 p-4 rounded-2xl bg-black border border-zinc-700"
-          />
+          <div className="bg-black border border-zinc-700 rounded-2xl p-4 space-y-4">
 
+  <div>
+    <label className="block text-orange-400 font-bold mb-2">
+      📝 Ride Story
+    </label>
+
+    <textarea
+      placeholder="Tell riders about your trip..."
+      value={caption}
+      onChange={(e) => setCaption(e.target.value)}
+      className="w-full h-40 bg-transparent outline-none resize-none"
+    />
+  </div>
+
+  <div className="border-t border-zinc-700 pt-4">
+    <label className="block text-orange-400 font-bold mb-2">
+      🗺️ Itinerary (Optional)
+    </label>
+
+    <textarea
+      value={itinerary}
+      onChange={(e) => setItinerary(e.target.value)}
+      placeholder={`Example:
+• Bangalore → Chitradurga
+• Breakfast stop
+• Lunch at Davangere
+• Sunset viewpoint`}
+      className="w-full h-28 bg-transparent outline-none resize-none"
+    />
+  </div>
+
+</div>
           <button
             onClick={postTrip}
             className="w-full bg-orange-500 py-4 rounded-2xl text-xl font-black hover:scale-105 transition"

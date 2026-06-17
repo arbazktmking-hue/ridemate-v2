@@ -730,13 +730,53 @@ transition
         </p>
 
         <div className="mt-4 bg-black/40 rounded-2xl p-4 border border-zinc-800">
-          <h3 className="font-bold mb-2 text-orange-300">
-            Trip Description
-          </h3>
+          <div className="mt-4 bg-black/40 rounded-2xl p-4 border border-zinc-800">
+  <h3 className="font-bold mb-2 text-orange-300">
+    📝 About this Ride
+  </h3>
 
-          <p className="italic">
-            {selectedTrip.caption}
-          </p>
+  <p className="italic text-zinc-200">
+    {selectedTrip.caption || "No description provided."}
+  </p>
+
+  {selectedTrip.itinerary && (
+    <div className="mt-6 border-t border-zinc-700 pt-4">
+      <h3 className="font-bold mb-4 text-orange-300">
+        🗺️ Itinerary
+      </h3>
+
+      <div className="space-y-3">
+        {selectedTrip.itinerary
+          .split("\n")
+          .filter((line: string) => line.trim() !== "")
+          .map((line: string, index: number) => (
+            <div
+              key={index}
+              className="flex items-start gap-3"
+            >
+              <div className="mt-1 w-3 h-3 rounded-full bg-orange-500 flex-shrink-0" />
+
+              <p className="text-zinc-300">
+                {line}
+              </p>
+            </div>
+          ))}
+      </div>
+    </div>
+  )}
+</div>
+
+{selectedTrip.itinerary && (
+  <div className="mt-5 border-t border-zinc-700 pt-4">
+    <h3 className="font-bold mb-2 text-orange-300">
+      🗺️ Itinerary
+    </h3>
+
+    <p className="whitespace-pre-line text-zinc-300">
+      {selectedTrip.itinerary}
+    </p>
+  </div>
+)}
         </div>
 
       </div>

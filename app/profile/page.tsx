@@ -360,6 +360,16 @@ shadow-xl
 </p>
 <p className="text-zinc-300 mt-2">
   {trip.caption}
+  {trip.itinerary && (
+  <div className="mt-2 text-sm text-zinc-400 whitespace-pre-line">
+    <span className="font-bold text-orange-400">
+      🗺️ Itinerary:
+    </span>
+
+    {"\n"}
+    {trip.itinerary}
+  </div>
+)}
 </p>
 
           <p className="text-zinc-400 mt-2">
