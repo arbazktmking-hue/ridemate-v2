@@ -46,3 +46,18 @@ html {
 .snap-center {
   scroll-snap-align: center;
 }
+/* Hide scrollbar everywhere */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+html,
+body {
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
