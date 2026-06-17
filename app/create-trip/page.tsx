@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-
+import PageBackground from "../components/PageBackground";
 import {
   collection,
   addDoc
@@ -73,7 +73,7 @@ setTripPrice("");
 };
 
   return (
-    <main className="min-h-screen bg-black text-white px-6 py-10">
+    <PageBackground>
 
       <div className="max-w-3xl mx-auto bg-zinc-900 rounded-3xl border border-zinc-800 p-8">
 
@@ -183,6 +183,6 @@ setTripPrice("");
 
       </div>
 
-    </main>
+    </PageBackground>
   );
 }

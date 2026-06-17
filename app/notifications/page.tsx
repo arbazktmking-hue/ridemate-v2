@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-
+import PageBackground from "../components/PageBackground";
 import {
   collection,
   getDocs
@@ -48,7 +48,7 @@ useEffect(() => {
 }, []);
   return (
 
-    <main className="min-h-screen bg-black text-white px-6 py-10">
+    <PageBackground>
 
       <div className="max-w-4xl mx-auto">
 
@@ -89,7 +89,7 @@ useEffect(() => {
 
       </div>
 
-    </main>
+    </PageBackground>
 
   );
 

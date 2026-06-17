@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-
+import PageBackground from "../components/PageBackground";
 import { useRouter } from "next/navigation";
 import {
   collection,
@@ -201,12 +201,22 @@ const completeTrip = async (tripId: string) => {
 
 };
   return (
-    <main className="min-h-screen bg-black text-white px-6 py-10">
+    <PageBackground>
 {editingTrip && (
 
   <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
 
-    <div className="bg-zinc-900 p-6 rounded-3xl w-[95%] max-w-[500px] border border-zinc-700">
+    <div
+  className="
+    bg-white/10
+    backdrop-blur-2xl
+    border border-white/10
+    p-6
+    rounded-3xl
+    w-[95%]
+    max-w-[500px]
+  "
+>
 
       <h2 className="text-3xl font-black text-orange-500 mb-4">
         Edit Trip ✏️
@@ -245,7 +255,20 @@ const completeTrip = async (tripId: string) => {
   </div>
 
 )}
-      <div className="max-w-2xl mx-auto bg-zinc-900 rounded-3xl border border-zinc-800 p-10 text-center">
+      <div
+  className="
+    max-w-2xl
+    mx-auto
+    mt-8
+    rounded-3xl
+    bg-white/5
+    backdrop-blur-2xl
+    border border-white/10
+    shadow-2xl
+    p-10
+    text-center
+  "
+>
 
         <img
           src={user.image}
@@ -262,13 +285,29 @@ const completeTrip = async (tripId: string) => {
         </p>
 <div className="mt-8 space-y-3">
 
-  <div className="bg-black p-4 rounded-2xl">
-    🏍 Trips Posted: {tripCount}
-  </div>
+  <div
+  className="
+    bg-white/5
+    backdrop-blur-xl
+    border border-white/10
+    p-4
+    rounded-2xl
+  "
+>
+  🏍 Trips Posted: {tripCount}
+</div>
 
-  <div className="bg-black p-4 rounded-2xl">
-    ❤️ Likes Received: {totalLikes}
-  </div>
+<div
+  className="
+    bg-white/5
+    backdrop-blur-xl
+    border border-white/10
+    p-4
+    rounded-2xl
+  "
+>
+  ❤️ Likes Received: {totalLikes}
+</div>
 
 </div>
         <div className="mt-10 text-left">
@@ -291,7 +330,14 @@ const completeTrip = async (tripId: string) => {
 
         <div
           key={trip.id}
-          className="bg-black p-4 rounded-2xl border border-zinc-800"
+          className="
+bg-white/5
+backdrop-blur-xl
+border border-white/10
+p-5
+rounded-3xl
+shadow-xl
+"
         >
 
           <h3 className="font-bold text-xl">
@@ -372,6 +418,6 @@ const completeTrip = async (tripId: string) => {
 
       </div>
 
-    </main>
+    </PageBackground>
   );
 }
