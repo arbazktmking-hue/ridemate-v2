@@ -358,19 +358,23 @@ shadow-xl
 <p className="text-green-400">
   💰 ₹{trip.tripPrice || 0}
 </p>
-<p className="text-zinc-300 mt-2">
-  {trip.caption}
-  {trip.itinerary && (
-  <div className="mt-2 text-sm text-zinc-400 whitespace-pre-line">
-    <span className="font-bold text-orange-400">
-      🗺️ Itinerary:
-    </span>
+<div className="mt-2">
+  <p className="text-zinc-300">
+    {trip.caption}
+  </p>
 
-    {"\n"}
-    {trip.itinerary}
-  </div>
-)}
-</p>
+  {trip.itinerary && (
+    <div className="mt-3 text-sm text-zinc-400 whitespace-pre-line">
+      <span className="font-bold text-orange-400">
+        🗺️ Itinerary:
+      </span>
+
+      <div className="mt-1">
+        {trip.itinerary}
+      </div>
+    </div>
+  )}
+</div>
 
           <p className="text-zinc-400 mt-2">
             ❤️ {trip.likes || 0}

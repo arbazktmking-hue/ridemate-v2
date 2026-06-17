@@ -42,40 +42,35 @@ const [rideCount, setRideCount] = useState(0);
   }, []);
 
   useEffect(() => {
+  const loadNotifications = async () => {
+    const currentUser = JSON.parse(
+      localStorage.getItem("ridemateUser") || "{}"
+    );
 
-    const loadNotifications = async () => {
+    if (!currentUser.name) return;
 
-      const user = JSON.parse(
-        localStorage.getItem("ridemateUser") || "{}"
-      );
+    const snapshot = await getDocs(
+      collection(db, "notifications")
+    );
 
-      if (!user.name) return;
+    let unread = 0;
 
-      const snapshot = await getDocs(
-        collection(db, "notifications")
-      );
+    snapshot.forEach((docSnap) => {
+      const notification = docSnap.data();
 
-      let count = 0;
+      if (
+        notification.user === currentUser.name &&
+        notification.read === false
+      ) {
+        unread++;
+      }
+    });
 
-      snapshot.forEach((doc) => {
+    setNotificationCount(unread);
+  };
 
-        const notification = doc.data();
-
-        if (
-          notification.user === user.name
-        ) {
-          count++;
-        }
-
-      });
-
-      setNotificationCount(count);
-
-    };
-
-    loadNotifications();
-
-  }, []);
+  loadNotifications();
+}, []);
 useEffect(() => {
 
   const loadRideCount = async () => {
@@ -102,19 +97,51 @@ useEffect(() => {
   <Menu size={28} />
 </button>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between flex-1 ml-4">
 
-  <Route className="text-orange-500" size={28} />
+  <div className="flex items-center gap-3">
+    <Route className="text-orange-500" size={28} />
 
-  <div>
-    <h1 className="text-2xl font-black text-orange-500">
-      RideMate
-    </h1>
+    <div>
+      <h1 className="text-2xl font-black text-orange-500">
+        RideMate
+      </h1>
 
-    <p className="text-xs text-zinc-400">
-      Adventure starts here
-    </p>
+      <p className="text-xs text-zinc-400">
+        Adventure starts here
+      </p>
+    </div>
   </div>
+
+  <a
+    href="/notifications"
+    className="relative p-2 rounded-xl bg-white/10 hover:bg-white/20 transition"
+  >
+    <Bell size={24} />
+
+    {notificationCount > 0 && (
+      <span
+        className="
+          absolute
+          -top-1
+          -right-1
+          min-w-[20px]
+          h-5
+          px-1
+          flex
+          items-center
+          justify-center
+          rounded-full
+          bg-red-500
+          text-white
+          text-[10px]
+          font-black
+        "
+      >
+        {notificationCount > 9 ? "9+" : notificationCount}
+      </span>
+    )}
+  </a>
 
 </div>
 
@@ -193,18 +220,19 @@ animate-[slideIn_0.25s_ease-out]
   </a>
 
   <a
-    href="/notifications"
-    className="flex items-center gap-3 hover:text-orange-500 transition"
-  >
-    <Bell size={20} />
-    Notifications
+  href="/notifications"
+  className="flex items-center gap-3 hover:text-orange-500 transition"
+>
+  <Bell size={20} />
 
-    {notificationCount > 0 && (
-      <span className="ml-auto bg-red-500 text-white text-xs font-black rounded-full px-2 py-1">
-        {notificationCount}
-      </span>
-    )}
-  </a>
+  Notifications
+
+  {notificationCount > 0 && (
+    <span className="ml-auto bg-red-500 text-white text-xs font-black rounded-full px-2 py-1">
+      {notificationCount}
+    </span>
+  )}
+</a>
 
   <a href="/profile" className="flex items-center gap-3 hover:text-orange-500 transition">
     <User size={20} />

@@ -187,6 +187,7 @@ console.log(
             user: trip.userName,
             text: `${currentUser.name} liked your trip ❤️`,
             createdAt: Date.now(),
+            read: false,
           }
         );
 
@@ -246,6 +247,7 @@ console.log(
             user: trip.userName,
             text: `${user.name} commented on your trip 💬`,
             createdAt: Date.now(),
+            read: false,
           }
         );
 
@@ -326,6 +328,7 @@ console.log(
         user: trip.userName,
         text: `${currentUser.name} wants to join your ride 🚀`,
         createdAt: Date.now(),
+        read: false,
       }
     );
 
@@ -765,18 +768,6 @@ transition
     </div>
   )}
 </div>
-
-{selectedTrip.itinerary && (
-  <div className="mt-5 border-t border-zinc-700 pt-4">
-    <h3 className="font-bold mb-2 text-orange-300">
-      🗺️ Itinerary
-    </h3>
-
-    <p className="whitespace-pre-line text-zinc-300">
-      {selectedTrip.itinerary}
-    </p>
-  </div>
-)}
         </div>
 
       </div>
