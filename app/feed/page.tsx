@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
+import Link from "next/link";
 import {
   collection,
   getDocs,
@@ -385,31 +385,36 @@ overflow-hidden
                 />
 
                 {/* Rider Info */}
-                <div
-                  className="
-      absolute
-      top-4
-      left-4
-      flex
-      items-center
-      gap-3
-      bg-black/50
-      backdrop-blur-sm
-      px-3
-      py-2
-      rounded-full
-    "
-                >
-                  <img
-                    src={trip.userImage}
-                    alt="Rider"
-                    className="w-10 h-10 rounded-full"
-                  />
+<Link
+  href={`/rider/${encodeURIComponent(trip.userName)}`}
+  onClick={(e) => e.stopPropagation()}
+  className="
+    absolute
+    top-4
+    left-4
+    flex
+    items-center
+    gap-3
+    bg-black/50
+    backdrop-blur-sm
+    px-3
+    py-2
+    rounded-full
+    hover:bg-black/70
+    transition
+    z-50
+  "
+>
+  <img
+    src={trip.userImage}
+    alt="Rider"
+    className="w-10 h-10 rounded-full border border-orange-500"
+  />
 
-                  <span className="font-bold text-white">
-                    {trip.userName}
-                  </span>
-                </div>
+  <span className="font-bold text-white">
+    {trip.userName}
+  </span>
+</Link>
 
                 {/* Trip Details */}
                 <div
