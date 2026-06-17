@@ -88,7 +88,7 @@ useEffect(() => {
 }, []);
   return (
     <>
-      <nav className="bg-black/80 backdrop-blur-xl text-white border-b border-white/10 px-4 py-4 flex items-center justify-between sticky top-0 z-50">
+      <nav className="bg-black/80 backdrop-blur-xl text-white border-b border-white/10 px-4 py-4 flex items-center justify-between fixed top-0 left-0 right-0 z-[100]">
 
         <button
   onClick={() => setMenuOpen(!menuOpen)}
@@ -148,14 +148,30 @@ useEffect(() => {
       </nav>
 
       {menuOpen && (
+  <>
+    {/* Backdrop */}
+    <div
+      className="fixed inset-0 bg-black/60 z-[9998]"
+      onClick={() => setMenuOpen(false)}
+    />
 
-      <div className="
-fixed left-0 top-0 h-screen w-72
-bg-zinc-950 border-r border-zinc-800 p-6 z-50
-overflow-y-auto
-pb-20
-animate-[slideIn_0.25s_ease-out]
-">
+    {/* Sidebar */}
+    <div
+      className="
+        fixed
+        top-0
+        left-0
+        h-screen
+        w-72
+        bg-zinc-950
+        border-r
+        border-zinc-800
+        p-6
+        pb-20
+        overflow-y-auto
+        z-[9999]
+      "
+    >
 
           <button
             onClick={() =>
@@ -241,9 +257,9 @@ animate-[slideIn_0.25s_ease-out]
 
 </div>
 
-        </div>
-
-      )}
+                </div> {/* End Sidebar */}
+      </>
+    )}
     </>
   );
 }

@@ -336,17 +336,17 @@ console.log(
 
   };
   return (
-    <main className="h-[calc(100dvh-64px)] bg-black text-white overflow-hidden">
+    <main className="fixed inset-0 pt-16 bg-black text-white overflow-hidden">
 
       <div
-        className="
-  w-full
-  h-full
-  overflow-y-scroll
-  snap-y
-  snap-mandatory
+  className="
+    h-full
+    overflow-y-auto
+    overflow-x-hidden
+    snap-y
+    snap-mandatory
   "
-      >
+>
         <div>
 
           {trips.map((trip) => (
@@ -768,6 +768,18 @@ transition
     </div>
   )}
 </div>
+
+{selectedTrip.itinerary && (
+  <div className="mt-5 border-t border-zinc-700 pt-4">
+    <h3 className="font-bold mb-2 text-orange-300">
+      🗺️ Itinerary
+    </h3>
+
+    <p className="whitespace-pre-line text-zinc-300">
+      {selectedTrip.itinerary}
+    </p>
+  </div>
+)}
         </div>
 
       </div>
