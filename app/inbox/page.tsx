@@ -17,51 +17,47 @@ export default function InboxPage() {
 
   useEffect(() => {
 
-    const loadChats = async () => {
+  const loadChats = async () => {
 
-      const currentUser = JSON.parse(
-        localStorage.getItem(
-          "ridemateUser"
-        ) || "{}"
-      );
+    const currentUser = JSON.parse(
+      localStorage.getItem("ridemateUser") || "{}"
+    );
 
-      const snapshot = await getDocs(
-        collection(db, "messages")
-      );
+    const snapshot = await getDocs(
+      collection(db, "messages")
+    );
 
-      const riders: any = {};
+    const riders: any = {};
 
-      snapshot.forEach((doc) => {
+    snapshot.forEach((doc) => {
 
-        const msg = doc.data();
+      const msg = doc.data();
 
-        if (
-          msg.sender === currentUser.name
-        ) {
+      if (msg.sender === currentUser.name) {
+        riders[msg.receiver] = true;
+      }
 
-          riders[msg.receiver] = true;
+      if (msg.receiver === currentUser.name) {
+        riders[msg.sender] = true;
+      }
 
-        }
+    });
 
-        if (
-          msg.receiver === currentUser.name
-        ) {
+    setChats(Object.keys(riders));
 
-          riders[msg.sender] = true;
+  };
 
-        }
+  // Initial load
+  loadChats();
 
-      });
-
-      setChats(
-        Object.keys(riders)
-      );
-
-    };
-
+  // Refresh every second
+  const interval = setInterval(() => {
     loadChats();
+  }, 1000);
 
-  }, []);
+  return () => clearInterval(interval);
+
+}, []);
 
   return (
 
