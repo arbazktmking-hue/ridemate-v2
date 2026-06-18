@@ -1,16 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import PageBackground from "../components/PageBackground";
 import {
   collection,
-  addDoc
+  addDoc,
+  doc,
+  getDoc,
+  updateDoc,
 } from "firebase/firestore";
 
 import { db } from "../firebase";
-
+import { useSearchParams, useRouter } from "next/navigation";
 export default function CreateTripPage() {
 
+  const searchParams = useSearchParams();
+const router = useRouter();
+const editId = searchParams.get("edit");
+const isEditing = !!editId;
 const [destination, setDestination] = useState("");
 const [bike, setBike] = useState("");
 const [caption, setCaption] = useState("");
@@ -23,59 +30,120 @@ const [tripPrice, setTripPrice] = useState("");
 const [tripImage, setTripImage] = useState(
   "https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=1200&auto=format&fit=crop"
 );
+useEffect(() => {
+  const loadTrip = async () => {
+    if (!editId) return;
 
+    const snap = await getDoc(doc(db, "trips", editId));
+
+    if (!snap.exists()) return;
+
+    const trip = snap.data();
+
+    setDestination(trip.destination || "");
+    setBike(trip.bike || "");
+    setCaption(trip.caption || "");
+    setStartLocation(trip.startLocation || "");
+    setEndLocation(trip.endLocation || "");
+    setDistance(trip.distance || "");
+    setTripDate(trip.tripDate || "");
+    setItinerary(trip.itinerary || "");
+    setTripPrice(trip.tripPrice || "");
+    setTripImage(trip.image || "");
+  };
+
+  loadTrip();
+}, [editId]);
 const postTrip = async () => {
-
   try {
-
     const user = JSON.parse(
       localStorage.getItem("ridemateUser") || "{}"
     );
 
-    await addDoc(
-  collection(db, "trips"),
-  {
+    let tripData;
+
+if (isEditing && editId) {
+  const existingTrip = (
+    await getDoc(doc(db, "trips", editId))
+  ).data();
+
+  tripData = {
+    ...existingTrip,
     status: "upcoming",
-  destination,
-  startLocation,
-  endLocation,
-  distance,
-  bike,
-  tripDate,
-  itinerary: itinerary.trim(),
-tripPrice,
-  caption,
+    destination,
+    startLocation,
+    endLocation,
+    distance,
+    bike,
+    tripDate,
+    itinerary: itinerary.trim(),
+    tripPrice,
+    caption,
     image: tripImage,
     userName: user.name,
     userImage: user.image,
-    createdAt: new Date(),
-    likes: 0,
-    comments: [],
-  }
-);
+  };
+} else {
+  tripData = {
+    status: "upcoming",
+    destination,
+    startLocation,
+    endLocation,
+    distance,
+    bike,
+    tripDate,
+    itinerary: itinerary.trim(),
+    tripPrice,
+    caption,
+    image: tripImage,
+    userName: user.name,
+    userImage: user.image,
+  };
+}
 
-    alert("Trip Posted Successfully 🔥");
+    // EDIT EXISTING TRIP
+    if (isEditing && editId) {
+      await updateDoc(
+        doc(db, "trips", editId),
+        tripData
+      );
 
-   setDestination("");
-setStartLocation("");
-setEndLocation("");
-setDistance("");
-setBike("");
-setCaption("");
-setTripDate("");
-setTripPrice("");
-setItinerary("");
-setTripImage(
-  "https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=1200&auto=format&fit=crop"
-);
+      alert("✅ Trip updated successfully!");
+
+      router.push("/profile");
+      return;
+    }
+
+    // CREATE NEW TRIP
+    await addDoc(
+      collection(db, "trips"),
+      {
+        ...tripData,
+        createdAt: new Date(),
+        likes: 0,
+        comments: [],
+      }
+    );
+
+    alert("🔥 Trip Posted Successfully!");
+
+    setDestination("");
+    setStartLocation("");
+    setEndLocation("");
+    setDistance("");
+    setBike("");
+    setCaption("");
+    setTripDate("");
+    setTripPrice("");
+    setItinerary("");
+    setTripImage(
+      "https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=1200&auto=format&fit=crop"
+    );
+
   } catch (error) {
-
-    console.error("FIRESTORE ERROR:", error);
-
-    alert("Failed to post trip");
-
+    console.error(error);
+    alert("Failed to save trip");
   }
-
 };
 
   return (
@@ -84,8 +152,8 @@ setTripImage(
       <div className="max-w-3xl mx-auto bg-zinc-900 rounded-3xl border border-zinc-800 p-8">
 
         <h1 className="text-5xl font-black text-orange-500 mb-10">
-          Create Trip 🔥
-        </h1>
+  {isEditing ? "Edit Trip ✏️" : "Create Trip 🔥"}
+</h1>
 
         <img
           src={tripImage}
@@ -207,7 +275,7 @@ setTripImage(
             onClick={postTrip}
             className="w-full bg-orange-500 py-4 rounded-2xl text-xl font-black hover:scale-105 transition"
           >
-            Post Trip
+            {isEditing ? "Save Changes" : "Post Trip"}
           </button>
 
         </div>

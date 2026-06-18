@@ -18,8 +18,7 @@ export default function ProfilePage() {
   const [tripCount, setTripCount] = useState(0);
 const [totalLikes, setTotalLikes] = useState(0);
 const [myTrips, setMyTrips] = useState<any[]>([]);
-const [editingTrip, setEditingTrip] = useState<any>(null);
-const [newCaption, setNewCaption] = useState("");
+
   const router = useRouter();
 
   useEffect(() => {
@@ -92,48 +91,7 @@ loadStats();
     return null;
 
   }
-  const editTrip = (trip: any) => {
 
-  setEditingTrip(trip);
-
-  setNewCaption(
-    trip.caption || ""
-  );
-
-};
-const saveTripEdit = async () => {
-
-  if (!editingTrip) return;
-
-  try {
-
-    await updateDoc(
-      doc(db, "trips", editingTrip.id),
-      {
-        caption: newCaption,
-      }
-    );
-
-    setMyTrips((prevTrips) =>
-      prevTrips.map((trip) =>
-        trip.id === editingTrip.id
-          ? {
-              ...trip,
-              caption: newCaption,
-            }
-          : trip
-      )
-    );
-
-    setEditingTrip(null);
-
-  } catch (error) {
-
-    console.log(error);
-
-  }
-
-};
 const deleteTrip = async (tripId: string) => {
 
   const confirmed = confirm(
@@ -209,59 +167,6 @@ try {
 };
   return (
     <PageBackground>
-{editingTrip && (
-
-  <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-
-    <div
-  className="
-    bg-white/10
-    backdrop-blur-2xl
-    border border-white/10
-    p-6
-    rounded-3xl
-    w-[95%]
-    max-w-[500px]
-  "
->
-
-      <h2 className="text-3xl font-black text-orange-500 mb-4">
-        Edit Trip ✏️
-      </h2>
-
-      <textarea
-        value={newCaption}
-        onChange={(e) =>
-          setNewCaption(e.target.value)
-        }
-        className="w-full h-40 p-4 rounded-2xl bg-black border border-zinc-700"
-      />
-
-      <div className="flex gap-3 mt-5">
-
-        <button
-          onClick={saveTripEdit}
-          className="bg-orange-500 px-5 py-3 rounded-xl font-bold"
-        >
-          Save Changes
-        </button>
-
-        <button
-          onClick={() =>
-            setEditingTrip(null)
-          }
-          className="bg-zinc-700 px-5 py-3 rounded-xl font-bold"
-        >
-          Cancel
-        </button>
-
-      </div>
-
-    </div>
-
-  </div>
-
-)}
       <div
   className="
     max-w-2xl
@@ -389,11 +294,11 @@ shadow-xl
 <div className="mt-3 flex gap-3 flex-wrap">
 
   <button
-    onClick={() => editTrip(trip)}
-    className="bg-orange-500 px-4 py-2 rounded-xl font-bold"
-  >
-    ✏️ Edit
-  </button>
+  onClick={() => router.push(`/create-trip?edit=${trip.id}`)}
+  className="bg-orange-500 px-4 py-2 rounded-xl font-bold"
+>
+  ✏️ Edit
+</button>
 
   <button
     onClick={() => deleteTrip(trip.id)}
