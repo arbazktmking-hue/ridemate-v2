@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import PageBackground from "../components/PageBackground";
 import {
@@ -11,12 +10,17 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../firebase";
-import { useSearchParams, useRouter } from "next/navigation";
-export default function CreateTripPage() {
+import { useRouter } from "next/navigation";
+function CreateTripContent() {
 
-  const searchParams = useSearchParams();
+  
 const router = useRouter();
-const editId = searchParams.get("edit");
+const [editId, setEditId] = useState<string | null>(null);
+
+useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  setEditId(params.get("edit"));
+}, []);
 const isEditing = !!editId;
 const [destination, setDestination] = useState("");
 const [bike, setBike] = useState("");
@@ -285,3 +289,4 @@ if (isEditing && editId) {
     </PageBackground>
   );
 }
+export default CreateTripContent;
