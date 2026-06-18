@@ -99,7 +99,38 @@ const sendMessage = async () => {
 
     setMessage("");
 
-    location.reload();
+// Reload messages without refreshing page
+const snapshot = await getDocs(
+  collection(db, "messages")
+);
+
+const allMessages: any[] = [];
+
+snapshot.forEach((doc) => {
+
+  const msg = doc.data();
+
+  if (
+    (
+      msg.sender === currentUser.name &&
+      msg.receiver === riderName
+    )
+    ||
+    (
+      msg.sender === riderName &&
+      msg.receiver === currentUser.name
+    )
+  ) {
+    allMessages.push(msg);
+  }
+
+});
+
+allMessages.sort(
+  (a, b) => a.createdAt - b.createdAt
+);
+
+setMessages(allMessages);
 
   } catch (error) {
 

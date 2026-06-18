@@ -235,19 +235,12 @@ useEffect(() => {
     Ride Requests
   </a>
 
-  <a
-  href="/notifications"
+ <a
+  href="/live-trip-chats"
   className="flex items-center gap-3 hover:text-orange-500 transition"
 >
-  <Bell size={20} />
-
-  Notifications
-
-  {notificationCount > 0 && (
-    <span className="ml-auto bg-red-500 text-white text-xs font-black rounded-full px-2 py-1">
-      {notificationCount}
-    </span>
-  )}
+  💬
+  Live Trip Chats
 </a>
 
   <a href="/profile" className="flex items-center gap-3 hover:text-orange-500 transition">

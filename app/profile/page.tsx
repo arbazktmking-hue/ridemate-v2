@@ -164,7 +164,6 @@ const deleteTrip = async (tripId: string) => {
 
 };
 const completeTrip = async (tripId: string) => {
-
   const confirmed = confirm(
     "Mark this trip as completed?"
   );
@@ -172,7 +171,7 @@ const completeTrip = async (tripId: string) => {
   if (!confirmed) return;
 
   try {
-
+    // Mark the trip as completed
     await updateDoc(
       doc(db, "trips", tripId),
       {
@@ -180,6 +179,18 @@ const completeTrip = async (tripId: string) => {
       }
     );
 
+    // ALSO mark the live chat as completed
+    const chatRef = doc(db, "tripChats", tripId);
+
+try {
+  await updateDoc(chatRef, {
+    completed: true,
+  });
+} catch {
+  // Ignore if the chat document doesn't exist
+}
+
+    // Update local UI
     setMyTrips((prev) =>
       prev.map((trip) =>
         trip.id === tripId
@@ -192,13 +203,9 @@ const completeTrip = async (tripId: string) => {
     );
 
     alert("🏁 Trip completed!");
-
   } catch (error) {
-
     console.log(error);
-
   }
-
 };
   return (
     <PageBackground>

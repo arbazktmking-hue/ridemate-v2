@@ -7,6 +7,10 @@ import {
   getDocs,
   doc,
   updateDoc,
+  addDoc,
+  setDoc,
+  getDoc,
+  arrayUnion,
 } from "firebase/firestore";
 
 import { db } from "../firebase";
@@ -53,28 +57,68 @@ export default function RequestsPage() {
 
   }, []);
 
-  const updateRequest = async (
+ const updateRequest = async (
   requestId: string,
   status: string,
   tripId: string
 ) => {
+  const request = requests.find((r) => r.id === requestId);
 
+  if (!request) return;
+
+  // Update the request
   await updateDoc(
-  doc(db, "rideRequests", requestId),
-  {
-    status,
-    tripCompleted: false,
-    tripId,
-  }
-);
+    doc(db, "rideRequests", requestId),
+    {
+      status,
+      tripCompleted: false,
+      tripId,
+    }
+  );
+// Create or update the trip chat when approved
+if (status === "approved") {
+  const chatRef = doc(db, "tripChats", tripId);
 
-  setRequests((prev) =>
-    prev.filter(
-      (request) =>
-        request.id !== requestId
-    )
+  const existingChat = await getDoc(chatRef);
+
+  if (!existingChat.exists()) {
+    await setDoc(chatRef, {
+  tripId,
+  destination: request.destination,
+  owner: request.tripOwner,
+  members: [
+    request.tripOwner,
+    request.requester,
+  ],
+  createdAt: Date.now(),
+
+  // NEW: keeps track of whether the ride is still active
+  completed: false,
+});
+  } else {
+    await updateDoc(chatRef, {
+      members: arrayUnion(request.requester),
+    });
+  }
+}
+  // Notify the requester
+  await addDoc(
+    collection(db, "notifications"),
+    {
+      user: request.requester,
+      text:
+        status === "approved"
+          ? `🎉 ${request.tripOwner} approved your ride request to ${request.destination}`
+          : `❌ ${request.tripOwner} rejected your ride request to ${request.destination}`,
+      createdAt: Date.now(),
+      read: false,
+    }
   );
 
+  // Remove from local list
+  setRequests((prev) =>
+    prev.filter((r) => r.id !== requestId)
+  );
 };
 
   return (
