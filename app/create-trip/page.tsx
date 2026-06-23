@@ -16,6 +16,7 @@ function CreateTripContent() {
   
 const router = useRouter();
 const [editId, setEditId] = useState<string | null>(null);
+const [rideType, setRideType] = useState<"individual" | "group">("individual");
 
 useEffect(() => {
   const params = new URLSearchParams(window.location.search);
@@ -54,6 +55,7 @@ useEffect(() => {
     setItinerary(trip.itinerary || "");
     setTripPrice(trip.tripPrice || "");
     setTripImage(trip.image || "");
+    setRideType(trip.rideType || "individual");
   };
 
   loadTrip();
@@ -74,6 +76,7 @@ if (isEditing && editId) {
   tripData = {
     ...existingTrip,
     status: "upcoming",
+    rideType,
     destination,
     startLocation,
     endLocation,
@@ -89,20 +92,21 @@ if (isEditing && editId) {
   };
 } else {
   tripData = {
-    status: "upcoming",
-    destination,
-    startLocation,
-    endLocation,
-    distance,
-    bike,
-    tripDate,
-    itinerary: itinerary.trim(),
-    tripPrice,
-    caption,
-    image: tripImage,
-    userName: user.name,
-    userImage: user.image,
-  };
+  status: "upcoming",
+  rideType,
+  destination,
+  startLocation,
+  endLocation,
+  distance,
+  bike,
+  tripDate,
+  itinerary: itinerary.trim(),
+  tripPrice,
+  caption,
+  image: tripImage,
+  userName: user.name,
+  userImage: user.image,
+};
 }
 
     // EDIT EXISTING TRIP
@@ -158,7 +162,12 @@ if (isEditing && editId) {
         <h1 className="text-5xl font-black text-orange-500 mb-10">
   {isEditing ? "Edit Trip ✏️" : "Create Trip 🔥"}
 </h1>
-
+<div className="bg-red-600 text-white p-4 rounded-xl text-center text-2xl font-bold">
+  TEST CREATE TRIP UPDATED
+</div>
+<p className="text-red-500 text-xl font-bold">
+  TEST: CREATE TRIP UPDATED
+</p>
         <img
           src={tripImage}
           alt="Trip"
@@ -186,7 +195,27 @@ if (isEditing && editId) {
 
         </label>
         <div className="space-y-6 mt-8">
+<div className="space-y-2">
+  <label className="font-bold text-orange-400">
+    Ride Type
+  </label>
 
+  <select
+    value={rideType}
+    onChange={(e) =>
+      setRideType(e.target.value as "individual" | "group")
+    }
+    className="w-full p-4 rounded-2xl bg-black border border-zinc-700"
+  >
+    <option value="individual">
+      👤 Individual Ride (Need Pillion)
+    </option>
+
+    <option value="group">
+      👥 Group Ride (Bring Your Own Bike)
+    </option>
+  </select>
+</div>
           <input
             type="text"
             placeholder="Destination"

@@ -326,7 +326,10 @@ console.log(
       collection(db, "notifications"),
       {
         user: trip.userName,
-        text: `${currentUser.name} wants to join your ride 🚀`,
+        text:
+  trip.rideType === "group"
+    ? `${currentUser.name} wants to join your group ride 🏍️`
+    : `${currentUser.name} wants to join as your pillion 🪖`,
         createdAt: Date.now(),
         read: false,
       }
@@ -335,17 +338,23 @@ console.log(
     alert("Ride request sent 🚀");
 
   };
+  console.log("Trips state:", trips);
   return (
-    <main className="fixed inset-0 pt-16 bg-black text-white overflow-hidden">
+    <main className="fixed inset-0 top-16 bg-black text-white overflow-hidden">
 
       <div
   className="
-    h-full
-    overflow-y-auto
-    overflow-x-hidden
-    snap-y
-    snap-mandatory
-  "
+  h-full
+  w-full
+  overflow-y-auto
+  overflow-x-hidden
+  snap-y
+  snap-mandatory
+  overscroll-none
+  [scrollbar-width:none]
+  [-ms-overflow-style:none]
+  [&::-webkit-scrollbar]:hidden
+"
 >
         <div>
 
@@ -439,7 +448,17 @@ overflow-hidden
                   <h2 className="text-4xl font-black tracking-tight drop-shadow-lg">
   🏔 {trip.destination}
 </h2>
-
+<div className="mt-2">
+  {trip.rideType === "group" ? (
+    <span className="bg-blue-500/20 text-blue-300 px-3 py-1 rounded-full text-sm font-bold">
+      👥 Group Ride • Bring Your Own Bike
+    </span>
+  ) : (
+    <span className="bg-green-500/20 text-green-300 px-3 py-1 rounded-full text-sm font-bold">
+      👤 Individual Ride • Looking for Pillion
+    </span>
+  )}
+</div>
 <p className="mt-3 text-lg text-white/90 font-semibold">
   📍 {trip.startLocation}
 </p>
@@ -465,7 +484,7 @@ overflow-hidden
     border-white/10
     rounded-3xl
     py-3
-    z-[999]
+    z-20
     shadow-2xl
   "
 >
@@ -475,7 +494,7 @@ overflow-hidden
     e.stopPropagation();
     likeTrip(trip.id, trip.likes || 0);
   }}
-  className="..."
+  className=""
 >
     <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-red-500/20 transition">
       <Heart className="w-6 h-6 text-red-400" />
@@ -558,8 +577,8 @@ overflow-hidden
     </div>
 
     <span className="text-xs">
-      Join
-    </span>
+  {trip.rideType === "group" ? "Join Ride" : "Ride Along"}
+</span>
   </button>
 </div>
                 {heartAnimation === trip.id && (
@@ -700,40 +719,43 @@ transition
       />
 
       <div className="space-y-3 text-zinc-200">
+  <p>
+    🏍 <strong>Bike:</strong> {selectedTrip.bike}
+  </p>
 
-        <p>
-          🏍 <strong>Bike:</strong> {selectedTrip.bike}
-        </p>
+  <p>
+    📍 <strong>Route:</strong>{" "}
+    {selectedTrip.startLocation} → {selectedTrip.endLocation}
+  </p>
 
-        <p>
-          📍 <strong>Route:</strong>{" "}
-          {selectedTrip.startLocation} → {selectedTrip.endLocation}
-        </p>
+  <p>
+    🛣️ <strong>Distance:</strong> {selectedTrip.distance} KM
+  </p>
 
-        <p>
-          🛣️ <strong>Distance:</strong>{" "}
-          {selectedTrip.distance} KM
-        </p>
+  <p>
+    📅 <strong>Departure:</strong>{" "}
+    {selectedTrip.tripDate
+      ? new Date(selectedTrip.tripDate).toLocaleString()
+      : "TBA"}
+  </p>
 
-        <p>
-          📅 <strong>Departure:</strong>{" "}
-          {selectedTrip.tripDate
-            ? new Date(selectedTrip.tripDate).toLocaleString()
-            : "TBA"}
-        </p>
+  <p>
+    💰 <strong>Contribution:</strong> ₹
+    {selectedTrip.tripPrice || 0}
+  </p>
 
-        <p>
-          💰 <strong>Contribution:</strong> ₹
-          {selectedTrip.tripPrice || 0}
-        </p>
+  <p>
+    👤 <strong>Host:</strong> {selectedTrip.userName}
+  </p>
 
-        <p>
-          👤 <strong>Host:</strong>{" "}
-          {selectedTrip.userName}
-        </p>
+  <p>
+    🚩 <strong>Ride Type:</strong>{" "}
+    {selectedTrip.rideType === "group"
+      ? "👥 Group Ride (Bring Your Own Bike)"
+      : "👤 Individual Ride (Looking for Pillion Rider)"}
+  </p>
 
-        <div className="mt-4 bg-black/40 rounded-2xl p-4 border border-zinc-800">
-          <div className="mt-4 bg-black/40 rounded-2xl p-4 border border-zinc-800">
+  <div className="mt-4 bg-black/40 rounded-2xl p-4 border border-zinc-800">
   <h3 className="font-bold mb-2 text-orange-300">
     📝 About this Ride
   </h3>
@@ -758,10 +780,7 @@ transition
               className="flex items-start gap-3"
             >
               <div className="mt-1 w-3 h-3 rounded-full bg-orange-500 flex-shrink-0" />
-
-              <p className="text-zinc-300">
-                {line}
-              </p>
+              <p className="text-zinc-300">{line}</p>
             </div>
           ))}
       </div>
@@ -769,34 +788,24 @@ transition
   )}
 </div>
 
-{selectedTrip.itinerary && (
-  <div className="mt-5 border-t border-zinc-700 pt-4">
-    <h3 className="font-bold mb-2 text-orange-300">
-      🗺️ Itinerary
-    </h3>
+</div>
 
-    <p className="whitespace-pre-line text-zinc-300">
-      {selectedTrip.itinerary}
-    </p>
-  </div>
-)}
-        </div>
-
-      </div>
-
-      <button
-        onClick={() => {
-          requestToJoin(selectedTrip);
-          setSelectedTrip(null);
-        }}
-        className="mt-6 w-full bg-orange-500 text-black font-black py-4 rounded-2xl hover:scale-[1.02] transition"
-      >
-        🚀 Request Seat
-      </button>
+<button
+  onClick={() => {
+    requestToJoin(selectedTrip);
+    setSelectedTrip(null);
+  }}
+  className="mt-6 w-full bg-orange-500 text-black font-black py-4 rounded-2xl hover:scale-[1.02] transition"
+>
+  {selectedTrip.rideType === "group"
+    ? "🏍️ Request to Join Group Ride"
+    : "🪖 Request Pillion Seat"}
+</button>
 
     </div>
   </div>
 )}
+
     </main>
   );
 }
