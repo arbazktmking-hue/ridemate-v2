@@ -227,7 +227,7 @@ useEffect(() => {
 
   <a href="/create-trip" className="flex items-center gap-3 hover:text-orange-500 transition">
     <Bike size={20} />
-    Plan Expedition
+    Post a Trip
   </a>
 
   <a href="/requests" className="flex items-center gap-3 hover:text-orange-500 transition">

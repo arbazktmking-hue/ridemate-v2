@@ -8,6 +8,7 @@ import {
   collection,
   getDocs,
   addDoc,
+  updateDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 
@@ -17,21 +18,29 @@ export default function TripChatPage() {
   const [chat, setChat] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [message, setMessage] = useState("");
-
+const [rating, setRating] = useState(5);
+const [review, setReview] = useState("");
+const [alreadyReviewed, setAlreadyReviewed] = useState(false);
   const currentUser = JSON.parse(
     localStorage.getItem("ridemateUser") || "{}"
   );
 
   useEffect(() => {
-    loadChat();
+  loadChat();
+  loadMessages();
+
+  const interval = setInterval(() => {
     loadMessages();
+  }, 1000);
 
-    const interval = setInterval(() => {
-      loadMessages();
-    }, 3000);
+  return () => clearInterval(interval);
+}, []);
 
-    return () => clearInterval(interval);
-  }, []);
+useEffect(() => {
+  if (chat) {
+    checkExistingReview();
+  }
+}, [chat]);
 
   async function loadChat() {
     if (!tripId) return;
@@ -41,8 +50,10 @@ export default function TripChatPage() {
     );
 
     if (snap.exists()) {
-      setChat(snap.data());
-    }
+  const data = snap.data();
+
+  setChat(data);
+}
   }
 
   async function loadMessages() {
@@ -65,23 +76,95 @@ export default function TripChatPage() {
     setMessages(msgs);
   }
 
-  async function sendMessage() {
-    if (!message.trim()) return;
+  async function completeTrip() {
+  if (!tripId) return;
 
-    await addDoc(
-      collection(db, "tripChatMessages"),
-      {
-        tripId,
-        sender: currentUser.name,
-        text: message,
-        createdAt: Date.now(),
-      }
-    );
+  const confirmed = confirm(
+    "Are you sure you want to mark this trip as completed?"
+  );
 
-    setMessage("");
-    loadMessages();
+  if (!confirmed) return;
+
+  // Mark chat as completed
+await updateDoc(
+  doc(db, "tripChats", tripId as string),
+  {
+    completed: true,
+  }
+);
+
+// Mark the trip as completed too
+if (chat?.tripId) {
+  await updateDoc(
+    doc(db, "trips", chat.tripId),
+    {
+      status: "completed",
+    }
+  );
+}
+
+  loadChat();
+
+  alert("🏁 Trip marked as completed!");
+}
+
+async function sendMessage() {
+  if (!message.trim()) return;
+
+  await addDoc(
+    collection(db, "tripChatMessages"),
+    {
+      tripId,
+      sender: currentUser.name,
+      text: message,
+      createdAt: Date.now(),
+    }
+  );
+
+  setMessage("");
+  loadMessages();
+}
+async function checkExistingReview() {
+  if (!tripId) return;
+
+  const snapshot = await getDocs(collection(db, "rideReviews"));
+
+  let found = false;
+
+  snapshot.forEach((reviewDoc) => {
+    const data = reviewDoc.data();
+
+    if (
+      data.tripId === tripId &&
+      data.reviewer === currentUser.name
+    ) {
+      found = true;
+    }
+  });
+
+  setAlreadyReviewed(found);
+}
+async function submitReview() {
+  if (alreadyReviewed) {
+    alert("You have already reviewed this ride.");
+    return;
   }
 
+  if (!chat || !tripId) return;
+
+  await addDoc(collection(db, "rideReviews"), {
+    tripId,
+    rider: chat.owner,
+    reviewer: currentUser.name,
+    rating,
+    review,
+    createdAt: Date.now(),
+  });
+
+  setAlreadyReviewed(true);
+
+  alert("⭐ Review submitted successfully!");
+}
   if (!chat) {
     return (
       <main className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -126,25 +209,79 @@ export default function TripChatPage() {
 
         </div>
 
-        <div className="flex gap-3 mt-4">
+        <div className="mt-4 space-y-3">
 
-          <input
-            value={message}
-            onChange={(e) =>
-              setMessage(e.target.value)
-            }
-            placeholder="Type message..."
-            className="flex-1 p-3 rounded-xl bg-zinc-800"
-          />
+  {chat.completed ? (
+    <div className="bg-green-900 text-green-300 p-4 rounded-xl text-center font-bold">
+      🏁 This trip has been completed.
+      {currentUser.name !== chat.owner && !alreadyReviewed && (
+  <div className="mt-4 bg-zinc-800 p-4 rounded-xl space-y-3">
 
-          <button
-            onClick={sendMessage}
-            className="bg-orange-500 px-6 rounded-xl font-bold text-black"
-          >
-            Send
-          </button>
+    <h2 className="font-bold text-orange-400">
+      ⭐ Rate Your Rider
+    </h2>
 
-        </div>
+    <select
+      value={rating}
+      onChange={(e) => setRating(Number(e.target.value))}
+      className="w-full p-3 rounded-lg bg-black"
+    >
+      <option value={5}>⭐⭐⭐⭐⭐</option>
+      <option value={4}>⭐⭐⭐⭐</option>
+      <option value={3}>⭐⭐⭐</option>
+      <option value={2}>⭐⭐</option>
+      <option value={1}>⭐</option>
+    </select>
+
+    <textarea
+      value={review}
+      onChange={(e) => setReview(e.target.value)}
+      placeholder="Share your experience..."
+      className="w-full p-3 rounded-lg bg-black"
+    />
+
+    <button
+      onClick={submitReview}
+      className="w-full bg-orange-500 text-black font-bold py-3 rounded-xl"
+    >
+      Submit Review
+    </button>
+
+  </div>
+)}
+    </div>
+  ) : (
+    <>
+      <div className="flex gap-3">
+
+        <input
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Type message..."
+          className="flex-1 p-3 rounded-xl bg-zinc-800"
+        />
+
+        <button
+          onClick={sendMessage}
+          className="bg-orange-500 px-6 rounded-xl font-bold text-black"
+        >
+          Send
+        </button>
+
+      </div>
+
+      {currentUser.name === chat.owner && (
+        <button
+          onClick={completeTrip}
+          className="w-full bg-green-600 py-3 rounded-xl font-bold"
+        >
+          🏁 Trip Completed
+        </button>
+      )}
+    </>
+  )}
+
+</div>
 
       </div>
 
