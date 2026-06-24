@@ -9,6 +9,7 @@ import {
   getDocs,
   addDoc,
   updateDoc,
+  arrayUnion,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 
@@ -21,9 +22,16 @@ export default function TripChatPage() {
 const [rating, setRating] = useState(5);
 const [review, setReview] = useState("");
 const [alreadyReviewed, setAlreadyReviewed] = useState(false);
-  const currentUser = JSON.parse(
-    localStorage.getItem("ridemateUser") || "{}"
-  );
+  const [currentUser, setCurrentUser] = useState<any>({});
+
+useEffect(() => {
+  if (typeof window !== "undefined") {
+    const saved = localStorage.getItem("ridemateUser");
+    if (saved) {
+      setCurrentUser(JSON.parse(saved));
+    }
+  }
+}, []);
 
   useEffect(() => {
   loadChat();
@@ -90,6 +98,7 @@ await updateDoc(
   doc(db, "tripChats", tripId as string),
   {
     completed: true,
+    reviewedUsers: [],
   }
 );
 
@@ -145,6 +154,12 @@ async function checkExistingReview() {
   setAlreadyReviewed(found);
 }
 async function submitReview() {
+  await updateDoc(
+  doc(db, "tripChats", tripId as string),
+  {
+    reviewedUsers: arrayUnion(currentUser.name),
+  }
+);
   if (alreadyReviewed) {
     alert("You have already reviewed this ride.");
     return;
@@ -165,7 +180,7 @@ async function submitReview() {
 
   alert("⭐ Review submitted successfully!");
 }
-  if (!chat) {
+  if (!chat || !currentUser.name) {
     return (
       <main className="min-h-screen bg-black text-white flex items-center justify-center">
         Loading...

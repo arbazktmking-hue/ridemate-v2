@@ -10,26 +10,42 @@ export default function LiveTripChatsPage() {
 
   useEffect(() => {
     const loadChats = async () => {
-      const currentUser = JSON.parse(
-        localStorage.getItem("ridemateUser") || "{}"
-      );
+      const savedUser = localStorage.getItem("ridemateUser");
 
-      if (!currentUser.name) return;
+      if (!savedUser) return;
 
-      const snapshot = await getDocs(
-        collection(db, "tripChats")
-      );
+      const currentUser = JSON.parse(savedUser);
+
+      const snapshot = await getDocs(collection(db, "tripChats"));
 
       const loaded: any[] = [];
 
       snapshot.forEach((docSnap) => {
         const chat = docSnap.data();
 
-        // Only show active chats that the current user belongs to
-        if (
-          chat.members?.includes(currentUser.name) &&
-          chat.completed === false
-        ) {
+        const hasReviewed =
+          Array.isArray(chat.reviewedUsers) &&
+          chat.reviewedUsers.includes(currentUser.name);
+
+        const isMember =
+          Array.isArray(chat.members) &&
+          chat.members.includes(currentUser.name);
+
+        const shouldShow =
+          isMember &&
+          (
+            // Active trip
+            chat.completed === false ||
+
+            // Completed trip but passenger still needs to review
+            (
+              chat.completed === true &&
+              currentUser.name !== chat.owner &&
+              !hasReviewed
+            )
+          );
+
+        if (shouldShow) {
           loaded.push({
             id: docSnap.id,
             ...chat,
@@ -41,6 +57,10 @@ export default function LiveTripChatsPage() {
     };
 
     loadChats();
+
+    const interval = setInterval(loadChats, 1000);
+
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -68,12 +88,18 @@ export default function LiveTripChatsPage() {
               </h2>
 
               <p className="mt-2 text-zinc-400">
-                {chat.members.length} rider(s) in chat
+                {chat.members?.length || 0} rider(s) in chat
               </p>
 
-              <p className="mt-1 text-sm text-zinc-500">
-                Tap to open
-              </p>
+              {chat.completed ? (
+                <p className="mt-2 text-yellow-400 font-bold">
+                  ⭐ Please rate your rider
+                </p>
+              ) : (
+                <p className="mt-2 text-green-400 font-bold">
+                  🟢 Active Trip
+                </p>
+              )}
             </Link>
           ))}
         </div>
