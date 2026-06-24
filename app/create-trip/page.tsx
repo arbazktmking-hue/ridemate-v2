@@ -162,12 +162,6 @@ if (isEditing && editId) {
         <h1 className="text-5xl font-black text-orange-500 mb-10">
   {isEditing ? "Edit Trip ✏️" : "Create Trip 🔥"}
 </h1>
-<div className="bg-red-600 text-white p-4 rounded-xl text-center text-2xl font-bold">
-  TEST CREATE TRIP UPDATED
-</div>
-<p className="text-red-500 text-xl font-bold">
-  TEST: CREATE TRIP UPDATED
-</p>
         <img
           src={tripImage}
           alt="Trip"
