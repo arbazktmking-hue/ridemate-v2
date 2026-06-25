@@ -30,10 +30,11 @@ const [totalDistance, setTotalDistance] = useState(0);
 const [badge, setBadge] = useState("");
 const [following, setFollowing] = useState(0);
 const [currentUser, setCurrentUser] = useState<any>(null);
+const [showBio, setShowBio] = useState(false);
 const [reviews, setReviews] = useState<any[]>([]);
 const [avgRating, setAvgRating] = useState(0);
 const [reviewCount, setReviewCount] = useState(0);
-const achievements = [];
+const achievements: string[] = [];
 
 if (riderTrips.length >= 1)
   achievements.push("🏍 First Ride");
@@ -324,10 +325,39 @@ await addDoc(
   >
     ➡️ Following: {following}
   </Link>
-
+<div className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 text-center col-span-2">
+  ⭐ Rating: {avgRating.toFixed(1)} / 5
+  <br />
+  <span className="text-zinc-400">
+    {reviewCount} review(s)
+  </span>
+</div>
 </div>
 
-    <div className="mt-6 space-y-3">
+    <div className="mt-6">
+
+  <button
+    onClick={() => setShowBio(!showBio)}
+    className="
+      w-full
+      bg-zinc-900
+      p-4
+      rounded-2xl
+      border border-zinc-800
+      text-orange-500
+      font-black
+    "
+  >
+    {showBio
+      ? "▲ Hide Rider Bio"
+      : "▼ Rider Bio"}
+  </button>
+
+  {showBio && (
+
+  <div className="space-y-3 mt-4">
+
+    {/* BIO CONTENT */}
 
       <div className="bg-zinc-900 p-4 rounded-2xl">
         🏍 Trips Posted: {riderTrips.length}
@@ -336,13 +366,7 @@ await addDoc(
       <div className="bg-zinc-900 p-4 rounded-2xl">
         ❤️ Likes Received: {totalLikes}
       </div>
-<div className="bg-zinc-900 p-4 rounded-2xl">
-  ⭐ Rating: {avgRating.toFixed(1)} / 5
-</div>
 
-<div className="bg-zinc-900 p-4 rounded-2xl">
-  📝 Reviews: {reviewCount}
-</div>
       <div className="bg-zinc-900 p-4 rounded-2xl">
   🛣️ Total Distance: {totalDistance} KM
 </div>
@@ -365,29 +389,23 @@ await addDoc(
   </h3>
 
   <div className="space-y-2">
+  {achievements.map((achievement, index) => (
+    <div
+      key={index}
+      className="bg-black p-3 rounded-xl"
+    >
+      {achievement}
+    </div>
+  ))}
+</div>
 
-    {achievements.map(
-      (achievement, index) => (
-
-        <div
-          key={index}
-          className="bg-black p-3 rounded-xl"
-        >
-          {achievement}
-        </div>
-
-      )
-    )}
-
-  </div>
+</div> {/* achievements card */}
 
 </div>
-    </div>
 
-  </div>
+)}
 
-  <div className="mt-10">
-
+<div className="mt-10">
     <h2 className="text-3xl font-black text-orange-500 mb-6">
       Rider Trips 🏍️
     </h2>
@@ -484,11 +502,17 @@ await addDoc(
 
   )}
 
-</div>
-  </div>
+</div> {/* Rider Reviews */}
 
-</div>
-    </main>
+</div> {/* Rider Trips section (mt-10) */}
+
+</div> {/* mt-6 */}
+
+</div> {/* text-center */}
+
+</div> {/* max-w-4xl */}
+
+</main>
 
   );
 
