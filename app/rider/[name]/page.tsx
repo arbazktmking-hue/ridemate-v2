@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-
 import {
   collection,
   getDocs,
@@ -31,6 +30,9 @@ const [totalDistance, setTotalDistance] = useState(0);
 const [badge, setBadge] = useState("");
 const [following, setFollowing] = useState(0);
 const [currentUser, setCurrentUser] = useState<any>(null);
+const [reviews, setReviews] = useState<any[]>([]);
+const [avgRating, setAvgRating] = useState(0);
+const [reviewCount, setReviewCount] = useState(0);
 const achievements = [];
 
 if (riderTrips.length >= 1)
@@ -114,7 +116,37 @@ distance += Number(
 setTotalLikes(likes);
 setTotalDistance(distance);
 setRiderImage(image);
+const reviewSnapshot = await getDocs(
+  collection(db, "rideReviews")
+);
 
+const riderReviews: any[] = [];
+
+let totalRating = 0;
+
+reviewSnapshot.forEach((reviewDoc) => {
+  const review = reviewDoc.data();
+
+  if (review.rider === riderName) {
+    riderReviews.push(review);
+
+    totalRating += review.rating || 0;
+  }
+});
+
+setReviews(
+  riderReviews.sort(
+    (a, b) => b.createdAt - a.createdAt
+  )
+);
+
+setReviewCount(riderReviews.length);
+
+setAvgRating(
+  riderReviews.length
+    ? totalRating / riderReviews.length
+    : 0
+);
 if (trips.length >= 10) {
 
   setBadge("🥇 RideMate Legend");
@@ -304,7 +336,13 @@ await addDoc(
       <div className="bg-zinc-900 p-4 rounded-2xl">
         ❤️ Likes Received: {totalLikes}
       </div>
+<div className="bg-zinc-900 p-4 rounded-2xl">
+  ⭐ Rating: {avgRating.toFixed(1)} / 5
+</div>
 
+<div className="bg-zinc-900 p-4 rounded-2xl">
+  📝 Reviews: {reviewCount}
+</div>
       <div className="bg-zinc-900 p-4 rounded-2xl">
   🛣️ Total Distance: {totalDistance} KM
 </div>
@@ -379,7 +417,16 @@ await addDoc(
           <p className="text-zinc-300 mt-2">
             {trip.caption}
           </p>
+{trip.itinerary && (
+  <div className="mt-3 text-sm text-zinc-400 whitespace-pre-line">
+    <span className="font-bold text-orange-400">
+      🗺️ Itinerary:
+    </span>
 
+    {"\n"}
+    {trip.itinerary}
+  </div>
+)}
           <p className="text-zinc-400 mt-2">
             ❤️ {trip.likes || 0}
           </p>
@@ -389,7 +436,55 @@ await addDoc(
       ))}
 
     </div>
+<div className="mt-12">
 
+  <h2 className="text-3xl font-black text-orange-500 mb-6">
+    Rider Reviews ⭐
+  </h2>
+
+  {reviews.length === 0 ? (
+
+    <div className="bg-zinc-900 p-5 rounded-2xl">
+      No reviews yet
+    </div>
+
+  ) : (
+
+    <div className="space-y-4">
+
+      {reviews.map((review, index) => (
+
+        <div
+          key={index}
+          className="
+          bg-zinc-900
+          p-5
+          rounded-2xl
+          border border-zinc-800
+          "
+        >
+
+          <div className="text-yellow-400 font-bold text-lg">
+            {"⭐".repeat(review.rating)}
+          </div>
+
+          <p className="mt-3 text-zinc-300">
+            {review.review}
+          </p>
+
+          <p className="mt-3 text-sm text-zinc-500">
+            — {review.reviewer}
+          </p>
+
+        </div>
+
+      ))}
+
+    </div>
+
+  )}
+
+</div>
   </div>
 
 </div>
