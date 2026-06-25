@@ -95,8 +95,9 @@ console.log(
   riderName
 );
       if (
-        trip.userName === riderName
-      ) {
+  trip.userName === riderName &&
+  trip.status === "completed"
+) {
 
         trips.push({
           id: doc.id,
@@ -325,13 +326,25 @@ await addDoc(
   >
     ➡️ Following: {following}
   </Link>
-<div className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 text-center col-span-2">
+<Link
+  href={`/rider/${encodeURIComponent(riderName)}/reviews`}
+  className="
+    bg-zinc-900
+    p-4
+    rounded-2xl
+    border border-zinc-800
+    hover:border-orange-500
+    text-center
+    col-span-2
+    block
+  "
+>
   ⭐ Rating: {avgRating.toFixed(1)} / 5
   <br />
   <span className="text-zinc-400">
     {reviewCount} review(s)
   </span>
-</div>
+</Link>
 </div>
 
     <div className="mt-6">
@@ -454,55 +467,6 @@ await addDoc(
       ))}
 
     </div>
-<div className="mt-12">
-
-  <h2 className="text-3xl font-black text-orange-500 mb-6">
-    Rider Reviews ⭐
-  </h2>
-
-  {reviews.length === 0 ? (
-
-    <div className="bg-zinc-900 p-5 rounded-2xl">
-      No reviews yet
-    </div>
-
-  ) : (
-
-    <div className="space-y-4">
-
-      {reviews.map((review, index) => (
-
-        <div
-          key={index}
-          className="
-          bg-zinc-900
-          p-5
-          rounded-2xl
-          border border-zinc-800
-          "
-        >
-
-          <div className="text-yellow-400 font-bold text-lg">
-            {"⭐".repeat(review.rating)}
-          </div>
-
-          <p className="mt-3 text-zinc-300">
-            {review.review}
-          </p>
-
-          <p className="mt-3 text-sm text-zinc-500">
-            — {review.reviewer}
-          </p>
-
-        </div>
-
-      ))}
-
-    </div>
-
-  )}
-
-</div> {/* Rider Reviews */}
 
 </div> {/* Rider Trips section (mt-10) */}
 
