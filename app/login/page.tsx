@@ -15,39 +15,37 @@ export default function LoginPage() {
 
   const loginWithGoogle = async () => {
 
-    try {
+  try {
 
-      const provider = new GoogleAuthProvider();
+    const provider = new GoogleAuthProvider();
 
-      const result = await signInWithPopup(
-        auth,
-        provider
-      );
+    const result = await signInWithPopup(
+      auth,
+      provider
+    );
 
-      const user = {
-        name: result.user.displayName,
-        email: result.user.email,
-        image: result.user.photoURL,
-      };
+    const user = {
+      uid: result.user.uid,
+      email: result.user.email,
+      image: result.user.photoURL,
+    };
 
-      localStorage.setItem(
-        "ridemateUser",
-        JSON.stringify(user)
-      );
+    localStorage.setItem(
+      "pendingUser",
+      JSON.stringify(user)
+    );
 
-      alert(`Welcome ${user.name} 🔥`);
+    router.push("/create-username");
 
-      router.push("/profile");
+  } catch (error) {
 
-    } catch (error) {
+    console.log(error);
 
-      console.log(error);
+    alert("Login failed");
 
-      alert("Login failed");
+  }
 
-    }
-
-  };
+};
 
   return (
     <main className="min-h-screen bg-black text-white flex items-center justify-center px-6">
