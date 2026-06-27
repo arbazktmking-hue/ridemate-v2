@@ -17,7 +17,11 @@ import { db } from "../firebase";
 
 export default function RequestsPage() {
 
-  const [requests, setRequests] = useState<any[]>([]);
+  const [receivedRequests, setReceivedRequests] = useState<any[]>([]);
+const [sentRequests, setSentRequests] = useState<any[]>([]);
+const [activeTab, setActiveTab] = useState<
+  "received" | "sent"
+>("received");
 
   useEffect(() => {
 
@@ -31,25 +35,37 @@ export default function RequestsPage() {
         collection(db, "rideRequests")
       );
 
-      const loaded: any[] = [];
+      const received: any[] = [];
+const sent: any[] = [];
 
-      snapshot.forEach((docSnap) => {
+snapshot.forEach((docSnap) => {
 
-        const request = docSnap.data();
+  const request = docSnap.data();
 
-        if (
-          request.tripOwner === currentUser.name &&
-          request.status === "pending"
-        ) {
-          loaded.push({
-            id: docSnap.id,
-            ...request,
-          });
-        }
+  // requests received
+  if (
+    request.tripOwner === currentUser.name
+  ) {
+    received.push({
+      id: docSnap.id,
+      ...request,
+    });
+  }
 
-      });
+  // requests sent
+  if (
+    request.requester === currentUser.name
+  ) {
+    sent.push({
+      id: docSnap.id,
+      ...request,
+    });
+  }
 
-      setRequests(loaded);
+});
+
+setReceivedRequests(received);
+setSentRequests(sent);
 
     };
 
@@ -62,7 +78,9 @@ export default function RequestsPage() {
   status: string,
   tripId: string
 ) => {
-  const request = requests.find((r) => r.id === requestId);
+  const request = receivedRequests.find(
+  (r) => r.id === requestId
+);
 
   if (!request) return;
 
@@ -91,7 +109,6 @@ if (status === "approved") {
     request.requester,
   ],
   createdAt: Date.now(),
-
   // NEW: keeps track of whether the ride is still active
   completed: false,
 });
@@ -116,99 +133,196 @@ if (status === "approved") {
   );
 
   // Remove from local list
-  setRequests((prev) =>
-    prev.filter((r) => r.id !== requestId)
-  );
+  setReceivedRequests((prev) =>
+  prev.filter((r) => r.id !== requestId)
+);
 };
 
   return (
-    <PageBackground>
+  <PageBackground>
+    <div className="max-w-4xl mx-auto">
 
-      <div className="max-w-4xl mx-auto">
+      <h1 className="text-5xl font-black text-orange-500 mb-10">
+        Ride Requests 🚀
+      </h1>
+<div className="flex gap-4 mb-10">
 
-        <h1 className="text-5xl font-black text-orange-500 mb-10">
-          Ride Requests 🚀
-        </h1>
+  <button
+    onClick={() => setActiveTab("received")}
+    className={`px-6 py-3 rounded-2xl font-black ${
+      activeTab === "received"
+        ? "bg-orange-500 text-black"
+        : "bg-zinc-900 border border-zinc-800"
+    }`}
+  >
+    Requests Received
+  </button>
 
-        {requests.length === 0 ? (
+  <button
+    onClick={() => setActiveTab("sent")}
+    className={`px-6 py-3 rounded-2xl font-black ${
+      activeTab === "sent"
+        ? "bg-orange-500 text-black"
+        : "bg-zinc-900 border border-zinc-800"
+    }`}
+  >
+    Requests Sent
+  </button>
 
-          <p className="text-zinc-400">
-            No pending requests
-          </p>
+</div>
 
-        ) : (
+      {activeTab === "received" && (
 
-          <div className="space-y-5">
+<>
+  {receivedRequests.length === 0 ? (
 
-            {requests.map((request) => (
+    <p className="text-zinc-400 mb-10">
+      No requests received
+    </p>
 
-              <div
-                key={request.id}
-                className="bg-zinc-900 p-5 rounded-3xl border border-zinc-800"
-              >
+  ) : (
 
-                <div className="flex items-center gap-4">
+    <div className="space-y-5 mb-14">
 
-                  <img
-                    src={request.requesterImage}
-                    alt=""
-                    className="w-14 h-14 rounded-full"
-                  />
+      {receivedRequests.map((request) => (
 
-                  <div>
+        <div
+          key={request.id}
+          className="bg-zinc-900 p-5 rounded-3xl border border-zinc-800"
+        >
 
-                    <h2 className="font-black text-xl">
-                      {request.requester}
-                    </h2>
+          <div className="flex items-center gap-4">
 
-                    <p className="text-zinc-400">
-                      Wants to join ride to {request.destination}
-                    </p>
+            <img
+              src={request.requesterImage}
+              alt=""
+              className="w-14 h-14 rounded-full"
+            />
 
-                  </div>
+            <div>
 
-                </div>
+              <h2 className="font-black text-xl">
+                {request.requester}
+              </h2>
 
-                <div className="flex gap-3 mt-5">
+              <p className="text-zinc-400">
+                Wants to join ride to {request.destination}
+              </p>
 
-                  <button
-                    onClick={() =>
-  updateRequest(
-    request.id,
-    "approved",
-    request.tripId
-  )
-}
-                    className="bg-green-600 px-5 py-2 rounded-xl font-bold"
-                  >
-                    Approve ✅
-                  </button>
+              <p className="text-orange-500 mt-1">
+                Status: {request.status}
+              </p>
 
-                  <button
-                    onClick={() =>
-  updateRequest(
-    request.id,
-    "rejected",
-    request.tripId
-  )
-}
-                    className="bg-red-600 px-5 py-2 rounded-xl font-bold"
-                  >
-                    Reject ❌
-                  </button>
-
-                </div>
-
-              </div>
-
-            ))}
+            </div>
 
           </div>
 
-        )}
+          {request.status === "pending" && (
 
-      </div>
+            <div className="flex gap-3 mt-5">
 
-    </PageBackground>
+              <button
+                onClick={() =>
+                  updateRequest(
+                    request.id,
+                    "approved",
+                    request.tripId
+                  )
+                }
+                className="bg-green-600 px-5 py-2 rounded-xl font-bold"
+              >
+                Approve ✅
+              </button>
+
+              <button
+                onClick={() =>
+                  updateRequest(
+                    request.id,
+                    "rejected",
+                    request.tripId
+                  )
+                }
+                className="bg-red-600 px-5 py-2 rounded-xl font-bold"
+              >
+                Reject ❌
+              </button>
+
+            </div>
+
+          )}
+
+        </div>
+
+      ))}
+
+    </div>
+
+  )}
+</>
+)}
+
+{activeTab === "sent" && (
+
+<>
+  {sentRequests.length === 0 ? (
+
+    <p className="text-zinc-400">
+      No requests sent
+    </p>
+
+  ) : (
+
+    <div className="space-y-5">
+
+      {sentRequests.map((request) => (
+
+        <div
+          key={request.id}
+          className="bg-zinc-900 p-5 rounded-3xl border border-zinc-800"
+        >
+
+          <h2 className="font-black text-xl">
+            {request.destination}
+          </h2>
+
+          <p className="text-zinc-400 mt-2">
+            Requested to: {request.tripOwner}
+          </p>
+
+          <p className="mt-3 font-bold">
+
+            {request.status === "approved" && (
+              <span className="text-green-500">
+                Approved ✅
+              </span>
+            )}
+
+            {request.status === "pending" && (
+              <span className="text-yellow-500">
+                Pending ⏳
+              </span>
+            )}
+
+            {request.status === "rejected" && (
+              <span className="text-red-500">
+                Rejected ❌
+              </span>
+            )}
+
+          </p>
+
+        </div>
+
+      ))}
+
+    </div>
+
+  )}
+</>
+)}
+
+    </div>
+  </PageBackground>
   );
+
 }
