@@ -408,30 +408,36 @@ overflow-hidden
     }, 800);
   }}
 >
-
-                {trip.mediaType?.startsWith("image") ? (
-  <img
-    src={trip.mediaUrl}
-    alt="Post"
-    className="w-full h-full object-cover"
-  />
-) : trip.mediaType?.startsWith("video") ? (
-  <video
-    src={trip.mediaUrl}
-    className="w-full h-full object-cover"
-    autoPlay
-    muted
-    loop
-    playsInline
-  />
+  {trip.mediaUrl ? (
+  trip.mediaType?.startsWith("image") ? (
+    <img
+      src={trip.mediaUrl}
+      alt="Post"
+      className="w-full h-full object-cover"
+    />
+  ) : trip.mediaType?.startsWith("video") ? (
+    <video
+      src={trip.mediaUrl}
+      className="w-full h-full object-cover"
+      autoPlay
+      muted
+      loop
+      playsInline
+    />
+  ) : (
+    <div className="w-full h-full flex items-center justify-center bg-zinc-900">
+      <p className="text-zinc-400">
+        📷 Media preview coming soon
+      </p>
+    </div>
+  )
 ) : (
   <div className="w-full h-full flex items-center justify-center bg-zinc-900">
     <p className="text-zinc-400">
-      📷 Media preview coming soon
+      📷 No media available
     </p>
   </div>
 )}
-
                 {/* Rider Info */}
 <Link
   href={`/rider/${encodeURIComponent(trip.userName)}`}
@@ -464,22 +470,18 @@ overflow-hidden
   </span>
 </Link>
 
-               {/* Post Caption */}
+ {/* Post Caption */}
 <div
   className="
     absolute
     bottom-28
     left-4
-    right-4
+    right-24
     text-white
     z-20
   "
 >
-  <p className="font-bold text-lg">
-    {trip.userName}
-  </p>
-
-  <p className="mt-1 text-white/90 leading-relaxed">
+  <p className="text-white/90 leading-relaxed">
     {trip.caption || "No caption yet."}
   </p>
 </div>
