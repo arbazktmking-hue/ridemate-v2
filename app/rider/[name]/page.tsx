@@ -1,6 +1,9 @@
 "use client";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import {
+  useParams,
+  useRouter,
+} from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   collection,
@@ -12,12 +15,14 @@ import {
   addDoc
 } from "firebase/firestore";
 
-import { db } from "../../firebase";
+import { db, auth } from "../../firebase";
+
+import { signOut } from "firebase/auth";
 
 export default function RiderPage() {
 
   const params = useParams();
-
+const router = useRouter();
   const riderName = decodeURIComponent(
     params.name as string
   );
@@ -34,6 +39,25 @@ const [showBio, setShowBio] = useState(false);
 const [reviews, setReviews] = useState<any[]>([]);
 const [avgRating, setAvgRating] = useState(0);
 const [reviewCount, setReviewCount] = useState(0);
+const logout = async () => {
+
+  try {
+
+    await signOut(auth);
+
+    localStorage.clear();
+
+    router.replace("/login");
+
+  } catch (error) {
+
+    console.error(error);
+
+    alert("Logout failed");
+
+  }
+
+};
 const achievements: string[] = [];
 
 if (riderTrips.length >= 1)
@@ -432,9 +456,25 @@ await addDoc(
           className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800"
         >
 
-          <h3 className="text-xl font-bold">
-            {trip.destination}
-          </h3>
+          <p className="text-sm text-zinc-500 mb-1">
+  📅 Posted:
+  {" "}
+  {trip.createdAt?.toDate
+    ? trip.createdAt
+        .toDate()
+        .toLocaleString("en-IN", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })
+    : "Unknown"}
+</p>
+
+<h3 className="text-xl font-bold">
+  {trip.destination}
+</h3>
 <p className="text-zinc-400">
   📍 {trip.startLocation} → {trip.endLocation}
 </p>
@@ -468,7 +508,33 @@ await addDoc(
 
     </div>
 
-</div> {/* Rider Trips section (mt-10) */}
+</div> {/* Rider Trips section */}
+
+{/* Logout Button */}
+
+{currentUser?.name === riderName && (
+
+  <div className="mt-12">
+
+    <button
+      onClick={logout}
+      className="
+        w-full
+        bg-red-600
+        hover:bg-red-700
+        py-4
+        rounded-2xl
+        text-xl
+        font-black
+        transition
+      "
+    >
+      🚪 Logout
+    </button>
+
+  </div>
+
+)}
 
 </div> {/* mt-6 */}
 
