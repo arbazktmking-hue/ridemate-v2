@@ -32,6 +32,7 @@ export default function FeedPage() {
     useState<string[]>([]);
   const [heartAnimation, setHeartAnimation] =
     useState<string | null>(null);
+    const [commentPost, setCommentPost] = useState<any>(null);
   useEffect(() => {
 
     const fetchTrips = async () => {
@@ -163,7 +164,7 @@ console.log(
 
     try {
 
-      const tripRef = doc(db, "trips", id);
+      const tripRef = doc(db, "feedPosts", id);
 
       await updateDoc(tripRef, {
         likes: currentLikes + 1,
@@ -219,7 +220,7 @@ console.log(
 
     try {
 
-      const tripRef = doc(db, "trips", tripId);
+      const tripRef = doc(db, "feedPosts", tripId);
 
       const user = JSON.parse(
         localStorage.getItem("ridemateUser") || "{}"
@@ -483,90 +484,68 @@ overflow-hidden
   </p>
 </div>
 
-               {/* Bottom Action Bar */}
+               {/* Right Side Actions */}
 <div
   className="
     absolute
-    bottom-4
-    left-4
     right-4
+    bottom-32
     flex
-    justify-around
+    flex-col
     items-center
-    bg-black/40
-    backdrop-blur-xl
-    border
-    border-white/10
-    rounded-3xl
-    py-3
-    z-20
-    shadow-2xl
+    gap-6
+    z-30
   "
 >
+
   {/* Like */}
   <button
-  onClick={(e) => {
-    e.stopPropagation();
-    likeTrip(trip.id, trip.likes || 0);
-  }}
-  className=""
->
-    <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-red-500/20 transition">
-      <Heart className="w-6 h-6 text-red-400" />
-    </div>
+    onClick={(e) => {
+      e.stopPropagation();
+      likeTrip(trip.id, trip.likes || 0);
+    }}
+    className="flex flex-col items-center"
+  >
+    <Heart className="w-8 h-8 text-white" />
 
-    <span className="text-xs">
+    <span className="text-sm font-bold mt-1">
       {trip.likes || 0}
     </span>
   </button>
 
-  {/* Comments */}
+  {/* Comment */}
   <button
-  onClick={(e) => {
-    e.stopPropagation();
+    onClick={(e) => {
+      e.stopPropagation();
+      setCommentPost(trip);
+    }}
+    className="flex flex-col items-center"
+  >
+    <MessageCircle className="w-8 h-8 text-white" />
 
-    if (openComments.includes(trip.id)) {
-      setOpenComments(prev =>
-        prev.filter(id => id !== trip.id)
-      );
-    } else {
-      setOpenComments(prev => [
-        ...prev,
-        trip.id,
-      ]);
-    }
-  }}
->
-    <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-blue-500/20 transition">
-      <MessageCircle className="w-6 h-6 text-sky-400" />
-    </div>
-
-    <span className="text-xs">
+    <span className="text-sm font-bold mt-1">
       {(trip.comments || []).length}
     </span>
   </button>
 
   {/* Save */}
   <button
-  onClick={(e) => {
-    e.stopPropagation();
-    toggleSaveTrip(trip.id);
-  }}
->
-    <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-yellow-500/20 transition">
-      <Bookmark
-        className={`w-6 h-6 ${
-          savedTrips.includes(trip.id)
-            ? "fill-yellow-400 text-yellow-400"
-            : "text-white"
-        }`}
-      />
-    </div>
+    onClick={(e) => {
+      e.stopPropagation();
+      toggleSaveTrip(trip.id);
+    }}
+    className="flex flex-col items-center"
+  >
+    <Bookmark
+      className={`w-8 h-8 ${
+        savedTrips.includes(trip.id)
+          ? "fill-white text-white"
+          : "text-white"
+      }`}
+    />
 
-    <span className="text-xs">
-      {savedTrips.includes(trip.id)
-        ? "Saved"
-        : "Save"}
+    <span className="text-sm font-bold mt-1">
+      Save
     </span>
   </button>
 
@@ -589,95 +568,6 @@ overflow-hidden
                   </div>
                 )}
 
-              <div
-  onClick={(e) => e.stopPropagation()}
-  className={`
-    absolute
-    bottom-24
-    left-0
-    right-0
-    bg-black/90
-    backdrop-blur-md
-    z-50
-    overflow-y-auto
-    transition-all
-    duration-300
-    ${
-      openComments.includes(trip.id)
-        ? "max-h-[300px] opacity-100"
-        : "max-h-0 opacity-0"
-    }
-  `}
->
-
-                <div className="mt-6">
-                  <input
-                    type="text"
-                    placeholder="Write a comment..."
-                    className="w-full p-4 rounded-xl bg-black border border-zinc-700 text-base"
-                    onKeyDown={(e) => {
-
-                      if (e.key === "Enter") {
-
-                        addComment(
-                          trip.id,
-                          e.currentTarget.value
-                        );
-
-                        e.currentTarget.value = "";
-
-                      }
-
-                    }}
-                  />
-
-                  <div className="mt-4 space-y-2">
-
-                    {(trip.comments || []).map(
-                      (comment: any, index: number) => (
-
-                        <div
-                          key={index}
-                          className="
-bg-black
-p-4
-rounded-2xl
-border
-border-zinc-800
-hover:border-orange-500
-transition
-"
-                        >
-
-                          <div className="flex items-center gap-3 mb-2">
-
-                            <img
-                              src={comment.image}
-                              alt="User"
-                              className="w-8 h-8 rounded-full"
-                            />
-
-                            <p className="font-bold text-orange-500">
-                              {comment.user}
-                            </p>
-
-                          </div>
-
-                          <p className="text-zinc-300">
-                            {comment.text}
-                          </p>
-
-                        </div>
-
-                      )
-                    )}
-
-                  </div>
-
-                </div>
-
-              </div>
-
 </div>
 
 </div>
@@ -685,7 +575,108 @@ transition
           ))}
         </div>
       </div>
+{commentPost && (
+  <div
+    className="fixed inset-0 z-[2000] bg-black/60 backdrop-blur-sm flex items-end"
+    onClick={() => setCommentPost(null)}
+  >
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className="
+        w-full
+        h-[75vh]
+        bg-zinc-950
+        rounded-t-3xl
+        border-t
+        border-zinc-800
+        flex
+        flex-col
+      "
+    >
+      {/* Header */}
+      <div className="flex justify-between items-center p-5 border-b border-zinc-800">
+        <h2 className="text-xl font-bold">
+          Comments
+        </h2>
 
+        <button
+          onClick={() => setCommentPost(null)}
+          className="text-2xl"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Comments List */}
+      <div className="flex-1 overflow-y-auto p-5 space-y-4">
+
+        {(commentPost.comments || []).length === 0 ? (
+          <p className="text-zinc-500 text-center mt-10">
+            No comments yet.
+          </p>
+        ) : (
+          (commentPost.comments || []).map(
+            (comment: any, index: number) => (
+              <div
+                key={index}
+                className="flex gap-3"
+              >
+                <img
+                  src={comment.image}
+                  className="w-10 h-10 rounded-full"
+                />
+
+                <div>
+                  <p className="font-bold">
+                    {comment.user}
+                  </p>
+
+                  <p className="text-zinc-300">
+                    {comment.text}
+                  </p>
+                </div>
+              </div>
+            )
+          )
+        )}
+
+      </div>
+
+      {/* Input */}
+      <div className="border-t border-zinc-800 p-4">
+
+        <input
+          type="text"
+          placeholder="Add a comment..."
+          className="
+            w-full
+            p-4
+            rounded-full
+            bg-black
+            border
+            border-zinc-700
+          "
+          onKeyDown={(e) => {
+
+            if (e.key === "Enter") {
+
+              addComment(
+                commentPost.id,
+                e.currentTarget.value
+              );
+
+              e.currentTarget.value = "";
+
+            }
+
+          }}
+        />
+
+      </div>
+
+    </div>
+  </div>
+)}
     </main>
   );
 }
