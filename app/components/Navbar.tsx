@@ -18,6 +18,7 @@ import {
   Bell,
   User,
   Route,
+  Search,
 } from "lucide-react";
 export default function Navbar() {
 
@@ -113,6 +114,15 @@ useEffect(() => {
     </div>
   </div>
 
+  <div className="flex items-center gap-3">
+
+  <a
+    href="/search"
+    className="p-2 rounded-xl bg-white/10 hover:bg-white/20 transition"
+  >
+    <Search size={24} />
+  </a>
+
   <a
     href="/notifications"
     className="relative p-2 rounded-xl bg-white/10 hover:bg-white/20 transition"
@@ -142,6 +152,8 @@ useEffect(() => {
       </span>
     )}
   </a>
+
+</div>
 
 </div>
 
@@ -205,10 +217,13 @@ useEffect(() => {
 
           <div className="flex flex-col gap-3 text-lg">
 
-  <a href="/" className="flex items-center gap-3 hover:text-orange-500 transition">
-    <House size={20} />
-    Home
-  </a>
+  <a
+  href="/home"
+  className="flex items-center gap-3 hover:text-orange-500 transition"
+>
+  <House size={20} />
+  Home
+</a>
 
   <a href="/feed" className="flex items-center gap-3 hover:text-orange-500 transition">
     <Compass size={20} />
