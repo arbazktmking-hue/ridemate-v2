@@ -469,21 +469,30 @@ overflow-hidden
     {trip.userName}
   </span>
 </Link>
-
- {/* Post Caption */}
+{/* Post Caption */}
 <div
   className="
     absolute
-    bottom-28
+    bottom-5
     left-4
     right-24
-    text-white
     z-20
   "
 >
-  <p className="text-white/90 leading-relaxed">
-    {trip.caption || "No caption yet."}
+  <p className="text-white text-base leading-6">
+    {trip.caption?.length > 120
+      ? trip.caption.substring(0, 120) + "..."
+      : trip.caption || "No caption yet."}
   </p>
+
+  {trip.caption?.length > 120 && (
+    <button
+      className="text-orange-400 text-sm mt-1 font-semibold"
+      onClick={() => alert(trip.caption)}
+    >
+      Read more
+    </button>
+  )}
 </div>
 
                {/* Right Side Actions */}
