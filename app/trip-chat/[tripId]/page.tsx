@@ -14,7 +14,8 @@ import {
 import { db } from "../../firebase";
 
 export default function TripChatPage() {
-  const { tripId } = useParams();
+  const params = useParams();
+const tripId = params.tripId as string;
 
   const [chat, setChat] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -51,18 +52,27 @@ useEffect(() => {
 }, [chat]);
 
   async function loadChat() {
-    if (!tripId) return;
+  console.log("Route tripId:", tripId);
 
-    const snap = await getDoc(
-      doc(db, "tripChats", tripId as string)
-    );
-
-    if (snap.exists()) {
-  const data = snap.data();
-
-  setChat(data);
-}
+  if (!tripId) {
+    console.log("tripId is undefined");
+    return;
   }
+
+  const chatRef = doc(db, "tripChats", tripId);
+
+  const snap = await getDoc(chatRef);
+
+  console.log("Document exists:", snap.exists());
+
+  if (snap.exists()) {
+    console.log("Chat Data:", snap.data());
+
+    setChat(snap.data());
+  } else {
+    console.log("No tripChat document found with ID:", tripId);
+  }
+}
 
   async function loadMessages() {
     const snapshot = await getDocs(
@@ -95,7 +105,7 @@ useEffect(() => {
 
   // Mark chat as completed
 await updateDoc(
-  doc(db, "tripChats", tripId as string),
+  doc(db, "tripChats", tripId),
   {
     completed: true,
     reviewedUsers: [],
@@ -155,7 +165,7 @@ async function checkExistingReview() {
 }
 async function submitReview() {
   await updateDoc(
-  doc(db, "tripChats", tripId as string),
+  doc(db, "tripChats", tripId),
   {
     reviewedUsers: arrayUnion(currentUser.name),
   }

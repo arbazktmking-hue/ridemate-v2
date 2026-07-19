@@ -1,7 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+  useRef,
+} from "react";
 import Link from "next/link";
+import {
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import {
   collection,
   getDocs,
@@ -21,10 +29,12 @@ import {
   MessageCircle,
   Bookmark,
   Rocket,
+  Share2,
 } from "lucide-react";
 export default function FeedPage() {
-
-
+const router = useRouter();
+const searchParams = useSearchParams();
+const sharedTripId = searchParams.get("trip");
   const [trips, setTrips] = useState<any[]>([]);
   const [savedTrips, setSavedTrips] = useState<string[]>([]);
   const [selectedTrip, setSelectedTrip] = useState<any>(null);
@@ -32,6 +42,7 @@ export default function FeedPage() {
     useState<string[]>([]);
   const [heartAnimation, setHeartAnimation] =
     useState<string | null>(null);
+    const tripRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   useEffect(() => {
 
     const fetchTrips = async () => {
@@ -80,6 +91,29 @@ console.log(
     fetchTrips();
 
   }, []);
+  useEffect(() => {
+  if (!sharedTripId) return;
+
+  console.log("Shared Trip:", sharedTripId);
+  console.log("Trips:", trips.map(t => t.id));
+
+  const timer = setTimeout(() => {
+    console.log("Refs:", Object.keys(tripRefs.current));
+
+    const element = tripRefs.current[sharedTripId];
+
+    console.log("Found element:", element);
+
+    if (element) {
+      element.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  }, 1500);
+
+  return () => clearTimeout(timer);
+}, [sharedTripId, trips]);
   useEffect(() => {
 
     const loadSavedTrips = async () => {
@@ -361,6 +395,9 @@ console.log(
           {trips.map((trip) => (
             <div
   key={trip.id}
+  ref={(el) => {
+    tripRefs.current[trip.id] = el;
+  }}
   className="
 snap-start
 h-[calc(100dvh-64px)]
@@ -468,15 +505,15 @@ overflow-hidden
 </p>
                 </div>
 
-               {/* Bottom Action Bar */}
+              {/* Bottom Action Bar */}
 <div
   className="
     absolute
     bottom-4
     left-4
     right-4
-    flex
-    justify-around
+    grid
+    grid-cols-5
     items-center
     bg-black/40
     backdrop-blur-xl
@@ -488,98 +525,127 @@ overflow-hidden
     shadow-2xl
   "
 >
-  {/* Like */}
-  <button
-  onClick={(e) => {
-    e.stopPropagation();
-    likeTrip(trip.id, trip.likes || 0);
-  }}
-  className=""
->
-    <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-red-500/20 transition">
-      <Heart className="w-6 h-6 text-red-400" />
-    </div>
 
-    <span className="text-xs">
+  {/* Like */}
+  <div className="flex flex-col items-center">
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        likeTrip(trip.id, trip.likes || 0);
+      }}
+    >
+      <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-red-500/20 transition">
+        <Heart className="w-6 h-6 text-red-400" />
+      </div>
+    </button>
+
+    <span className="text-xs mt-1">
       {trip.likes || 0}
     </span>
-  </button>
+  </div>
 
-  {/* Comments */}
-  <button
-  onClick={(e) => {
-    e.stopPropagation();
+  {/* Comment */}
+  <div className="flex flex-col items-center">
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
 
-    if (openComments.includes(trip.id)) {
-      setOpenComments(prev =>
-        prev.filter(id => id !== trip.id)
-      );
-    } else {
-      setOpenComments(prev => [
-        ...prev,
-        trip.id,
-      ]);
-    }
-  }}
->
-    <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-blue-500/20 transition">
-      <MessageCircle className="w-6 h-6 text-sky-400" />
-    </div>
+        if (openComments.includes(trip.id)) {
+          setOpenComments(prev =>
+            prev.filter(id => id !== trip.id)
+          );
+        } else {
+          setOpenComments(prev => [
+            ...prev,
+            trip.id,
+          ]);
+        }
+      }}
+    >
+      <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-blue-500/20 transition">
+        <MessageCircle className="w-6 h-6 text-sky-400" />
+      </div>
+    </button>
 
-    <span className="text-xs">
+    <span className="text-xs mt-1">
       {(trip.comments || []).length}
     </span>
-  </button>
+  </div>
+
+  {/* Share */}
+  <div className="flex flex-col items-center">
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        router.push(`/share/${trip.id}`);
+      }}
+    >
+      <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-green-500/20 transition">
+        <Share2 className="w-6 h-6 text-green-400" />
+      </div>
+    </button>
+
+    <span className="text-xs mt-1">
+      Share
+    </span>
+  </div>
 
   {/* Save */}
-  <button
-  onClick={(e) => {
-    e.stopPropagation();
-    toggleSaveTrip(trip.id);
-  }}
->
-    <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-yellow-500/20 transition">
-      <Bookmark
-        className={`w-6 h-6 ${
-          savedTrips.includes(trip.id)
-            ? "fill-yellow-400 text-yellow-400"
-            : "text-white"
-        }`}
-      />
-    </div>
+  <div className="flex flex-col items-center">
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        toggleSaveTrip(trip.id);
+      }}
+    >
+      <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-yellow-500/20 transition">
+        <Bookmark
+          className={`w-6 h-6 ${
+            savedTrips.includes(trip.id)
+              ? "fill-yellow-400 text-yellow-400"
+              : "text-white"
+          }`}
+        />
+      </div>
+    </button>
 
-    <span className="text-xs">
+    <span className="text-xs mt-1">
       {savedTrips.includes(trip.id)
         ? "Saved"
         : "Save"}
     </span>
-  </button>
+  </div>
 
   {/* Join */}
-  <button
-  onClick={(e) => {
-    e.stopPropagation();
+  <div className="flex flex-col items-center">
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
 
-    const currentUser = JSON.parse(
-      localStorage.getItem("ridemateUser") || "{}"
-    );
+        const currentUser = JSON.parse(
+          localStorage.getItem("ridemateUser") || "{}"
+        );
 
-    if (currentUser.name === trip.userName) {
-      alert("This is your ride");
-      return;
-    }
+        if (currentUser.name === trip.userName) {
+          alert("This is your ride");
+          return;
+        }
 
-    requestToJoin(trip);
-  }}
->
-    <div className="w-12 h-12 rounded-full bg-orange-500 flex items-center justify-center hover:scale-110 transition">
-      <Rocket className="w-6 h-6 text-white" />
-    </div>
+        requestToJoin(trip);
+      }}
+    >
+      <div className="w-12 h-12 rounded-full bg-orange-500 flex items-center justify-center hover:scale-110 transition">
+        <Rocket className="w-6 h-6 text-white" />
+      </div>
+    </button>
 
-    <span className="text-xs">
-  {trip.rideType === "group" ? "Join Ride" : "Ride Along"}
-</span>
-  </button>
+    <span className="text-xs mt-1">
+      {trip.rideType === "group"
+        ? "Join Ride"
+        : "Ride Along"}
+    </span>
+  </div>
+
 </div>
                 {heartAnimation === trip.id && (
                   <div

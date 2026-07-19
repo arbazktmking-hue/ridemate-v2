@@ -27,6 +27,7 @@ const router = useRouter();
     params.name as string
   );
 const [riderTrips, setRiderTrips] = useState<any[]>([]);
+const [riderPosts, setRiderPosts] = useState<any[]>([]);
 const [totalLikes, setTotalLikes] = useState(0);
 const [riderImage, setRiderImage] = useState("");
 const [isFollowing, setIsFollowing] = useState(false);
@@ -142,6 +143,29 @@ distance += Number(
 setTotalLikes(likes);
 setTotalDistance(distance);
 setRiderImage(image);
+const postSnapshot = await getDocs(
+  collection(db, "feedPosts")
+);
+
+const posts: any[] = [];
+
+postSnapshot.forEach((doc) => {
+
+  const post = doc.data();
+
+  if (
+    post.userName === riderName &&
+    post.mediaUrl
+) {
+    posts.push({
+        id: doc.id,
+        ...post,
+    });
+}
+
+});
+
+setRiderPosts(posts);
 const reviewSnapshot = await getDocs(
   collection(db, "rideReviews")
 );
@@ -443,72 +467,56 @@ await addDoc(
 )}
 
 <div className="mt-10">
-    <h2 className="text-3xl font-black text-orange-500 mb-6">
-      Rider Trips 🏍️
-    </h2>
 
-    <div className="space-y-4">
+  <h2 className="text-3xl font-black text-orange-500 mt-8 mb-6">
+    Posts
+  </h2>
 
-      {riderTrips.map((trip) => (
+  <div className="grid grid-cols-3 gap-1">
 
-        <div
-          key={trip.id}
-          className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800"
-        >
+    {riderPosts.map((post) => (
 
-          <p className="text-sm text-zinc-500 mb-1">
-  📅 Posted:
-  {" "}
-  {trip.createdAt?.toDate
-    ? trip.createdAt
-        .toDate()
-        .toLocaleString("en-IN", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        })
-    : "Unknown"}
-</p>
+  <div
+    key={post.id}
+    className="aspect-square overflow-hidden bg-zinc-900"
+  >
 
-<h3 className="text-xl font-bold">
-  {trip.destination}
-</h3>
-<p className="text-zinc-400">
-  📍 {trip.startLocation} → {trip.endLocation}
-</p>
-<p className="text-orange-400 font-bold">
-  🛣️ {trip.distance || 0} KM
-</p>
-          <p className="text-orange-500">
-            {trip.bike}
-          </p>
+    {post.mediaUrl ? (
 
-          <p className="text-zinc-300 mt-2">
-            {trip.caption}
-          </p>
-{trip.itinerary && (
-  <div className="mt-3 text-sm text-zinc-400 whitespace-pre-line">
-    <span className="font-bold text-orange-400">
-      🗺️ Itinerary:
-    </span>
+      post.mediaType?.startsWith("image") ? (
 
-    {"\n"}
-    {trip.itinerary}
+        <img
+          src={post.mediaUrl}
+          className="w-full h-full object-cover"
+          alt=""
+        />
+
+      ) : (
+
+        <video
+          src={post.mediaUrl}
+          className="w-full h-full object-cover"
+          muted
+          controls={false}
+        />
+
+      )
+
+    ) : (
+
+      <div className="w-full h-full flex items-center justify-center text-zinc-500">
+        No Media
+      </div>
+
+    )}
+
   </div>
-)}
-          <p className="text-zinc-400 mt-2">
-            ❤️ {trip.likes || 0}
-          </p>
 
-        </div>
+))}
 
-      ))}
+  </div>
 
-    </div>
-
-</div> {/* Rider Trips section */}
+</div>
 
 {/* Logout Button */}
 
