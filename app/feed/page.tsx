@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Suspense,
   useEffect,
   useState,
   useRef,
@@ -31,7 +32,7 @@ import {
   Rocket,
   Share2,
 } from "lucide-react";
-export default function FeedPage() {
+function FeedContent() {
 const router = useRouter();
 const searchParams = useSearchParams();
 const sharedTripId = searchParams.get("trip");
@@ -873,5 +874,18 @@ transition
 )}
 
     </main>
+  );
+}
+export default function FeedPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="fixed inset-0 top-16 bg-black text-white flex items-center justify-center">
+          Loading...
+        </main>
+      }
+    >
+      <FeedContent />
+    </Suspense>
   );
 }
