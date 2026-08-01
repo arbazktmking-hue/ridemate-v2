@@ -12,7 +12,10 @@ import {
   setDoc,
   deleteDoc,
   getDoc,
-  addDoc
+  addDoc,
+  query,
+  where,
+  orderBy
 } from "firebase/firestore";
 
 import { db, auth } from "../../firebase";
@@ -40,6 +43,11 @@ const [showBio, setShowBio] = useState(false);
 const [reviews, setReviews] = useState<any[]>([]);
 const [avgRating, setAvgRating] = useState(0);
 const [reviewCount, setReviewCount] = useState(0);
+const [selectedPost, setSelectedPost] = useState<any>(null);
+
+const [postComments, setPostComments] = useState<any[]>([]);
+
+const [newComment, setNewComment] = useState("");
 const logout = async () => {
 
   try {
@@ -57,6 +65,46 @@ const logout = async () => {
     alert("Logout failed");
 
   }
+
+};
+const openPost = async (post: any) => {
+
+  setSelectedPost(post);
+
+  const q = query(
+  collection(db, "comments"),
+  where("postId", "==", post.id),
+  orderBy("createdAt", "asc")
+);
+
+const snapshot = await getDocs(q);
+
+const comments = snapshot.docs.map((doc) => ({
+  id: doc.id,
+  ...doc.data(),
+}));
+
+  setPostComments(comments);
+
+};
+
+const addCommentToPost = async () => {
+
+  if (!newComment.trim()) return;
+
+  await addDoc(
+    collection(db, "comments"),
+    {
+      postId: selectedPost.id,
+      user: currentUser.name,
+      text: newComment,
+      createdAt: Date.now(),
+    }
+  );
+
+  setNewComment("");
+
+  openPost(selectedPost);
 
 };
 const achievements: string[] = [];
@@ -311,25 +359,27 @@ await addDoc(
 };
   return (
 
-  <main className="min-h-screen bg-black text-white px-6 py-10">
+  <main className="min-h-screen bg-black text-white px-6 pt-24 pb-10">
 
     <div className="max-w-4xl mx-auto">
 
   <div className="text-center">
 
-    <img
-  src={
-    riderImage ||
-    "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300"
-  }
-  alt="Rider"
-  className="w-32 h-32 rounded-full mx-auto border-4 border-orange-500"
-/>
+  <div className="flex justify-center">
+  <img
+    src={
+      riderImage ||
+      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300"
+    }
+    alt="Rider"
+    className="w-36 h-36 rounded-full border-4 border-orange-500 shadow-2xl object-cover"
+  />
+</div>
 
     <h1 className="text-5xl font-black text-orange-500 mt-6">
       {riderName}
     </h1>
-   <div className="mt-3 mb-10 text-xl font-bold text-yellow-400">
+   <div className="mt-2 mb-6 text-lg font-bold text-yellow-400">
   {badge}
 </div>
 {currentUser?.name !== riderName && (
@@ -359,40 +409,44 @@ await addDoc(
   </div>
 
 )}
-<div className="grid grid-cols-2 gap-4 mt-16">
+<div className="grid grid-cols-3 gap-4 mt-10">
 
+  {/* Followers */}
   <Link
     href={`/rider/${encodeURIComponent(riderName)}/followers`}
-    className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 hover:border-orange-500 text-center"
+    className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 hover:border-orange-500 text-center transition"
   >
-    👥 Followers: {followers}
+    <p className="text-2xl font-black text-white">{followers}</p>
+    <p className="text-sm text-zinc-400 mt-1">Followers</p>
   </Link>
 
+  {/* Following */}
   <Link
     href={`/rider/${encodeURIComponent(riderName)}/following`}
-    className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 hover:border-orange-500 text-center"
+    className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 hover:border-orange-500 text-center transition"
   >
-    ➡️ Following: {following}
+    <p className="text-2xl font-black text-white">{following}</p>
+    <p className="text-sm text-zinc-400 mt-1">Following</p>
   </Link>
-<Link
-  href={`/rider/${encodeURIComponent(riderName)}/reviews`}
-  className="
-    bg-zinc-900
-    p-4
-    rounded-2xl
-    border border-zinc-800
-    hover:border-orange-500
-    text-center
-    col-span-2
-    block
-  "
->
-  ⭐ Rating: {avgRating.toFixed(1)} / 5
-  <br />
-  <span className="text-zinc-400">
-    {reviewCount} review(s)
-  </span>
-</Link>
+
+  {/* Rating */}
+  <Link
+    href={`/rider/${encodeURIComponent(riderName)}/reviews`}
+    className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 hover:border-orange-500 text-center transition"
+  >
+    <p className="text-2xl font-black text-yellow-400">{avgRating.toFixed(1)}</p>
+    <p className="text-sm text-zinc-400 mt-1">Rating</p>
+  </Link>
+
+</div>
+
+<div className="text-center mt-3">
+  <Link
+    href={`/rider/${encodeURIComponent(riderName)}/reviews`}
+    className="text-sm text-zinc-400 hover:text-orange-400 transition"
+  >
+    {reviewCount} review{reviewCount !== 1 ? "s" : ""}
+  </Link>
 </div>
 
     <div className="mt-6">
@@ -477,9 +531,17 @@ await addDoc(
     {riderPosts.map((post) => (
 
   <div
-    key={post.id}
-    className="aspect-square overflow-hidden bg-zinc-900"
-  >
+  key={post.id}
+  onClick={() => openPost(post)}
+  className="
+    aspect-square
+    overflow-hidden
+    bg-zinc-900
+    cursor-pointer
+    hover:opacity-90
+    transition
+  "
+>
 
     {post.mediaUrl ? (
 
@@ -549,7 +611,105 @@ await addDoc(
 </div> {/* text-center */}
 
 </div> {/* max-w-4xl */}
+{selectedPost && (
 
+<div className="fixed inset-0 bg-black/95 z-[9999] overflow-y-auto">
+
+  <div className="max-w-3xl mx-auto p-6">
+
+    <button
+      onClick={() => setSelectedPost(null)}
+      className="text-3xl mb-5"
+    >
+      ❌
+    </button>
+
+    {selectedPost.mediaType?.startsWith("image") ? (
+
+      <img
+        src={selectedPost.mediaUrl}
+        className="w-full rounded-2xl"
+        alt=""
+      />
+
+    ) : (
+
+      <video
+        src={selectedPost.mediaUrl}
+        controls
+        className="w-full rounded-2xl"
+      />
+
+    )}
+
+    <div className="mt-6">
+
+      <h2 className="text-2xl font-black">
+
+        ❤️ {selectedPost.likes || 0} Likes
+
+      </h2>
+
+      <p className="mt-3">
+
+        {selectedPost.caption}
+
+      </p>
+
+    </div>
+
+    <hr className="my-6 border-zinc-800" />
+
+    <h2 className="text-xl font-black mb-4">
+
+      Comments
+
+    </h2>
+
+    <div className="space-y-3">
+
+      {postComments.map((comment, index) => (
+
+        <div
+          key={index}
+          className="bg-zinc-900 p-3 rounded-xl"
+        >
+
+          <b>{comment.user}</b>
+
+          <p>{comment.text}</p>
+
+        </div>
+
+      ))}
+
+    </div>
+
+    <div className="flex gap-3 mt-6">
+
+      <input
+        value={newComment}
+        onChange={(e) =>
+          setNewComment(e.target.value)
+        }
+        placeholder="Write a comment..."
+        className="flex-1 p-3 rounded-xl bg-zinc-900"
+      />
+
+      <button
+        onClick={addCommentToPost}
+        className="bg-orange-500 px-6 rounded-xl font-bold"
+      >
+        Send
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+)}
 </main>
 
   );

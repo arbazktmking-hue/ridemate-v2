@@ -182,6 +182,7 @@ export default function ChatPage() {
 
   <Link
   href={`/feed?trip=${msg.tripId}`}
+  scroll={false}
   className="block"
 >
     <div className="bg-black/30 rounded-xl p-3 border border-orange-400 hover:border-orange-500 transition">
