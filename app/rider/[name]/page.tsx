@@ -440,15 +440,6 @@ await addDoc(
 
 </div>
 
-<div className="text-center mt-3">
-  <Link
-    href={`/rider/${encodeURIComponent(riderName)}/reviews`}
-    className="text-sm text-zinc-400 hover:text-orange-400 transition"
-  >
-    {reviewCount} review{reviewCount !== 1 ? "s" : ""}
-  </Link>
-</div>
-
     <div className="mt-6">
 
   <button
