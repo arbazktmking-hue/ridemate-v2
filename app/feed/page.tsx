@@ -4,7 +4,6 @@ import {
   Suspense,
   useEffect,
   useState,
-  useRef,
 } from "react";
 import Link from "next/link";
 import {
@@ -43,7 +42,9 @@ const sharedTripId = searchParams.get("trip");
     useState<string[]>([]);
   const [heartAnimation, setHeartAnimation] =
     useState<string | null>(null);
-    const tripRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+    const focusedTrip = trips.find(
+  (trip) => trip.id === sharedTripId
+);
   useEffect(() => {
 
     const fetchTrips = async () => {
@@ -74,7 +75,35 @@ const sharedTripId = searchParams.get("trip");
     index === self.findIndex((t) => t.id === trip.id)
 );
 
-setTrips(uniqueTrips);
+if (sharedTripId) {
+  const sharedTrip = uniqueTrips.find(
+    (trip) => trip.id === sharedTripId
+  );
+
+  const otherTrips = uniqueTrips.filter(
+    (trip) => trip.id !== sharedTripId
+  );
+
+  if (sharedTrip) {
+    setTrips([sharedTrip, ...otherTrips]);
+  } else {
+  if (sharedTripId) {
+  const sharedTrip = uniqueTrips.find(
+    (trip) => trip.id === sharedTripId
+  );
+
+  if (sharedTrip) {
+    setTrips([sharedTrip]); // show only this trip
+  } else {
+    setTrips(uniqueTrips);
+  }
+} else {
+  setTrips(uniqueTrips);
+}
+  }
+} else {
+  setTrips(uniqueTrips);
+}
 
 console.log(
   "Trips loaded:",
@@ -92,29 +121,7 @@ console.log(
     fetchTrips();
 
   }, []);
-  useEffect(() => {
-  if (!sharedTripId) return;
-
-  console.log("Shared Trip:", sharedTripId);
-  console.log("Trips:", trips.map(t => t.id));
-
-  const timer = setTimeout(() => {
-    console.log("Refs:", Object.keys(tripRefs.current));
-
-    const element = tripRefs.current[sharedTripId];
-
-    console.log("Found element:", element);
-
-    if (element) {
-      element.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }
-  }, 1500);
-
-  return () => clearTimeout(timer);
-}, [sharedTripId, trips]);
+  
   useEffect(() => {
 
     const loadSavedTrips = async () => {
@@ -393,12 +400,12 @@ console.log(
 >
         <div>
 
-          {trips.map((trip) => (
+          {(sharedTripId && focusedTrip
+  ? [focusedTrip]
+  : trips
+).map((trip) => (
             <div
   key={trip.id}
-  ref={(el) => {
-    tripRefs.current[trip.id] = el;
-  }}
   className="
 snap-start
 h-[calc(100dvh-64px)]
@@ -486,6 +493,21 @@ overflow-hidden
                   <h2 className="text-4xl font-black tracking-tight drop-shadow-lg">
   🏔 {trip.destination}
 </h2>
+<p className="text-xs text-white/60 mt-1">
+  {trip.createdAt
+    ? new Date(
+        trip.createdAt.seconds
+          ? trip.createdAt.seconds * 1000
+          : trip.createdAt
+      ).toLocaleString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "Just now"}
+</p>
 <div className="mt-2">
   {trip.rideType === "group" ? (
     <span className="bg-blue-500/20 text-blue-300 px-3 py-1 rounded-full text-sm font-bold">
