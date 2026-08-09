@@ -98,64 +98,30 @@ export default function Navbar() {
         </div>
 
         {/* Right side */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
 
-          {/* Search */}
-          <a
-            href="/search"
-            className="p-2 rounded-xl bg-white/10 hover:bg-white/20 transition"
-          >
-            <Search size={22} />
-          </a>
+  <a href="/search" className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition">
+    <Search size={20} />
+  </a>
 
-          {/* Saved */}
-          <a
-            href="/saved"
-            className="p-2 rounded-xl bg-white/10 hover:bg-white/20 transition"
-          >
-            <Bookmark size={22} />
-          </a>
+  <a href="/saved" className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition">
+    <Bookmark size={20} />
+  </a>
 
-          {/* Notifications */}
-          <a
-            href="/notifications"
-            className="relative p-2 rounded-xl bg-white/10 hover:bg-white/20 transition"
-          >
-            <Bell size={22} />
+  <a href="/notifications" className="relative p-2 rounded-full bg-white/10 hover:bg-white/20 transition">
+    <Bell size={20} />
+    {notificationCount > 0 && (
+      <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-black">
+        {notificationCount > 9 ? "9+" : notificationCount}
+      </span>
+    )}
+  </a>
 
-            {notificationCount > 0 && (
-              <span
-                className="
-                  absolute
-                  -top-1
-                  -right-1
-                  min-w-[20px]
-                  h-5
-                  px-1
-                  flex
-                  items-center
-                  justify-center
-                  rounded-full
-                  bg-red-500
-                  text-white
-                  text-[10px]
-                  font-black
-                "
-              >
-                {notificationCount > 9 ? "9+" : notificationCount}
-              </span>
-            )}
-          </a>
+  <a href="/profile" className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition">
+    <User size={20} />
+  </a>
 
-          {/* Profile */}
-          <a
-            href="/profile"
-            className="p-2 rounded-xl bg-white/10 hover:bg-white/20 transition"
-          >
-            <User size={22} />
-          </a>
-
-        </div>
+</div>
       </nav>
 
       {/* Sidebar */}
@@ -233,17 +199,6 @@ export default function Navbar() {
   <Bike size={22} />
   Ride Requests
 </a>
-
-              <a href="/saved" className="flex items-center gap-3 hover:text-orange-500 transition">
-                <Bookmark size={22} />
-                Saved
-              </a>
-
-              <a href="/profile" className="flex items-center gap-3 hover:text-orange-500 transition">
-                <User size={22} />
-                Profile
-              </a>
-
               <div className="mt-6 pt-6 border-t border-zinc-800 text-sm text-zinc-400">
                 Total rides: {rideCount}
               </div>
