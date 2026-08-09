@@ -229,10 +229,10 @@ export default function Navbar() {
                 Live Trip Chats
               </a>
 
-              <a href="/my-rides" className="flex items-center gap-3 hover:text-orange-500 transition">
-                <Bike size={22} />
-                My Rides
-              </a>
+              <a href="/requests" className="flex items-center gap-3 hover:text-orange-500 transition">
+  <Bike size={22} />
+  Ride Requests
+</a>
 
               <a href="/saved" className="flex items-center gap-3 hover:text-orange-500 transition">
                 <Bookmark size={22} />
