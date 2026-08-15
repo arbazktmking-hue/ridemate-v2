@@ -205,6 +205,11 @@ export default function Navbar() {
   My Trips
 </a>
 
+<a href="/about" className="flex items-center gap-3 hover:text-orange-500 transition">
+  ℹ️
+  About Us
+</a>
+
 <div className="mt-6 pt-6 border-t border-zinc-800 text-sm text-zinc-400">
   Total rides: {rideCount}
 </div>
