@@ -5,7 +5,9 @@ import {
   signInWithPopup
 } from "firebase/auth";
 
-import { auth } from "../firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+
+import { auth, db } from "../firebase";
 
 import { useRouter } from "next/navigation";
 
@@ -17,34 +19,84 @@ export default function LoginPage() {
 
   try {
 
-    const provider = new GoogleAuthProvider();
+    const provider =
+      new GoogleAuthProvider();
 
-    const result = await signInWithPopup(
-      auth,
-      provider
-    );
+    const result =
+      await signInWithPopup(
+        auth,
+        provider
+      );
 
-    const user = {
-      uid: result.user.uid,
+    const uid =
+      result.user.uid;
+
+    const userDoc =
+      await getDoc(
+        doc(
+          db,
+          "users",
+          uid
+        )
+      );
+
+    // existing user
+    if (userDoc.exists()) {
+
+      const user =
+        userDoc.data();
+
+      localStorage.setItem(
+        "ridemateUser",
+        JSON.stringify({
+          uid,
+          email: user.email,
+          image: user.image,
+          name: user.username,
+        })
+      );
+const termsAccepted = localStorage.getItem("termsAccepted");
+
+if (termsAccepted === "true") {
+  router.push("/profile");
+} else {
+  router.push("/terms");
+}
+    }
+
+    // new user
+    else {
+  await setDoc(
+    doc(db, "users", uid),
+    {
+      uid,
+      username: result.user.displayName,
       email: result.user.email,
       image: result.user.photoURL,
-    };
+      createdAt: Date.now(),
+    }
+  );
 
-    localStorage.setItem(
-      "pendingUser",
-      JSON.stringify(user)
-    );
+  localStorage.setItem(
+    "pendingUser",
+    JSON.stringify({
+      uid,
+      email: result.user.email,
+      image: result.user.photoURL,
+    })
+  );
 
-    router.push("/create-username");
+  router.push("/terms");
+}
 
   } catch (error) {
 
     console.log(error);
 
-    alert("Login failed");
-
+    alert(
+      "Login failed"
+    );
   }
-
 };
 
   return (
