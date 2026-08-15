@@ -199,9 +199,15 @@ export default function Navbar() {
   <Bike size={22} />
   Ride Requests
 </a>
-              <div className="mt-6 pt-6 border-t border-zinc-800 text-sm text-zinc-400">
-                Total rides: {rideCount}
-              </div>
+
+<a href="/my-rides" className="flex items-center gap-3 hover:text-orange-500 transition">
+  <Route size={22} />
+  My Trips
+</a>
+
+<div className="mt-6 pt-6 border-t border-zinc-800 text-sm text-zinc-400">
+  Total rides: {rideCount}
+</div>
             </div>
           </div>
         </>
