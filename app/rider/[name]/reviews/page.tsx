@@ -52,13 +52,17 @@ export default function RiderReviewsPage() {
   }, [riderName]);
 
   return (
-    <main className="min-h-screen bg-black text-white px-6 py-10">
+    <main className="min-h-screen bg-black text-white px-6 pt-24 pb-10">
 
       <div className="max-w-4xl mx-auto">
 
-        <h1 className="text-4xl font-black text-orange-500 mb-3">
-          ⭐ Reviews for {riderName}
-        </h1>
+        <h1 className="text-4xl md:text-5xl font-black text-orange-500 mb-2">
+  Reviews
+</h1>
+
+<p className="text-zinc-400 mb-8">
+  What riders are saying about {riderName}
+</p>
 
         <p className="text-xl text-yellow-400 mb-8">
           Average Rating: {avgRating.toFixed(1)} / 5
