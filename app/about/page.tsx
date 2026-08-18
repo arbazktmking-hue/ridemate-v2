@@ -130,7 +130,95 @@ export default function AboutPage() {
   </div>
 </div>
         </div>
+{/* Terms & Conditions */}
+<div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 mb-10">
+  <details className="group">
+    <summary className="cursor-pointer list-none flex items-center justify-between">
+      <div>
+        <h2 className="text-2xl font-black text-orange-500">
+          📜 Terms & Conditions
+        </h2>
+        <p className="text-zinc-400 mt-1 text-sm">
+          Read the terms that apply to using RideMate
+        </p>
+      </div>
 
+      <span className="text-orange-500 text-2xl transition-transform group-open:rotate-180">
+        ▼
+      </span>
+    </summary>
+
+    <div className="mt-6 pt-6 border-t border-zinc-800 space-y-5 text-zinc-300 leading-7">
+      <p>
+        <strong>1. RideMate is a connecting platform.</strong>
+      </p>
+
+      <p>
+        <strong>2. Users are responsible for their own safety.</strong>
+      </p>
+
+      <p>
+        <strong>
+          3. RideMate is not liable for accidents, injuries, theft,
+          disputes, or any mishappening.
+        </strong>
+      </p>
+
+      <p>
+        <strong>
+          4. Users must verify the identity and documents of fellow riders
+          before any trip.
+        </strong>
+      </p>
+
+      <p>
+        <strong>
+          5. Users must comply with all traffic laws and carry valid
+          documents.
+        </strong>
+      </p>
+
+      <p>
+        <strong>6. RideMate is not responsible for personal belongings.</strong>
+      </p>
+
+      <p>
+        <strong>
+          7. Expense sharing is a private arrangement between users.
+        </strong>
+      </p>
+
+      <p>
+        <strong>
+          8. Harassment, fraud, abuse, or illegal activity may lead to
+          account suspension.
+        </strong>
+      </p>
+
+      <p>
+        <strong>
+          9. RideMate is currently in beta and service availability is not
+          guaranteed.
+        </strong>
+      </p>
+
+      <p>
+        <strong>
+          10. By using RideMate, you voluntarily accept all risks associated
+          with motorcycle travel and agree that RideMate acts only as a
+          mediator connecting users.
+        </strong>
+      </p>
+
+      <div className="mt-6 pt-5 border-t border-zinc-800 text-center">
+        <p className="text-zinc-500 text-sm">
+          Your safety is your responsibility. RideMate only helps riders
+          connect.
+        </p>
+      </div>
+    </div>
+  </details>
+</div>
        {/* Founder */}
 <div className="text-center pt-8 border-t border-zinc-800">
   <h3 className="text-2xl font-black text-orange-500 mb-4 uppercase tracking-wide">
