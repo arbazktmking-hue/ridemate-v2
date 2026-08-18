@@ -37,6 +37,8 @@ const searchParams = useSearchParams();
 const sharedTripId = searchParams.get("trip");
   const [trips, setTrips] = useState<any[]>([]);
   const [savedTrips, setSavedTrips] = useState<string[]>([]);
+  const [startFilter, setStartFilter] = useState("");
+const [destinationFilter, setDestinationFilter] = useState("");
   const [selectedTrip, setSelectedTrip] = useState<any>(null);
   const [openComments, setOpenComments] =
     useState<string[]>([]);
@@ -45,6 +47,21 @@ const sharedTripId = searchParams.get("trip");
     const focusedTrip = trips.find(
   (trip) => trip.id === sharedTripId
 );
+const filteredTrips = trips.filter((trip) => {
+  const startMatch =
+    !startFilter ||
+    trip.startLocation
+      ?.toLowerCase()
+      .includes(startFilter.toLowerCase());
+
+  const destinationMatch =
+    !destinationFilter ||
+    trip.destination
+      ?.toLowerCase()
+      .includes(destinationFilter.toLowerCase());
+
+  return startMatch && destinationMatch;
+});
   useEffect(() => {
 
     const fetchTrips = async () => {
@@ -87,24 +104,11 @@ if (sharedTripId) {
   if (sharedTrip) {
     setTrips([sharedTrip, ...otherTrips]);
   } else {
-  if (sharedTripId) {
-  const sharedTrip = uniqueTrips.find(
-    (trip) => trip.id === sharedTripId
-  );
-
-  if (sharedTrip) {
-    setTrips([sharedTrip]); // show only this trip
-  } else {
     setTrips(uniqueTrips);
   }
 } else {
   setTrips(uniqueTrips);
 }
-  }
-} else {
-  setTrips(uniqueTrips);
-}
-
 console.log(
   "Trips loaded:",
   uniqueTrips.length,
@@ -383,7 +387,28 @@ console.log(
   console.log("Trips state:", trips);
   return (
     <main className="fixed inset-0 top-16 bg-black text-white overflow-hidden">
-
+{/* Create Trip Button */}
+<Link
+  href="/create-trip"
+  className="
+    fixed
+    top-20
+    right-4
+    z-[150]
+    bg-orange-500
+    text-black
+    px-4
+    py-2
+    rounded-full
+    font-black
+    text-sm
+    shadow-lg
+    hover:scale-105
+    transition
+  "
+>
+  + Create Trip
+</Link>
       <div
   className="
   h-full
@@ -398,11 +423,47 @@ console.log(
   [&::-webkit-scrollbar]:hidden
 "
 >
-        <div>
+        {/* Location Filters */}
+{!sharedTripId && (
+  <div className="sticky top-0 z-[100] bg-black/90 backdrop-blur-xl border-b border-zinc-800 p-3">
+    <div className="max-w-4xl mx-auto flex gap-2">
 
-          {(sharedTripId && focusedTrip
-  ? [focusedTrip]
-  : trips
+      <input
+        type="text"
+        placeholder="📍 Start location"
+        value={startFilter}
+        onChange={(e) => setStartFilter(e.target.value)}
+        className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-sm outline-none focus:border-orange-500"
+      />
+
+      <input
+        type="text"
+        placeholder="🏔 Destination"
+        value={destinationFilter}
+        onChange={(e) => setDestinationFilter(e.target.value)}
+        className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-sm outline-none focus:border-orange-500"
+      />
+
+      {(startFilter || destinationFilter) && (
+        <button
+          onClick={() => {
+            setStartFilter("");
+            setDestinationFilter("");
+          }}
+          className="px-4 rounded-xl bg-orange-500 text-black font-black text-sm"
+        >
+          Clear
+        </button>
+      )}
+
+    </div>
+  </div>
+)}
+
+<div>
+  {(sharedTripId && focusedTrip
+    ? [focusedTrip]
+    : filteredTrips
 ).map((trip) => (
             <div
   key={trip.id}

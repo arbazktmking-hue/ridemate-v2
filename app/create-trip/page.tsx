@@ -157,16 +157,12 @@ if (isEditing && editId) {
   return (
     <PageBackground>
 
-      <div className="max-w-3xl mx-auto bg-zinc-900 rounded-3xl border border-zinc-800 p-8">
-
-        <h1 className="text-5xl font-black text-orange-500 mb-10">
-  {isEditing ? "Edit Trip ✏️" : "Create Trip 🔥"}
-</h1>
+      <div className="w-full max-w-3xl mx-auto bg-zinc-900 rounded-3xl border border-zinc-800 p-4 sm:p-6 md:p-8 mt-8 mb-8">
         <img
-          src={tripImage}
-          alt="Trip"
-          className="w-full h-72 object-cover rounded-2xl mb-6"
-        />
+  src={tripImage}
+  alt="Trip"
+  className="w-full h-48 sm:h-56 md:h-72 object-cover rounded-2xl mb-5"
+/>
 
         <label className="bg-orange-500 px-6 py-3 rounded-2xl font-bold cursor-pointer inline-block hover:scale-105 transition">
 
