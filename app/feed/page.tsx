@@ -387,28 +387,6 @@ console.log(
   console.log("Trips state:", trips);
   return (
     <main className="fixed inset-0 top-16 bg-black text-white overflow-hidden">
-{/* Create Trip Button */}
-<Link
-  href="/create-trip"
-  className="
-    fixed
-    top-20
-    right-4
-    z-[150]
-    bg-orange-500
-    text-black
-    px-4
-    py-2
-    rounded-full
-    font-black
-    text-sm
-    shadow-lg
-    hover:scale-105
-    transition
-  "
->
-  + Create Trip
-</Link>
       <div
   className="
   h-full

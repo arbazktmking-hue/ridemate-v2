@@ -184,7 +184,13 @@ export default function Navbar() {
                 <Compass size={22} />
                 Explore Trips
               </a>
-
+<a
+  href="/create-trip"
+  className="flex items-center gap-3 hover:text-orange-500 transition"
+>
+  <Bike size={22} />
+  Post a Trip
+</a>
               <a href="/leaderboard" className="flex items-center gap-3 hover:text-orange-500 transition">
                 <Trophy size={22} />
                 Leaderboard
