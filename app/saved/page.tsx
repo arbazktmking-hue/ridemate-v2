@@ -5,11 +5,14 @@ import {
   useEffect,
   useState,
 } from "react";
+
 import Link from "next/link";
+
 import {
   useRouter,
   useSearchParams,
 } from "next/navigation";
+
 import {
   collection,
   getDocs,
@@ -20,210 +23,341 @@ import {
   arrayUnion,
   addDoc,
   setDoc,
-  deleteDoc
+  deleteDoc,
 } from "firebase/firestore";
 
 import { db } from "../firebase";
+
 import {
   Heart,
   MessageCircle,
   Bookmark,
   Rocket,
   Share2,
+  MapPin,
+  Bike,
+  CalendarDays,
+  Route,
+  IndianRupee,
+  Users,
+  UserRound,
 } from "lucide-react";
+
+
 function FeedContent() {
-const router = useRouter();
-const searchParams = useSearchParams();
-const sharedTripId = searchParams.get("trip");
+
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const sharedTripId = searchParams.get("trip");
+
   const [trips, setTrips] = useState<any[]>([]);
   const [savedTrips, setSavedTrips] = useState<string[]>([]);
-  const [selectedTrip, setSelectedTrip] = useState<any>(null);
-  const [openComments, setOpenComments] =
-    useState<string[]>([]);
+  const [openComments, setOpenComments] = useState<string[]>([]);
   const [heartAnimation, setHeartAnimation] =
     useState<string | null>(null);
-    const focusedTrip = trips.find(
-  (trip) => trip.id === sharedTripId
-);
+
+
+  const focusedTrip = trips.find(
+    (trip) => trip.id === sharedTripId
+  );
+
+
+  /* =========================================================
+     LOAD SAVED TRIPS
+  ========================================================= */
+
   useEffect(() => {
 
-    const fetchTrips = async () => {
+    const fetchSavedTrips = async () => {
 
       try {
 
         const currentUser = JSON.parse(
-  localStorage.getItem("ridemateUser") || "{}"
-);
+          localStorage.getItem("ridemateUser") || "{}"
+        );
 
-if (!currentUser.name) return;
 
-// Load saved trip IDs
-const savedSnapshot = await getDocs(
-  collection(db, "savedTrips")
-);
+        if (!currentUser.name) return;
 
-const savedIds: string[] = [];
 
-savedSnapshot.forEach((docSnap) => {
-  const data = docSnap.data();
+        /* -----------------------------------------------------
+           GET SAVED TRIP IDS
+        ----------------------------------------------------- */
 
-  if (data.user === currentUser.name) {
-    savedIds.push(data.tripId);
-  }
-});
+        const savedSnapshot = await getDocs(
+          collection(db, "savedTrips")
+        );
 
-// Load only saved trips
-const q = query(
-  collection(db, "trips"),
-  orderBy("createdAt", "desc")
-);
 
-const querySnapshot = await getDocs(q);
+        const savedIds: string[] = [];
 
-const loadedTrips: any[] = [];
 
-querySnapshot.forEach((docSnap) => {
-  if (savedIds.includes(docSnap.id)) {
-    loadedTrips.push({
-      id: docSnap.id,
-      ...docSnap.data(),
-    });
-  }
-});
+        savedSnapshot.forEach((docSnap) => {
 
-setSavedTrips(savedIds);
+          const data = docSnap.data();
 
-        const uniqueTrips = loadedTrips.filter(
-  (trip, index, self) =>
-    index === self.findIndex((t) => t.id === trip.id)
-);
 
-if (sharedTripId) {
-  const sharedTrip = uniqueTrips.find(
-    (trip) => trip.id === sharedTripId
-  );
+          if (
+            data.user ===
+            currentUser.name
+          ) {
 
-  const otherTrips = uniqueTrips.filter(
-    (trip) => trip.id !== sharedTripId
-  );
+            savedIds.push(
+              data.tripId
+            );
 
-  if (sharedTrip) {
-    setTrips([sharedTrip, ...otherTrips]);
-  } else {
-  if (sharedTripId) {
-  const sharedTrip = uniqueTrips.find(
-    (trip) => trip.id === sharedTripId
-  );
+          }
 
-  if (sharedTrip) {
-    setTrips([sharedTrip]); // show only this trip
-  } else {
-    setTrips(uniqueTrips);
-  }
-} else {
-  setTrips(uniqueTrips);
-}
-  }
-} else {
-  setTrips(uniqueTrips);
-}
+        });
 
-console.log(
-  "Trips loaded:",
-  uniqueTrips.length,
-  uniqueTrips
-);
+
+        setSavedTrips(savedIds);
+
+
+        /* -----------------------------------------------------
+           NO SAVED TRIPS
+        ----------------------------------------------------- */
+
+        if (savedIds.length === 0) {
+
+          setTrips([]);
+
+          return;
+
+        }
+
+
+        /* -----------------------------------------------------
+           LOAD TRIPS
+        ----------------------------------------------------- */
+
+        const q = query(
+          collection(db, "trips"),
+          orderBy("createdAt", "desc")
+        );
+
+
+        const querySnapshot =
+          await getDocs(q);
+
+
+        const loadedTrips: any[] = [];
+
+
+        querySnapshot.forEach(
+          (docSnap) => {
+
+            if (
+              savedIds.includes(
+                docSnap.id
+              )
+            ) {
+
+              loadedTrips.push({
+
+                id: docSnap.id,
+
+                ...docSnap.data(),
+
+              });
+
+            }
+
+          }
+        );
+
+
+        /* -----------------------------------------------------
+           REMOVE DUPLICATES
+        ----------------------------------------------------- */
+
+        const uniqueTrips =
+          loadedTrips.filter(
+            (trip, index, self) =>
+              index ===
+              self.findIndex(
+                (t) =>
+                  t.id === trip.id
+              )
+          );
+
+
+        /* -----------------------------------------------------
+           SHARED TRIP
+        ----------------------------------------------------- */
+
+        if (sharedTripId) {
+
+          const sharedTrip =
+            uniqueTrips.find(
+              (trip) =>
+                trip.id ===
+                sharedTripId
+            );
+
+
+          if (sharedTrip) {
+
+            const otherTrips =
+              uniqueTrips.filter(
+                (trip) =>
+                  trip.id !==
+                  sharedTripId
+              );
+
+
+            setTrips([
+              sharedTrip,
+              ...otherTrips,
+            ]);
+
+          } else {
+
+            setTrips(uniqueTrips);
+
+          }
+
+        } else {
+
+          setTrips(uniqueTrips);
+
+        }
+
+
+        console.log(
+          "Saved trips loaded:",
+          uniqueTrips.length,
+          uniqueTrips
+        );
+
+
       } catch (error) {
 
-        console.log(error);
+        console.log(
+          "Error loading saved trips:",
+          error
+        );
 
       }
 
     };
 
-    fetchTrips();
 
-  }, []);
-  
-  useEffect(() => {
+    fetchSavedTrips();
 
-    const loadSavedTrips = async () => {
+  }, [sharedTripId]);
 
-      const user = JSON.parse(
-        localStorage.getItem("ridemateUser") || "{}"
-      );
 
-      if (!user.name) return;
+  /* =========================================================
+     SAVE / UNSAVE
+  ========================================================= */
 
-      const snapshot = await getDocs(
-        collection(db, "savedTrips")
-      );
-
-      const saved: string[] = [];
-
-      snapshot.forEach((doc) => {
-
-        const data = doc.data();
-
-        if (data.user === user.name) {
-          saved.push(data.tripId);
-        }
-
-      });
-
-      setSavedTrips(saved);
-
-    };
-
-    loadSavedTrips();
-
-  }, []);
   const toggleSaveTrip = async (
     tripId: string
   ) => {
 
-    const user = JSON.parse(
-      localStorage.getItem("ridemateUser") || "{}"
-    );
+    try {
 
-    const saveId =
-      `${user.name}_${tripId}`;
-
-    if (
-      savedTrips.includes(tripId)
-    ) {
-
-      await deleteDoc(
-        doc(db, "savedTrips", saveId)
+      const user = JSON.parse(
+        localStorage.getItem(
+          "ridemateUser"
+        ) || "{}"
       );
 
-      setSavedTrips((prev) =>
-  prev.filter((id) => id !== tripId)
-);
 
-// Remove the trip from the saved page immediately
-setTrips((prev) =>
-  prev.filter((trip) => trip.id !== tripId)
-);
+      if (!user.name) return;
 
-    } else {
 
-      await setDoc(
-        doc(db, "savedTrips", saveId),
-        {
-          user: user.name,
-          tripId,
-        }
+      const saveId =
+        `${user.name}_${tripId}`;
+
+
+      if (
+        savedTrips.includes(
+          tripId
+        )
+      ) {
+
+        /* ---------------------------------------------
+           UNSAVE
+        --------------------------------------------- */
+
+        await deleteDoc(
+          doc(
+            db,
+            "savedTrips",
+            saveId
+          )
+        );
+
+
+        setSavedTrips(
+          (prev) =>
+            prev.filter(
+              (id) =>
+                id !== tripId
+            )
+        );
+
+
+        /* ---------------------------------------------
+           REMOVE FROM CURRENT PAGE
+        --------------------------------------------- */
+
+        setTrips(
+          (prev) =>
+            prev.filter(
+              (trip) =>
+                trip.id !== tripId
+            )
+        );
+
+
+      } else {
+
+        /* ---------------------------------------------
+           SAVE
+        --------------------------------------------- */
+
+        await setDoc(
+          doc(
+            db,
+            "savedTrips",
+            saveId
+          ),
+          {
+            user: user.name,
+            tripId,
+          }
+        );
+
+
+        setSavedTrips(
+          (prev) => [
+            ...prev,
+            tripId,
+          ]
+        );
+
+      }
+
+    } catch (error) {
+
+      console.log(
+        "Save error:",
+        error
       );
-
-      setSavedTrips((prev) => [
-        ...prev,
-        tripId,
-      ]);
 
     }
 
   };
+
+
+  /* =========================================================
+     LIKE
+  ========================================================= */
+
   const likeTrip = async (
     id: string,
     currentLikes: number
@@ -231,549 +365,1856 @@ setTrips((prev) =>
 
     try {
 
-      const tripRef = doc(db, "trips", id);
-
-      await updateDoc(tripRef, {
-        likes: currentLikes + 1,
-      });
-      const currentUser = JSON.parse(
-        localStorage.getItem("ridemateUser") || "{}"
+      const tripRef = doc(
+        db,
+        "trips",
+        id
       );
+
+
+      await updateDoc(
+        tripRef,
+        {
+          likes:
+            currentLikes + 1,
+        }
+      );
+
+
+      const currentUser =
+        JSON.parse(
+          localStorage.getItem(
+            "ridemateUser"
+          ) || "{}"
+        );
+
 
       const trip = trips.find(
         (t) => t.id === id
       );
 
+
+      /* ---------------------------------------------
+         NOTIFICATION
+      --------------------------------------------- */
+
       if (
         trip &&
-        trip.userName !== currentUser.name
+        trip.userName !==
+          currentUser.name
       ) {
 
         await addDoc(
-          collection(db, "notifications"),
+          collection(
+            db,
+            "notifications"
+          ),
           {
-            user: trip.userName,
-            text: `${currentUser.name} liked your trip ❤️`,
-            createdAt: Date.now(),
-            read: false,
+
+            user:
+              trip.userName,
+
+            text:
+              `${currentUser.name} liked your trip ❤️`,
+
+            createdAt:
+              Date.now(),
+
+            read:
+              false,
+
           }
         );
 
       }
-      setTrips((prevTrips) =>
-        prevTrips.map((trip) =>
-          trip.id === id
-            ? {
-              ...trip,
-              likes: currentLikes + 1,
-            }
-            : trip
-        )
+
+
+      /* ---------------------------------------------
+         UPDATE UI
+      --------------------------------------------- */
+
+      setTrips(
+        (prevTrips) =>
+          prevTrips.map(
+            (trip) =>
+              trip.id === id
+                ? {
+
+                    ...trip,
+
+                    likes:
+                      currentLikes +
+                      1,
+
+                  }
+                : trip
+          )
       );
+
 
     } catch (error) {
 
-      console.log(error);
+      console.log(
+        "Like error:",
+        error
+      );
 
     }
 
   };
+
+
+  /* =========================================================
+     ADD COMMENT
+  ========================================================= */
+
   const addComment = async (
     tripId: string,
     commentText: string
   ) => {
 
-    if (!commentText.trim()) return;
+    if (
+      !commentText.trim()
+    ) return;
+
 
     try {
 
-      const tripRef = doc(db, "trips", tripId);
-
-      const user = JSON.parse(
-        localStorage.getItem("ridemateUser") || "{}"
+      const tripRef = doc(
+        db,
+        "trips",
+        tripId
       );
 
-      await updateDoc(tripRef, {
-        comments: arrayUnion({
-          user: user.name,
-          image: user.image,
-          text: commentText,
-        }),
-      });
+
+      const user =
+        JSON.parse(
+          localStorage.getItem(
+            "ridemateUser"
+          ) || "{}"
+        );
+
+
+      const newComment = {
+
+        user:
+          user.name,
+
+        image:
+          user.image,
+
+        text:
+          commentText,
+
+      };
+
+
+      await updateDoc(
+        tripRef,
+        {
+          comments:
+            arrayUnion(
+              newComment
+            ),
+        }
+      );
+
+
       const trip = trips.find(
-        (t) => t.id === tripId
+        (t) =>
+          t.id === tripId
       );
+
+
+      /* ---------------------------------------------
+         NOTIFICATION
+      --------------------------------------------- */
 
       if (
         trip &&
-        trip.userName !== user.name
+        trip.userName !==
+          user.name
       ) {
 
         await addDoc(
-          collection(db, "notifications"),
+          collection(
+            db,
+            "notifications"
+          ),
           {
-            user: trip.userName,
-            text: `${user.name} commented on your trip 💬`,
-            createdAt: Date.now(),
-            read: false,
+
+            user:
+              trip.userName,
+
+            text:
+              `${user.name} commented on your trip 💬`,
+
+            createdAt:
+              Date.now(),
+
+            read:
+              false,
+
           }
         );
 
       }
-      setTrips((prevTrips) =>
-        prevTrips.map((trip) =>
-          trip.id === tripId
-            ? {
-              ...trip,
-              comments: [
-                ...(trip.comments || []),
-                {
-                  user: user.name,
-                  image: user.image,
-                  text: commentText,
-                },
-              ],
-            }
-            : trip
-        )
+
+
+      /* ---------------------------------------------
+         UPDATE UI
+      --------------------------------------------- */
+
+      setTrips(
+        (prevTrips) =>
+          prevTrips.map(
+            (trip) =>
+              trip.id ===
+              tripId
+                ? {
+
+                    ...trip,
+
+                    comments: [
+
+                      ...(trip.comments ||
+                        []),
+
+                      newComment,
+
+                    ],
+
+                  }
+                : trip
+          )
       );
+
+
     } catch (error) {
 
-      console.log(error);
+      console.log(
+        "Comment error:",
+        error
+      );
 
     }
 
   };
-  const requestToJoin = async (trip: any) => {
 
-    const currentUser = JSON.parse(
-      localStorage.getItem("ridemateUser") || "{}"
-    );
 
-    if (currentUser.name === trip.userName) {
-      alert("You cannot join your own ride.");
-      return;
-    }
-    const existingRequests = await getDocs(
-      collection(db, "rideRequests")
-    );
+  /* =========================================================
+     REQUEST TO JOIN
+  ========================================================= */
 
-    let alreadyRequested = false;
+  const requestToJoin = async (
+    trip: any
+  ) => {
 
-    existingRequests.forEach((doc) => {
-      const request = doc.data();
+    try {
 
-      if (
-        request.tripId === trip.id &&
-        request.requester === currentUser.name &&
-        request.status === "pending"
-      ) {
-        alreadyRequested = true;
-      }
-    });
-
-    if (alreadyRequested) {
-      alert("Request already sent 🚀");
-      return;
-    }
-    await addDoc(
-      collection(db, "rideRequests"),
-      {
-        tripId: trip.id,
-        tripOwner: trip.userName,
-        requester: currentUser.name,
-        requesterImage: currentUser.image || "",
-        destination: trip.destination,
-        createdAt: Date.now(),
-        status: "pending",
-      }
-    );
-
-    // 🔥 Send notification to ride owner
-    await addDoc(
-      collection(db, "notifications"),
-      {
-        user: trip.userName,
-        text:
-  trip.rideType === "group"
-    ? `${currentUser.name} wants to join your group ride 🏍️`
-    : `${currentUser.name} wants to join as your pillion 🪖`,
-        createdAt: Date.now(),
-        read: false,
-      }
-    );
-
-    alert("Ride request sent 🚀");
-
-  };
-  console.log("Trips state:", trips);
-  return (
-    <main className="fixed inset-0 top-16 bg-black text-white overflow-hidden">
-
-      <div
-  className="
-  h-full
-  w-full
-  overflow-y-auto
-  overflow-x-hidden
-  snap-y
-  snap-mandatory
-  overscroll-none
-  [scrollbar-width:none]
-  [-ms-overflow-style:none]
-  [&::-webkit-scrollbar]:hidden
-"
->
-        <div>
-
-          {(sharedTripId && focusedTrip
-  ? [focusedTrip]
-  : trips
-).map((trip) => (
-            <div
-  key={trip.id}
-  className="
-snap-start
-h-[calc(100dvh-64px)]
-w-full
-relative
-overflow-hidden
-"
->
-              <div
-  className="relative h-full"
-  onClick={() => setSelectedTrip(trip)}
-  onDoubleClick={() => {
-    likeTrip(
-      trip.id,
-      trip.likes || 0
-    );
-
-    setHeartAnimation(trip.id);
-
-    setTimeout(() => {
-      setHeartAnimation(null);
-    }, 800);
-  }}
->
-
-                <img
-                  src={trip.image}
-                  alt="Trip"
-                  className="
-      w-full
-      h-full
-      object-cover
-    "
-                />
-
-                {/* Rider Info */}
-<Link
-  href={`/rider/${encodeURIComponent(trip.userName)}`}
-  onClick={(e) => e.stopPropagation()}
-  className="
-    absolute
-    top-4
-    left-4
-    flex
-    items-center
-    gap-3
-    bg-black/50
-    backdrop-blur-sm
-    px-3
-    py-2
-    rounded-full
-    hover:bg-black/70
-    transition
-    z-50
-  "
->
-  <img
-    src={trip.userImage}
-    alt="Rider"
-    className="w-10 h-10 rounded-full border border-orange-500"
-  />
-
-  <span className="font-bold text-white">
-    {trip.userName}
-  </span>
-</Link>
-
-                {/* Trip Details */}
-                <div
-  className="
-      absolute
-      bottom-28
-      left-4
-      right-4
-      rounded-3xl
-      bg-black/35
-      backdrop-blur-xl
-      border
-      border-white/10
-      p-5
-      text-white
-      shadow-2xl
-    "
->
-                  <h2 className="text-4xl font-black tracking-tight drop-shadow-lg">
-  🏔 {trip.destination}
-</h2>
-<div className="mt-2">
-  {trip.rideType === "group" ? (
-    <span className="bg-blue-500/20 text-blue-300 px-3 py-1 rounded-full text-sm font-bold">
-      👥 Group Ride • Bring Your Own Bike
-    </span>
-  ) : (
-    <span className="bg-green-500/20 text-green-300 px-3 py-1 rounded-full text-sm font-bold">
-      👤 Individual Ride • Looking for Pillion
-    </span>
-  )}
-</div>
-<p className="mt-3 text-lg text-white/90 font-semibold">
-  📍 {trip.startLocation}
-</p>
-
-<p className="inline-flex items-center gap-2 mt-3 bg-orange-500/20 border border-orange-500/40 px-4 py-2 rounded-full text-orange-300 font-bold text-sm backdrop-blur-md">
-  🏍 {trip.bike}
-</p>
-                </div>
-
-              {/* Bottom Action Bar */}
-<div
-  className="
-    absolute
-    bottom-4
-    left-4
-    right-4
-    grid
-    grid-cols-5
-    items-center
-    bg-black/40
-    backdrop-blur-xl
-    border
-    border-white/10
-    rounded-3xl
-    py-3
-    z-20
-    shadow-2xl
-  "
->
-
-  {/* Like */}
-  <div className="flex flex-col items-center">
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        likeTrip(trip.id, trip.likes || 0);
-      }}
-    >
-      <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-red-500/20 transition">
-        <Heart className="w-6 h-6 text-red-400" />
-      </div>
-    </button>
-
-    <span className="text-xs mt-1">
-      {trip.likes || 0}
-    </span>
-  </div>
-
-  {/* Comment */}
-  <div className="flex flex-col items-center">
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-
-        if (openComments.includes(trip.id)) {
-          setOpenComments(prev =>
-            prev.filter(id => id !== trip.id)
-          );
-        } else {
-          setOpenComments(prev => [
-            ...prev,
-            trip.id,
-          ]);
-        }
-      }}
-    >
-      <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-blue-500/20 transition">
-        <MessageCircle className="w-6 h-6 text-sky-400" />
-      </div>
-    </button>
-
-    <span className="text-xs mt-1">
-      {(trip.comments || []).length}
-    </span>
-  </div>
-
-  {/* Share */}
-  <div className="flex flex-col items-center">
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        router.push(`/share/${trip.id}`);
-      }}
-    >
-      <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-green-500/20 transition">
-        <Share2 className="w-6 h-6 text-green-400" />
-      </div>
-    </button>
-
-    <span className="text-xs mt-1">
-      Share
-    </span>
-  </div>
-
-  {/* Save */}
-  <div className="flex flex-col items-center">
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        toggleSaveTrip(trip.id);
-      }}
-    >
-      <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-yellow-500/20 transition">
-        <Bookmark
-          className={`w-6 h-6 ${
-            savedTrips.includes(trip.id)
-              ? "fill-yellow-400 text-yellow-400"
-              : "text-white"
-          }`}
-        />
-      </div>
-    </button>
-
-    <span className="text-xs mt-1">
-      {savedTrips.includes(trip.id)
-        ? "Saved"
-        : "Save"}
-    </span>
-  </div>
-
-  {/* Join */}
-  <div className="flex flex-col items-center">
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-
-        const currentUser = JSON.parse(
-          localStorage.getItem("ridemateUser") || "{}"
+      const currentUser =
+        JSON.parse(
+          localStorage.getItem(
+            "ridemateUser"
+          ) || "{}"
         );
 
-        if (currentUser.name === trip.userName) {
-          alert("This is your ride");
-          return;
+
+      if (
+        currentUser.name ===
+        trip.userName
+      ) {
+
+        alert(
+          "You cannot join your own ride."
+        );
+
+        return;
+
+      }
+
+
+      const existingRequests =
+        await getDocs(
+          collection(
+            db,
+            "rideRequests"
+          )
+        );
+
+
+      let alreadyRequested =
+        false;
+
+
+      existingRequests.forEach(
+        (docSnap) => {
+
+          const request =
+            docSnap.data();
+
+
+          if (
+            request.tripId ===
+              trip.id &&
+            request.requester ===
+              currentUser.name &&
+            request.status ===
+              "pending"
+          ) {
+
+            alreadyRequested =
+              true;
+
+          }
+
         }
+      );
 
-        requestToJoin(trip);
-      }}
-    >
-      <div className="w-12 h-12 rounded-full bg-orange-500 flex items-center justify-center hover:scale-110 transition">
-        <Rocket className="w-6 h-6 text-white" />
-      </div>
-    </button>
 
-    <span className="text-xs mt-1">
-      {trip.rideType === "group"
-        ? "Join Ride"
-        : "Ride Along"}
-    </span>
-  </div>
+      if (
+        alreadyRequested
+      ) {
 
-</div>
-                {heartAnimation === trip.id && (
-                  <div
-                    className="
-        absolute
+        alert(
+          "Request already sent 🚀"
+        );
+
+        return;
+
+      }
+
+
+      /* ---------------------------------------------
+         CREATE REQUEST
+      --------------------------------------------- */
+
+      await addDoc(
+        collection(
+          db,
+          "rideRequests"
+        ),
+        {
+
+          tripId:
+            trip.id,
+
+          tripOwner:
+            trip.userName,
+
+          requester:
+            currentUser.name,
+
+          requesterImage:
+            currentUser.image ||
+            "",
+
+          destination:
+            trip.destination,
+
+          createdAt:
+            Date.now(),
+
+          status:
+            "pending",
+
+        }
+      );
+
+
+      /* ---------------------------------------------
+         NOTIFICATION
+      --------------------------------------------- */
+
+      await addDoc(
+        collection(
+          db,
+          "notifications"
+        ),
+        {
+
+          user:
+            trip.userName,
+
+          text:
+            trip.rideType ===
+            "group"
+              ? `${currentUser.name} wants to join your group ride 🏍️`
+              : `${currentUser.name} wants to join as your pillion 🪖`,
+
+          createdAt:
+            Date.now(),
+
+          read:
+            false,
+
+        }
+      );
+
+
+      alert(
+        "Ride request sent 🚀"
+      );
+
+
+    } catch (error) {
+
+      console.log(
+        "Join request error:",
+        error
+      );
+
+
+      alert(
+        "Something went wrong. Please try again."
+      );
+
+    }
+
+  };
+
+
+  /* =========================================================
+     RENDER
+  ========================================================= */
+
+  return (
+
+    <main
+      className="
+        fixed
         inset-0
-        flex
-        items-center
-        justify-center
-        pointer-events-none
-        animate-bounce
+        top-16
+        bg-black
+        text-white
+        overflow-hidden
       "
-                  >
-                    <span className="text-8xl">
-                      ❤️
-                    </span>
-                  </div>
-                )}
+    >
+
+      <div
+        className="
+          h-full
+          w-full
+          overflow-y-auto
+          overflow-x-hidden
+          snap-y
+          snap-mandatory
+          overscroll-none
+          [scrollbar-width:none]
+          [-ms-overflow-style:none]
+          [&::-webkit-scrollbar]:hidden
+        "
+      >
+
+        <div>
+
+          {(sharedTripId &&
+            focusedTrip
+            ? [focusedTrip]
+            : trips
+          ).map((trip) => (
+
+            <div
+              key={trip.id}
+              className="
+                snap-start
+                h-[calc(100dvh-64px)]
+                min-h-[500px]
+                w-full
+                relative
+                overflow-hidden
+                bg-black
+              "
+            >
+
+
+              {/* =================================================
+                  BACKGROUND RIDER IMAGE
+              ================================================= */}
+
+              <img
+                src={
+                  trip.userImage ||
+                  ""
+                }
+                alt={
+                  trip.userName ||
+                  "Rider"
+                }
+                className="
+                  absolute
+                  inset-0
+                  w-full
+                  h-full
+                  object-cover
+                  object-center
+                  select-none
+                "
+              />
+
+
+              {/* =================================================
+                  CINEMATIC OVERLAY
+              ================================================= */}
 
               <div
-  onClick={(e) => e.stopPropagation()}
-  className={`
-    absolute
-    bottom-24
-    left-0
-    right-0
-    bg-black/90
-    backdrop-blur-md
-    z-50
-    overflow-y-auto
-    transition-all
-    duration-300
-    ${
-      openComments.includes(trip.id)
-        ? "max-h-[300px] opacity-100"
-        : "max-h-0 opacity-0"
-    }
-  `}
->
+                className="
+                  absolute
+                  inset-0
+                  bg-black/20
+                  pointer-events-none
+                "
+              />
 
-                <div className="mt-6">
+
+              {/* =================================================
+                  LEFT BLUR
+              ================================================= */}
+
+              <div
+                className="
+                  absolute
+                  inset-y-0
+                  left-0
+                  w-full
+                  md:w-[55%]
+                  backdrop-blur-md
+                  bg-black/60
+                  border-r
+                  border-white/10
+                  pointer-events-none
+                "
+              />
+
+
+              {/* =================================================
+                  LEFT GRADIENT
+              ================================================= */}
+
+              <div
+                className="
+                  absolute
+                  inset-y-0
+                  left-0
+                  w-full
+                  md:w-[62%]
+                  bg-gradient-to-r
+                  from-black/80
+                  via-black/55
+                  to-transparent
+                  pointer-events-none
+                "
+              />
+
+
+              {/* =================================================
+                  SAVED BADGE
+              ================================================= */}
+
+              <div
+                className="
+                  absolute
+                  top-4
+                  right-4
+                  md:right-8
+                  z-40
+                  flex
+                  items-center
+                  gap-2
+                  bg-yellow-500/20
+                  backdrop-blur-xl
+                  border
+                  border-yellow-400/30
+                  text-yellow-300
+                  px-4
+                  py-2
+                  rounded-full
+                  text-xs
+                  font-bold
+                "
+              >
+
+                <Bookmark
+                  className="
+                    w-4
+                    h-4
+                    fill-yellow-400
+                  "
+                />
+
+                Saved Ride
+
+              </div>
+
+
+              {/* =================================================
+                  RIDER PROFILE
+              ================================================= */}
+
+              <Link
+                href={`/rider/${encodeURIComponent(
+                  trip.userName
+                )}`}
+                onClick={(e) =>
+                  e.stopPropagation()
+                }
+                className="
+                  absolute
+                  top-4
+                  left-4
+                  md:left-8
+                  flex
+                  items-center
+                  gap-3
+                  bg-black/55
+                  backdrop-blur-xl
+                  px-3
+                  py-2
+                  rounded-full
+                  border
+                  border-white/10
+                  hover:bg-black/75
+                  transition
+                  z-40
+                  max-w-[75%]
+                "
+              >
+
+                {trip.userImage ? (
+
+                  <img
+                    src={
+                      trip.userImage
+                    }
+                    alt="Rider"
+                    className="
+                      w-10
+                      h-10
+                      rounded-full
+                      object-cover
+                      border
+                      border-orange-500
+                      flex-shrink-0
+                    "
+                  />
+
+                ) : (
+
+                  <div
+                    className="
+                      w-10
+                      h-10
+                      rounded-full
+                      bg-zinc-800
+                      border
+                      border-orange-500
+                      flex
+                      items-center
+                      justify-center
+                    "
+                  >
+                    👤
+                  </div>
+
+                )}
+
+
+                <div>
+
+                  <p
+                    className="
+                      text-[10px]
+                      text-white/50
+                      uppercase
+                      tracking-widest
+                    "
+                  >
+                    Ride hosted by
+                  </p>
+
+                  <span
+                    className="
+                      font-bold
+                      text-white
+                      truncate
+                      block
+                    "
+                  >
+                    {trip.userName}
+                  </span>
+
+                </div>
+
+              </Link>
+
+
+              {/* =================================================
+                  TRIP INFORMATION
+              ================================================= */}
+
+              <div
+                className="
+                  absolute
+                  z-20
+
+                  left-4
+                  right-4
+                  top-24
+                  bottom-28
+
+                  md:left-8
+                  md:right-auto
+                  md:top-24
+                  md:bottom-28
+                  md:w-[50%]
+
+                  flex
+                  flex-col
+                  justify-center
+
+                  pointer-events-none
+                "
+              >
+
+
+                {/* DESTINATION */}
+
+                <div>
+
+                  <p
+                    className="
+                      text-xs
+                      md:text-sm
+                      uppercase
+                      tracking-[0.25em]
+                      text-orange-400
+                      font-bold
+                      mb-2
+                    "
+                  >
+                    Saved Ride
+                  </p>
+
+
+                  <h1
+                    className="
+                      text-4xl
+                      sm:text-5xl
+                      md:text-6xl
+                      lg:text-7xl
+                      font-black
+                      leading-[0.95]
+                      tracking-tight
+                      text-white
+                      drop-shadow-2xl
+                    "
+                  >
+                    {trip.destination}
+                  </h1>
+
+
+                  <div
+                    className="
+                      mt-3
+                      h-1
+                      w-20
+                      md:w-28
+                      bg-orange-500
+                      rounded-full
+                    "
+                  />
+
+                </div>
+
+
+                {/* RIDE TYPE */}
+
+                <div
+                  className="
+                    mt-6
+                  "
+                >
+
+                  {trip.rideType ===
+                  "group" ? (
+
+                    <span
+                      className="
+                        inline-flex
+                        items-center
+                        gap-2
+                        bg-blue-500/20
+                        border
+                        border-blue-400/30
+                        text-blue-200
+                        px-4
+                        py-2
+                        rounded-full
+                        text-xs
+                        md:text-sm
+                        font-bold
+                        backdrop-blur-xl
+                      "
+                    >
+
+                      <Users
+                        className="
+                          w-4
+                          h-4
+                        "
+                      />
+
+                      Group Ride • Own Bike
+
+                    </span>
+
+                  ) : (
+
+                    <span
+                      className="
+                        inline-flex
+                        items-center
+                        gap-2
+                        bg-green-500/20
+                        border
+                        border-green-400/30
+                        text-green-200
+                        px-4
+                        py-2
+                        rounded-full
+                        text-xs
+                        md:text-sm
+                        font-bold
+                        backdrop-blur-xl
+                      "
+                    >
+
+                      <UserRound
+                        className="
+                          w-4
+                          h-4
+                        "
+                      />
+
+                      Individual Ride • Pillion
+
+                    </span>
+
+                  )}
+
+                </div>
+
+
+                {/* INFORMATION GRID */}
+
+                <div
+                  className="
+                    mt-5
+                    grid
+                    grid-cols-2
+                    gap-3
+                    max-w-xl
+                  "
+                >
+
+
+                  {/* BIKE */}
+
+                  <div
+                    className="
+                      bg-black/45
+                      backdrop-blur-xl
+                      border
+                      border-white/10
+                      rounded-2xl
+                      p-3
+                      md:p-4
+                    "
+                  >
+
+                    <div
+                      className="
+                        flex
+                        items-center
+                        gap-2
+                        text-orange-400
+                      "
+                    >
+
+                      <Bike
+                        className="
+                          w-4
+                          h-4
+                        "
+                      />
+
+                      <span
+                        className="
+                          text-[10px]
+                          md:text-xs
+                          uppercase
+                          tracking-wider
+                        "
+                      >
+                        Bike
+                      </span>
+
+                    </div>
+
+
+                    <p
+                      className="
+                        mt-1
+                        font-bold
+                        text-sm
+                        md:text-base
+                        truncate
+                      "
+                    >
+                      {trip.bike ||
+                        "Not specified"}
+                    </p>
+
+                  </div>
+
+
+                  {/* START */}
+
+                  <div
+                    className="
+                      bg-black/45
+                      backdrop-blur-xl
+                      border
+                      border-white/10
+                      rounded-2xl
+                      p-3
+                      md:p-4
+                    "
+                  >
+
+                    <div
+                      className="
+                        flex
+                        items-center
+                        gap-2
+                        text-orange-400
+                      "
+                    >
+
+                      <MapPin
+                        className="
+                          w-4
+                          h-4
+                        "
+                      />
+
+                      <span
+                        className="
+                          text-[10px]
+                          md:text-xs
+                          uppercase
+                          tracking-wider
+                        "
+                      >
+                        Starting From
+                      </span>
+
+                    </div>
+
+
+                    <p
+                      className="
+                        mt-1
+                        font-bold
+                        text-sm
+                        md:text-base
+                        truncate
+                      "
+                    >
+                      {trip.startLocation ||
+                        "Not specified"}
+                    </p>
+
+                  </div>
+
+
+                  {/* DISTANCE */}
+
+                  <div
+                    className="
+                      bg-black/45
+                      backdrop-blur-xl
+                      border
+                      border-white/10
+                      rounded-2xl
+                      p-3
+                      md:p-4
+                    "
+                  >
+
+                    <div
+                      className="
+                        flex
+                        items-center
+                        gap-2
+                        text-orange-400
+                      "
+                    >
+
+                      <Route
+                        className="
+                          w-4
+                          h-4
+                        "
+                      />
+
+                      <span
+                        className="
+                          text-[10px]
+                          md:text-xs
+                          uppercase
+                          tracking-wider
+                        "
+                      >
+                        Distance
+                      </span>
+
+                    </div>
+
+
+                    <p
+                      className="
+                        mt-1
+                        font-bold
+                        text-sm
+                        md:text-base
+                      "
+                    >
+                      {trip.distance
+                        ? `${trip.distance} KM`
+                        : "Not specified"}
+                    </p>
+
+                  </div>
+
+
+                  {/* DATE */}
+
+                  <div
+                    className="
+                      bg-black/45
+                      backdrop-blur-xl
+                      border
+                      border-white/10
+                      rounded-2xl
+                      p-3
+                      md:p-4
+                    "
+                  >
+
+                    <div
+                      className="
+                        flex
+                        items-center
+                        gap-2
+                        text-orange-400
+                      "
+                    >
+
+                      <CalendarDays
+                        className="
+                          w-4
+                          h-4
+                        "
+                      />
+
+                      <span
+                        className="
+                          text-[10px]
+                          md:text-xs
+                          uppercase
+                          tracking-wider
+                        "
+                      >
+                        Departure
+                      </span>
+
+                    </div>
+
+
+                    <p
+                      className="
+                        mt-1
+                        font-bold
+                        text-sm
+                        md:text-base
+                      "
+                    >
+                      {trip.tripDate
+                        ? new Date(
+                            trip.tripDate
+                          ).toLocaleDateString(
+                            "en-IN",
+                            {
+                              day:
+                                "numeric",
+                              month:
+                                "short",
+                            }
+                          )
+                        : "TBA"}
+                    </p>
+
+                  </div>
+
+                </div>
+
+
+                {/* PRICE */}
+
+                <div
+                  className="
+                    mt-4
+                    inline-flex
+                    self-start
+                    items-center
+                    gap-2
+                    bg-orange-500
+                    text-black
+                    px-5
+                    py-2.5
+                    rounded-full
+                    font-black
+                    text-sm
+                    md:text-base
+                    shadow-lg
+                    shadow-orange-500/20
+                  "
+                >
+
+                  <IndianRupee
+                    className="
+                      w-4
+                      h-4
+                    "
+                  />
+
+                  Contribution: ₹
+                  {trip.tripPrice || 0}
+
+                </div>
+
+
+                {/* CAPTION */}
+
+                {trip.caption && (
+
+                  <p
+                    className="
+                      mt-4
+                      max-w-xl
+                      text-sm
+                      md:text-base
+                      text-white/80
+                      italic
+                      line-clamp-3
+                      drop-shadow-lg
+                    "
+                  >
+                    "{trip.caption}"
+                  </p>
+
+                )}
+
+              </div>
+
+
+              {/* =================================================
+                  RIGHT SIDE INDICATOR
+              ================================================= */}
+
+              <div
+                className="
+                  hidden
+                  md:block
+                  absolute
+                  right-8
+                  top-1/2
+                  -translate-y-1/2
+                  z-20
+                  pointer-events-none
+                "
+              >
+
+                <div
+                  className="
+                    flex
+                    items-center
+                    gap-2
+                    bg-black/25
+                    backdrop-blur-sm
+                    border
+                    border-white/10
+                    px-4
+                    py-2
+                    rounded-full
+                    text-white/70
+                    text-xs
+                  "
+                >
+
+                  <span
+                    className="
+                      w-2
+                      h-2
+                      bg-yellow-400
+                      rounded-full
+                      animate-pulse
+                    "
+                  />
+
+                  Saved Ride
+
+                </div>
+
+              </div>
+
+
+              {/* =================================================
+                  BOTTOM ACTION BAR
+              ================================================= */}
+
+              <div
+                className="
+                  absolute
+                  bottom-3
+                  left-3
+                  right-3
+                  md:left-8
+                  md:right-8
+                  grid
+                  grid-cols-5
+                  items-center
+                  bg-black/65
+                  backdrop-blur-xl
+                  border
+                  border-white/10
+                  rounded-3xl
+                  py-2
+                  md:py-3
+                  z-40
+                  shadow-2xl
+                "
+                onClick={(e) =>
+                  e.stopPropagation()
+                }
+              >
+
+
+                {/* LIKE */}
+
+                <div
+                  className="
+                    flex
+                    flex-col
+                    items-center
+                  "
+                >
+
+                  <button
+                    onClick={(e) => {
+
+                      e.stopPropagation();
+
+
+                      likeTrip(
+                        trip.id,
+                        trip.likes ||
+                          0
+                      );
+
+
+                    }}
+                  >
+
+                    <div
+                      className="
+                        w-10
+                        h-10
+                        md:w-12
+                        md:h-12
+                        rounded-full
+                        bg-white/10
+                        flex
+                        items-center
+                        justify-center
+                        hover:bg-red-500/20
+                        transition
+                      "
+                    >
+
+                      <Heart
+                        className="
+                          w-5
+                          h-5
+                          md:w-6
+                          md:h-6
+                          text-red-400
+                        "
+                      />
+
+                    </div>
+
+                  </button>
+
+
+                  <span
+                    className="
+                      text-[10px]
+                      md:text-xs
+                      mt-1
+                    "
+                  >
+                    {trip.likes ||
+                      0}
+                  </span>
+
+                </div>
+
+
+                {/* COMMENT */}
+
+                <div
+                  className="
+                    flex
+                    flex-col
+                    items-center
+                  "
+                >
+
+                  <button
+                    onClick={(e) => {
+
+                      e.stopPropagation();
+
+
+                      if (
+                        openComments.includes(
+                          trip.id
+                        )
+                      ) {
+
+                        setOpenComments(
+                          (prev) =>
+                            prev.filter(
+                              (id) =>
+                                id !==
+                                trip.id
+                            )
+                        );
+
+                      } else {
+
+                        setOpenComments(
+                          (prev) => [
+                            ...prev,
+                            trip.id,
+                          ]
+                        );
+
+                      }
+
+                    }}
+                  >
+
+                    <div
+                      className="
+                        w-10
+                        h-10
+                        md:w-12
+                        md:h-12
+                        rounded-full
+                        bg-white/10
+                        flex
+                        items-center
+                        justify-center
+                        hover:bg-blue-500/20
+                        transition
+                      "
+                    >
+
+                      <MessageCircle
+                        className="
+                          w-5
+                          h-5
+                          md:w-6
+                          md:h-6
+                          text-sky-400
+                        "
+                      />
+
+                    </div>
+
+                  </button>
+
+
+                  <span
+                    className="
+                      text-[10px]
+                      md:text-xs
+                      mt-1
+                    "
+                  >
+                    {(
+                      trip.comments ||
+                      []
+                    ).length}
+                  </span>
+
+                </div>
+
+
+                {/* SHARE */}
+
+                <div
+                  className="
+                    flex
+                    flex-col
+                    items-center
+                  "
+                >
+
+                  <button
+                    onClick={(e) => {
+
+                      e.stopPropagation();
+
+
+                      router.push(
+                        `/share/${trip.id}`
+                      );
+
+                    }}
+                  >
+
+                    <div
+                      className="
+                        w-10
+                        h-10
+                        md:w-12
+                        md:h-12
+                        rounded-full
+                        bg-white/10
+                        flex
+                        items-center
+                        justify-center
+                        hover:bg-green-500/20
+                        transition
+                      "
+                    >
+
+                      <Share2
+                        className="
+                          w-5
+                          h-5
+                          md:w-6
+                          md:h-6
+                          text-green-400
+                        "
+                      />
+
+                    </div>
+
+                  </button>
+
+
+                  <span
+                    className="
+                      text-[10px]
+                      md:text-xs
+                      mt-1
+                    "
+                  >
+                    Share
+                  </span>
+
+                </div>
+
+
+                {/* SAVE */}
+
+                <div
+                  className="
+                    flex
+                    flex-col
+                    items-center
+                  "
+                >
+
+                  <button
+                    onClick={(e) => {
+
+                      e.stopPropagation();
+
+
+                      toggleSaveTrip(
+                        trip.id
+                      );
+
+                    }}
+                  >
+
+                    <div
+                      className="
+                        w-10
+                        h-10
+                        md:w-12
+                        md:h-12
+                        rounded-full
+                        bg-white/10
+                        flex
+                        items-center
+                        justify-center
+                        hover:bg-yellow-500/20
+                        transition
+                      "
+                    >
+
+                      <Bookmark
+                        className={`
+                          w-5
+                          h-5
+                          md:w-6
+                          md:h-6
+
+                          ${
+                            savedTrips.includes(
+                              trip.id
+                            )
+                              ? "fill-yellow-400 text-yellow-400"
+                              : "text-white"
+                          }
+                        `}
+                      />
+
+                    </div>
+
+                  </button>
+
+
+                  <span
+                    className="
+                      text-[10px]
+                      md:text-xs
+                      mt-1
+                    "
+                  >
+                    {savedTrips.includes(
+                      trip.id
+                    )
+                      ? "Saved"
+                      : "Save"}
+                  </span>
+
+                </div>
+
+
+                {/* JOIN */}
+
+                <div
+                  className="
+                    flex
+                    flex-col
+                    items-center
+                  "
+                >
+
+                  <button
+                    onClick={(e) => {
+
+                      e.stopPropagation();
+
+
+                      const currentUser =
+                        JSON.parse(
+                          localStorage.getItem(
+                            "ridemateUser"
+                          ) || "{}"
+                        );
+
+
+                      if (
+                        currentUser.name ===
+                        trip.userName
+                      ) {
+
+                        alert(
+                          "This is your ride"
+                        );
+
+                        return;
+
+                      }
+
+
+                      requestToJoin(
+                        trip
+                      );
+
+                    }}
+                  >
+
+                    <div
+                      className="
+                        w-10
+                        h-10
+                        md:w-12
+                        md:h-12
+                        rounded-full
+                        bg-orange-500
+                        flex
+                        items-center
+                        justify-center
+                        hover:scale-110
+                        transition
+                        shadow-lg
+                        shadow-orange-500/30
+                      "
+                    >
+
+                      <Rocket
+                        className="
+                          w-5
+                          h-5
+                          md:w-6
+                          md:h-6
+                          text-white
+                        "
+                      />
+
+                    </div>
+
+                  </button>
+
+
+                  <span
+                    className="
+                      text-[10px]
+                      md:text-xs
+                      mt-1
+                    "
+                  >
+
+                    {trip.rideType ===
+                    "group"
+                      ? "Join Ride"
+                      : "Ride Along"}
+
+                  </span>
+
+                </div>
+
+              </div>
+
+
+              {/* =================================================
+                  HEART ANIMATION
+              ================================================= */}
+
+              {heartAnimation ===
+                trip.id && (
+
+                <div
+                  className="
+                    absolute
+                    inset-0
+                    flex
+                    items-center
+                    justify-center
+                    pointer-events-none
+                    z-[100]
+                  "
+                >
+
+                  <span
+                    className="
+                      text-7xl
+                      md:text-9xl
+                      animate-ping
+                    "
+                  >
+                    ❤️
+                  </span>
+
+                </div>
+
+              )}
+
+
+              {/* =================================================
+                  COMMENTS PANEL
+              ================================================= */}
+
+              <div
+                onClick={(e) =>
+                  e.stopPropagation()
+                }
+                className={`
+                  absolute
+                  bottom-20
+                  md:bottom-24
+                  left-0
+                  right-0
+                  bg-black/95
+                  backdrop-blur-xl
+                  z-50
+                  overflow-y-auto
+                  transition-all
+                  duration-300
+
+                  ${
+                    openComments.includes(
+                      trip.id
+                    )
+                      ? "max-h-[320px] opacity-100"
+                      : "max-h-0 opacity-0"
+                  }
+                `}
+              >
+
+                <div
+                  className="
+                    p-4
+                  "
+                >
+
                   <input
                     type="text"
                     placeholder="Write a comment..."
-                    className="w-full p-4 rounded-xl bg-black border border-zinc-700 text-base"
+                    className="
+                      w-full
+                      p-4
+                      rounded-xl
+                      bg-zinc-950
+                      border
+                      border-zinc-700
+                      text-base
+                      outline-none
+                      focus:border-orange-500
+                    "
                     onKeyDown={(e) => {
 
-                      if (e.key === "Enter") {
+                      if (
+                        e.key ===
+                        "Enter"
+                      ) {
 
                         addComment(
                           trip.id,
-                          e.currentTarget.value
+                          e.currentTarget
+                            .value
                         );
 
-                        e.currentTarget.value = "";
+
+                        e.currentTarget
+                          .value =
+                          "";
 
                       }
 
                     }}
                   />
 
-                  <div className="mt-4 space-y-2">
 
-                    {(trip.comments || []).map(
-                      (comment: any, index: number) => (
+                  <div
+                    className="
+                      mt-4
+                      space-y-2
+                    "
+                  >
+
+                    {(
+                      trip.comments ||
+                      []
+                    ).map(
+                      (
+                        comment: any,
+                        index: number
+                      ) => (
 
                         <div
                           key={index}
                           className="
-bg-black
-p-4
-rounded-2xl
-border
-border-zinc-800
-hover:border-orange-500
-transition
-"
+                            bg-black
+                            p-4
+                            rounded-2xl
+                            border
+                            border-zinc-800
+                            hover:border-orange-500
+                            transition
+                          "
                         >
 
-                          <div className="flex items-center gap-3 mb-2">
+                          <div
+                            className="
+                              flex
+                              items-center
+                              gap-3
+                              mb-2
+                            "
+                          >
 
-                            <img
-                              src={comment.image}
-                              alt="User"
-                              className="w-8 h-8 rounded-full"
-                            />
+                            {comment.image ? (
 
-                            <p className="font-bold text-orange-500">
+                              <img
+                                src={
+                                  comment.image
+                                }
+                                alt="User"
+                                className="
+                                  w-8
+                                  h-8
+                                  rounded-full
+                                  object-cover
+                                "
+                              />
+
+                            ) : (
+
+                              <div
+                                className="
+                                  w-8
+                                  h-8
+                                  rounded-full
+                                  bg-zinc-800
+                                  flex
+                                  items-center
+                                  justify-center
+                                "
+                              >
+                                👤
+                              </div>
+
+                            )}
+
+
+                            <p
+                              className="
+                                font-bold
+                                text-orange-500
+                              "
+                            >
                               {comment.user}
                             </p>
 
                           </div>
 
-                          <p className="text-zinc-300">
+
+                          <p
+                            className="
+                              text-zinc-300
+                            "
+                          >
                             {comment.text}
                           </p>
 
@@ -788,137 +2229,135 @@ transition
 
               </div>
 
-</div>
-
-</div>
-
-          ))}
-        </div>
-      </div>
-      {selectedTrip && (
-  <div className="fixed inset-0 z-[2000] bg-black/60 backdrop-blur-sm flex items-end">
-    <div className="w-full bg-zinc-950 rounded-t-3xl p-6 border-t border-orange-500 max-h-[85vh] overflow-y-auto">
-
-      <div className="flex justify-between items-center mb-5">
-        <h2 className="text-3xl font-black text-orange-400">
-          🏔 {selectedTrip.destination}
-        </h2>
-
-        <button
-          onClick={() => setSelectedTrip(null)}
-          className="text-3xl"
-        >
-          ✕
-        </button>
-      </div>
-
-      <img
-        src={selectedTrip.image}
-        alt="Trip"
-        className="w-full h-56 object-cover rounded-2xl mb-5"
-      />
-
-      <div className="space-y-3 text-zinc-200">
-  <p>
-    🏍 <strong>Bike:</strong> {selectedTrip.bike}
-  </p>
-
-  <p>
-    📍 <strong>Route:</strong>{" "}
-    {selectedTrip.startLocation} → {selectedTrip.endLocation}
-  </p>
-
-  <p>
-    🛣️ <strong>Distance:</strong> {selectedTrip.distance} KM
-  </p>
-
-  <p>
-    📅 <strong>Departure:</strong>{" "}
-    {selectedTrip.tripDate
-      ? new Date(selectedTrip.tripDate).toLocaleString()
-      : "TBA"}
-  </p>
-
-  <p>
-    💰 <strong>Contribution:</strong> ₹
-    {selectedTrip.tripPrice || 0}
-  </p>
-
-  <p>
-    👤 <strong>Host:</strong> {selectedTrip.userName}
-  </p>
-
-  <p>
-    🚩 <strong>Ride Type:</strong>{" "}
-    {selectedTrip.rideType === "group"
-      ? "👥 Group Ride (Bring Your Own Bike)"
-      : "👤 Individual Ride (Looking for Pillion Rider)"}
-  </p>
-
-  <div className="mt-4 bg-black/40 rounded-2xl p-4 border border-zinc-800">
-  <h3 className="font-bold mb-2 text-orange-300">
-    📝 About this Ride
-  </h3>
-
-  <p className="italic text-zinc-200">
-    {selectedTrip.caption || "No description provided."}
-  </p>
-
-  {selectedTrip.itinerary && (
-    <div className="mt-6 border-t border-zinc-700 pt-4">
-      <h3 className="font-bold mb-4 text-orange-300">
-        🗺️ Itinerary
-      </h3>
-
-      <div className="space-y-3">
-        {selectedTrip.itinerary
-          .split("\n")
-          .filter((line: string) => line.trim() !== "")
-          .map((line: string, index: number) => (
-            <div
-              key={index}
-              className="flex items-start gap-3"
-            >
-              <div className="mt-1 w-3 h-3 rounded-full bg-orange-500 flex-shrink-0" />
-              <p className="text-zinc-300">{line}</p>
             </div>
+
           ))}
+
+
+          {/* =====================================================
+              EMPTY STATE
+          ===================================================== */}
+
+          {trips.length === 0 && (
+
+            <div
+              className="
+                h-[calc(100dvh-64px)]
+                flex
+                items-center
+                justify-center
+                bg-zinc-950
+                text-center
+                px-6
+              "
+            >
+
+              <div>
+
+                <div
+                  className="
+                    text-6xl
+                    mb-5
+                  "
+                >
+                  🔖
+                </div>
+
+
+                <h2
+                  className="
+                    text-2xl
+                    font-black
+                  "
+                >
+                  No saved rides
+                </h2>
+
+
+                <p
+                  className="
+                    text-zinc-400
+                    mt-2
+                  "
+                >
+                  Save a ride from the feed
+                  and it will appear here.
+                </p>
+
+
+                <button
+                  onClick={() =>
+                    router.push(
+                      "/feed"
+                    )
+                  }
+                  className="
+                    mt-6
+                    bg-orange-500
+                    text-black
+                    font-black
+                    px-6
+                    py-3
+                    rounded-full
+                    hover:scale-105
+                    transition
+                  "
+                >
+                  Explore Rides
+                </button>
+
+              </div>
+
+            </div>
+
+          )}
+
+        </div>
+
       </div>
-    </div>
-  )}
-</div>
-
-</div>
-
-<button
-  onClick={() => {
-    requestToJoin(selectedTrip);
-    setSelectedTrip(null);
-  }}
-  className="mt-6 w-full bg-orange-500 text-black font-black py-4 rounded-2xl hover:scale-[1.02] transition"
->
-  {selectedTrip.rideType === "group"
-    ? "🏍️ Request to Join Group Ride"
-    : "🪖 Request Pillion Seat"}
-</button>
-
-    </div>
-  </div>
-)}
 
     </main>
+
   );
+
 }
+
+
+/* =========================================================
+   PAGE WRAPPER
+========================================================= */
+
 export default function FeedPage() {
+
   return (
+
     <Suspense
       fallback={
-        <main className="fixed inset-0 top-16 bg-black text-white flex items-center justify-center">
+
+        <main
+          className="
+            fixed
+            inset-0
+            top-16
+            bg-black
+            text-white
+            flex
+            items-center
+            justify-center
+          "
+        >
+
           Loading...
+
         </main>
+
       }
     >
+
       <FeedContent />
+
     </Suspense>
+
   );
+
 }
