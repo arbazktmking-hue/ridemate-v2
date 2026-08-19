@@ -8,16 +8,23 @@ import {
   getDoc,
   updateDoc,
 } from "firebase/firestore";
-
 import { db } from "../firebase";
 import { useRouter } from "next/navigation";
 function CreateTripContent() {
-
-  
 const router = useRouter();
 const [editId, setEditId] = useState<string | null>(null);
 const [rideType, setRideType] = useState<"individual" | "group">("individual");
+useEffect(() => {
+  const savedUser = localStorage.getItem("ridemateUser");
 
+  if (savedUser) {
+    const user = JSON.parse(savedUser);
+
+    if (user.image) {
+      setTripImage(user.image);
+    }
+  }
+}, []);
 useEffect(() => {
   const params = new URLSearchParams(window.location.search);
   setEditId(params.get("edit"));
@@ -32,9 +39,7 @@ const [distance, setDistance] = useState("");
 const [tripDate, setTripDate] = useState("");
 const [itinerary, setItinerary] = useState("");
 const [tripPrice, setTripPrice] = useState("");
-const [tripImage, setTripImage] = useState(
-  "https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=1200&auto=format&fit=crop"
-);
+const [tripImage, setTripImage] = useState("");
 useEffect(() => {
   const loadTrip = async () => {
     if (!editId) return;
@@ -54,7 +59,6 @@ useEffect(() => {
     setTripDate(trip.tripDate || "");
     setItinerary(trip.itinerary || "");
     setTripPrice(trip.tripPrice || "");
-    setTripImage(trip.image || "");
     setRideType(trip.rideType || "individual");
   };
 
@@ -144,10 +148,6 @@ if (isEditing && editId) {
     setTripDate("");
     setTripPrice("");
     setItinerary("");
-    setTripImage(
-      "https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=1200&auto=format&fit=crop"
-    );
-
   } catch (error) {
     console.error(error);
     alert("Failed to save trip");
@@ -158,32 +158,15 @@ if (isEditing && editId) {
     <PageBackground>
 
       <div className="w-full max-w-3xl mx-auto bg-zinc-900 rounded-3xl border border-zinc-800 p-4 sm:p-6 md:p-8 mt-8 mb-8">
-        <img
-  src={tripImage}
-  alt="Trip"
-  className="w-full h-48 sm:h-56 md:h-72 object-cover rounded-2xl mb-5"
-/>
-
-        <label className="bg-orange-500 px-6 py-3 rounded-2xl font-bold cursor-pointer inline-block hover:scale-105 transition">
-
-          Upload Trip Photo
-
-          <input
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-
-              if (file) {
-                setTripImage(
-                  URL.createObjectURL(file)
-                );
-              }
-            }}
-          />
-
-        </label>
+{tripImage && (
+  <div className="flex justify-center mb-6">
+    <img
+      src={tripImage}
+      alt="Profile"
+      className="w-32 h-32 object-cover rounded-full border-4 border-orange-500 shadow-xl"
+    />
+  </div>
+)}
         <div className="space-y-6 mt-8">
 <div className="space-y-2">
   <label className="font-bold text-orange-400">
