@@ -34,7 +34,6 @@ const [destination, setDestination] = useState("");
 const [bike, setBike] = useState("");
 const [caption, setCaption] = useState("");
 const [startLocation, setStartLocation] = useState("");
-const [endLocation, setEndLocation] = useState("");
 const [distance, setDistance] = useState("");
 const [tripDate, setTripDate] = useState("");
 const [itinerary, setItinerary] = useState("");
@@ -54,7 +53,6 @@ useEffect(() => {
     setBike(trip.bike || "");
     setCaption(trip.caption || "");
     setStartLocation(trip.startLocation || "");
-    setEndLocation(trip.endLocation || "");
     setDistance(trip.distance || "");
     setTripDate(trip.tripDate || "");
     setItinerary(trip.itinerary || "");
@@ -83,7 +81,6 @@ if (isEditing && editId) {
     rideType,
     destination,
     startLocation,
-    endLocation,
     distance,
     bike,
     tripDate,
@@ -100,7 +97,6 @@ if (isEditing && editId) {
   rideType,
   destination,
   startLocation,
-  endLocation,
   distance,
   bike,
   tripDate,
@@ -122,7 +118,7 @@ if (isEditing && editId) {
 
       alert("✅ Trip updated successfully!");
 
-      router.push("/profile");
+      router.push("/my-rides");
       return;
     }
 
@@ -141,7 +137,6 @@ if (isEditing && editId) {
 
     setDestination("");
     setStartLocation("");
-    setEndLocation("");
     setDistance("");
     setBike("");
     setCaption("");
@@ -196,21 +191,6 @@ if (isEditing && editId) {
             onChange={(e) => setDestination(e.target.value)}
             className="w-full p-4 rounded-2xl bg-black border border-zinc-700"
           />
-<input
-  type="text"
-  placeholder="Start Location"
-  value={startLocation}
-  onChange={(e) => setStartLocation(e.target.value)}
-  className="w-full p-4 rounded-2xl bg-black border border-zinc-700"
-/>
-
-<input
-  type="text"
-  placeholder="End Location"
-  value={endLocation}
-  onChange={(e) => setEndLocation(e.target.value)}
-  className="w-full p-4 rounded-2xl bg-black border border-zinc-700"
-/>
 <input
   type="number"
   placeholder="Distance (KM)"

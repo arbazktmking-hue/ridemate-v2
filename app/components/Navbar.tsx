@@ -208,7 +208,7 @@ export default function Navbar() {
 
 <a href="/my-rides" className="flex items-center gap-3 hover:text-orange-500 transition">
   <Route size={22} />
-  My Trips
+  My Rides
 </a>
 
 <a href="/about" className="flex items-center gap-3 hover:text-orange-500 transition">
