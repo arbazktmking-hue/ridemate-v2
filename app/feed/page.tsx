@@ -1003,18 +1003,18 @@ function FeedContent() {
                         IMAGE IS NOT EDITED
                     ================================================= */}
 
-                    <div
-                      className="
-                        relative
-                        w-[25%]
-                        sm:w-[22%]
-                        md:w-[20%]
-                        lg:w-[18%]
-                        flex-shrink-0
-                        overflow-hidden
-                        bg-zinc-950
-                      "
-                    >
+                   <div
+  className="
+    relative
+    w-[25%]
+    sm:w-[22%]
+    md:w-[20%]
+    lg:w-[18%]
+    flex-shrink-0
+    overflow-hidden
+    bg-zinc-950
+  "
+>
 
                       {trip.userImage ? (
 
@@ -1052,6 +1052,18 @@ function FeedContent() {
                           "
                         >
                           👤
+                          {/* ORANGE PROFILE IMAGE BOUNDARY */}
+
+<div
+  className="
+    absolute
+    inset-0
+    border-2
+    border-orange-500
+    pointer-events-none
+    z-20
+  "
+/>
                         </div>
 
                       )}
