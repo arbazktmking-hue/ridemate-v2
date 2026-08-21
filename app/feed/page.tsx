@@ -51,13 +51,24 @@ function FeedContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const sharedTripId = searchParams.get("trip");
+  const sharedTripId =
+    searchParams.get("trip");
 
-  const [trips, setTrips] = useState<any[]>([]);
-  const [savedTrips, setSavedTrips] = useState<string[]>([]);
-  const [openComments, setOpenComments] = useState<string[]>([]);
-  const [expandedTrip, setExpandedTrip] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+
+  const [trips, setTrips] =
+    useState<any[]>([]);
+
+  const [savedTrips, setSavedTrips] =
+    useState<string[]>([]);
+
+  const [openComments, setOpenComments] =
+    useState<string[]>([]);
+
+  const [expandedTrip, setExpandedTrip] =
+    useState<string | null>(null);
+
+  const [loading, setLoading] =
+    useState(true);
 
 
   /* =========================================================
@@ -75,40 +86,54 @@ function FeedContent() {
           orderBy("createdAt", "desc")
         );
 
-        const querySnapshot = await getDocs(q);
+        const querySnapshot =
+          await getDocs(q);
 
         const loadedTrips: any[] = [];
 
-        querySnapshot.forEach((tripDoc) => {
 
-          const trip = tripDoc.data();
+        querySnapshot.forEach(
+          (tripDoc) => {
 
-          loadedTrips.push({
-            id: tripDoc.id,
-            ...trip,
-          });
+            const trip =
+              tripDoc.data();
 
-        });
+            loadedTrips.push({
+              id: tripDoc.id,
+              ...trip,
+            });
 
-
-        const uniqueTrips = loadedTrips.filter(
-          (trip, index, self) =>
-            index ===
-            self.findIndex(
-              (t) => t.id === trip.id
-            )
+          }
         );
+
+
+        const uniqueTrips =
+          loadedTrips.filter(
+            (trip, index, self) =>
+              index ===
+              self.findIndex(
+                (t) =>
+                  t.id === trip.id
+              )
+          );
 
 
         if (sharedTripId) {
 
-          const sharedTrip = uniqueTrips.find(
-            (trip) => trip.id === sharedTripId
-          );
+          const sharedTrip =
+            uniqueTrips.find(
+              (trip) =>
+                trip.id ===
+                sharedTripId
+            );
 
-          const otherTrips = uniqueTrips.filter(
-            (trip) => trip.id !== sharedTripId
-          );
+
+          const otherTrips =
+            uniqueTrips.filter(
+              (trip) =>
+                trip.id !==
+                sharedTripId
+            );
 
 
           if (sharedTrip) {
@@ -118,17 +143,23 @@ function FeedContent() {
               ...otherTrips,
             ]);
 
-            setExpandedTrip(sharedTrip.id);
+            setExpandedTrip(
+              sharedTrip.id
+            );
 
           } else {
 
-            setTrips(uniqueTrips);
+            setTrips(
+              uniqueTrips
+            );
 
           }
 
         } else {
 
-          setTrips(uniqueTrips);
+          setTrips(
+            uniqueTrips
+          );
 
         }
 
@@ -159,51 +190,72 @@ function FeedContent() {
 
   useEffect(() => {
 
-    const loadSavedTrips = async () => {
+    const loadSavedTrips =
+      async () => {
 
-      try {
+        try {
 
-        const user = JSON.parse(
-          localStorage.getItem(
-            "ridemateUser"
-          ) || "{}"
-        );
-
-        if (!user.name) return;
-
-
-        const snapshot = await getDocs(
-          collection(db, "savedTrips")
-        );
-
-        const saved: string[] = [];
+          const user =
+            JSON.parse(
+              localStorage.getItem(
+                "ridemateUser"
+              ) || "{}"
+            );
 
 
-        snapshot.forEach((docSnap) => {
-
-          const data = docSnap.data();
-
-          if (data.user === user.name) {
-
-            saved.push(data.tripId);
-
-          }
-
-        });
+          if (!user.name)
+            return;
 
 
-        setSavedTrips(saved);
+          const snapshot =
+            await getDocs(
+              collection(
+                db,
+                "savedTrips"
+              )
+            );
 
-      } catch (error) {
 
-        console.error(
-          "Failed to load saved trips:",
-          error
-        );
+          const saved: string[] =
+            [];
 
-      }
 
-    };
+          snapshot.forEach(
+            (docSnap) => {
+
+              const data =
+                docSnap.data();
+
+
+              if (
+                data.user ===
+                user.name
+              ) {
+
+                saved.push(
+                  data.tripId
+                );
+
+              }
+
+            }
+          );
+
+
+          setSavedTrips(
+            saved
+          );
+
+        } catch (error) {
+
+          console.error(
+            "Failed to load saved trips:",
+            error
+          );
+
+        }
+
+      };
 
 
     loadSavedTrips();
@@ -219,10 +271,11 @@ function FeedContent() {
     tripId: string
   ) => {
 
-    setExpandedTrip((current) =>
-      current === tripId
-        ? null
-        : tripId
+    setExpandedTrip(
+      (current) =>
+        current === tripId
+          ? null
+          : tripId
     );
 
   };
@@ -238,11 +291,12 @@ function FeedContent() {
 
     try {
 
-      const user = JSON.parse(
-        localStorage.getItem(
-          "ridemateUser"
-        ) || "{}"
-      );
+      const user =
+        JSON.parse(
+          localStorage.getItem(
+            "ridemateUser"
+          ) || "{}"
+        );
 
 
       if (!user.name) {
@@ -261,7 +315,9 @@ function FeedContent() {
 
 
       if (
-        savedTrips.includes(tripId)
+        savedTrips.includes(
+          tripId
+        )
       ) {
 
         await deleteDoc(
@@ -273,10 +329,12 @@ function FeedContent() {
         );
 
 
-        setSavedTrips((prev) =>
-          prev.filter(
-            (id) => id !== tripId
-          )
+        setSavedTrips(
+          (prev) =>
+            prev.filter(
+              (id) =>
+                id !== tripId
+            )
         );
 
       } else {
@@ -288,16 +346,20 @@ function FeedContent() {
             saveId
           ),
           {
-            user: user.name,
+            user:
+              user.name,
+
             tripId,
           }
         );
 
 
-        setSavedTrips((prev) => [
-          ...prev,
-          tripId,
-        ]);
+        setSavedTrips(
+          (prev) => [
+            ...prev,
+            tripId,
+          ]
+        );
 
       }
 
@@ -324,11 +386,12 @@ function FeedContent() {
 
     try {
 
-      const tripRef = doc(
-        db,
-        "trips",
-        id
-      );
+      const tripRef =
+        doc(
+          db,
+          "trips",
+          id
+        );
 
 
       await updateDoc(
@@ -348,9 +411,11 @@ function FeedContent() {
         );
 
 
-      const trip = trips.find(
-        (t) => t.id === id
-      );
+      const trip =
+        trips.find(
+          (t) =>
+            t.id === id
+        );
 
 
       if (
@@ -390,7 +455,8 @@ function FeedContent() {
                 ? {
                     ...trip,
                     likes:
-                      currentLikes + 1,
+                      currentLikes +
+                      1,
                   }
                 : trip
           )
@@ -417,30 +483,41 @@ function FeedContent() {
     commentText: string
   ) => {
 
-    if (!commentText.trim())
+    if (
+      !commentText.trim()
+    )
       return;
 
 
     try {
 
-      const tripRef = doc(
-        db,
-        "trips",
-        tripId
-      );
+      const tripRef =
+        doc(
+          db,
+          "trips",
+          tripId
+        );
 
 
-      const user = JSON.parse(
-        localStorage.getItem(
-          "ridemateUser"
-        ) || "{}"
-      );
+      const user =
+        JSON.parse(
+          localStorage.getItem(
+            "ridemateUser"
+          ) || "{}"
+        );
 
 
       const newComment = {
-        user: user.name,
-        image: user.image || "",
-        text: commentText,
+
+        user:
+          user.name,
+
+        image:
+          user.image || "",
+
+        text:
+          commentText,
+
       };
 
 
@@ -455,14 +532,17 @@ function FeedContent() {
       );
 
 
-      const trip = trips.find(
-        (t) => t.id === tripId
-      );
+      const trip =
+        trips.find(
+          (t) =>
+            t.id === tripId
+        );
 
 
       if (
         trip &&
-        trip.userName !== user.name
+        trip.userName !==
+          user.name
       ) {
 
         await addDoc(
@@ -492,7 +572,8 @@ function FeedContent() {
         (prevTrips) =>
           prevTrips.map(
             (trip) =>
-              trip.id === tripId
+              trip.id ===
+              tripId
                 ? {
                     ...trip,
 
@@ -522,194 +603,199 @@ function FeedContent() {
      REQUEST TO JOIN
   ========================================================= */
 
-  const requestToJoin = async (
-    trip: any
-  ) => {
+  const requestToJoin =
+    async (
+      trip: any
+    ) => {
 
-    try {
+      try {
 
-      const currentUser =
-        JSON.parse(
-          localStorage.getItem(
-            "ridemateUser"
-          ) || "{}"
+        const currentUser =
+          JSON.parse(
+            localStorage.getItem(
+              "ridemateUser"
+            ) || "{}"
+          );
+
+
+        if (!currentUser.name) {
+
+          alert(
+            "Please login first."
+          );
+
+          return;
+
+        }
+
+
+        if (
+          currentUser.name ===
+          trip.userName
+        ) {
+
+          alert(
+            "You cannot join your own ride."
+          );
+
+          return;
+
+        }
+
+
+        const existingRequests =
+          await getDocs(
+            collection(
+              db,
+              "rideRequests"
+            )
+          );
+
+
+        let alreadyRequested =
+          false;
+
+
+        existingRequests.forEach(
+          (requestDoc) => {
+
+            const request =
+              requestDoc.data();
+
+
+            if (
+              request.tripId ===
+                trip.id &&
+              request.requester ===
+                currentUser.name &&
+              request.status ===
+                "pending"
+            ) {
+
+              alreadyRequested =
+                true;
+
+            }
+
+          }
         );
 
 
-      if (!currentUser.name) {
+        if (
+          alreadyRequested
+        ) {
 
-        alert(
-          "Please login first."
-        );
+          alert(
+            "Request already sent 🚀"
+          );
 
-        return;
+          return;
 
-      }
-
-
-      if (
-        currentUser.name ===
-        trip.userName
-      ) {
-
-        alert(
-          "You cannot join your own ride."
-        );
-
-        return;
-
-      }
+        }
 
 
-      const existingRequests =
-        await getDocs(
+        await addDoc(
           collection(
             db,
             "rideRequests"
-          )
-        );
+          ),
+          {
 
+            tripId:
+              trip.id,
 
-      let alreadyRequested =
-        false;
+            tripOwner:
+              trip.userName,
 
+            requester:
+              currentUser.name,
 
-      existingRequests.forEach(
-        (requestDoc) => {
+            requesterImage:
+              currentUser.image ||
+              "",
 
-          const request =
-            requestDoc.data();
+            destination:
+              trip.destination ||
+              "",
 
+            startLocation:
+              trip.startLocation ||
+              "",
 
-          if (
-            request.tripId ===
-              trip.id &&
-            request.requester ===
-              currentUser.name &&
-            request.status ===
-              "pending"
-          ) {
+            distance:
+              trip.distance ||
+              "",
 
-            alreadyRequested =
-              true;
+            bike:
+              trip.bike ||
+              "",
+
+            tripDate:
+              trip.tripDate ||
+              "",
+
+            tripPrice:
+              trip.tripPrice ||
+              "",
+
+            rideType:
+              trip.rideType ||
+              "individual",
+
+            createdAt:
+              Date.now(),
+
+            status:
+              "pending",
 
           }
-
-        }
-      );
-
-
-      if (alreadyRequested) {
-
-        alert(
-          "Request already sent 🚀"
         );
 
-        return;
+
+        await addDoc(
+          collection(
+            db,
+            "notifications"
+          ),
+          {
+
+            user:
+              trip.userName,
+
+            text:
+              trip.rideType ===
+              "group"
+                ? `${currentUser.name} wants to join your group ride 🏍️`
+                : `${currentUser.name} wants to join as your pillion 🪖`,
+
+            createdAt:
+              Date.now(),
+
+            read:
+              false,
+
+          }
+        );
+
+
+        alert(
+          "Ride request sent 🚀"
+        );
+
+      } catch (error) {
+
+        console.error(
+          "Join ride error:",
+          error
+        );
+
+        alert(
+          "Something went wrong. Please try again."
+        );
 
       }
 
-
-      await addDoc(
-        collection(
-          db,
-          "rideRequests"
-        ),
-        {
-
-          tripId:
-            trip.id,
-
-          tripOwner:
-            trip.userName,
-
-          requester:
-            currentUser.name,
-
-          requesterImage:
-            currentUser.image ||
-            "",
-
-          destination:
-            trip.destination ||
-            "",
-
-          startLocation:
-            trip.startLocation ||
-            "",
-
-          distance:
-            trip.distance ||
-            "",
-
-          bike:
-            trip.bike ||
-            "",
-
-          tripDate:
-            trip.tripDate ||
-            "",
-
-          tripPrice:
-            trip.tripPrice ||
-            "",
-
-          rideType:
-            trip.rideType ||
-            "individual",
-
-          createdAt:
-            Date.now(),
-
-          status:
-            "pending",
-
-        }
-      );
-
-
-      await addDoc(
-        collection(
-          db,
-          "notifications"
-        ),
-        {
-          user:
-            trip.userName,
-
-          text:
-            trip.rideType ===
-            "group"
-              ? `${currentUser.name} wants to join your group ride 🏍️`
-              : `${currentUser.name} wants to join as your pillion 🪖`,
-
-          createdAt:
-            Date.now(),
-
-          read:
-            false,
-        }
-      );
-
-
-      alert(
-        "Ride request sent 🚀"
-      );
-
-    } catch (error) {
-
-      console.error(
-        "Join ride error:",
-        error
-      );
-
-      alert(
-        "Something went wrong. Please try again."
-      );
-
-    }
-
-  };
+    };
 
 
   /* =========================================================
@@ -720,16 +806,17 @@ function FeedContent() {
     tripId: string
   ) => {
 
-    setOpenComments((prev) =>
-      prev.includes(tripId)
-        ? prev.filter(
-            (id) =>
-              id !== tripId
-          )
-        : [
-            ...prev,
-            tripId,
-          ]
+    setOpenComments(
+      (prev) =>
+        prev.includes(tripId)
+          ? prev.filter(
+              (id) =>
+                id !== tripId
+            )
+          : [
+              ...prev,
+              tripId,
+            ]
     );
 
   };
@@ -758,11 +845,20 @@ function FeedContent() {
 
         <div className="text-center">
 
-          <div className="text-5xl mb-4">
+          <div
+            className="
+              text-5xl
+              mb-4
+            "
+          >
             🏍️
           </div>
 
-          <p className="text-zinc-400">
+          <p
+            className="
+              text-zinc-400
+            "
+          >
             Loading rides...
           </p>
 
@@ -831,179 +927,160 @@ function FeedContent() {
           "
         >
 
-          {trips.map((trip) => {
+          {trips.map(
+            (trip) => {
 
-            const isExpanded =
-              expandedTrip === trip.id;
+              const isExpanded =
+                expandedTrip ===
+                trip.id;
 
 
-            return (
-
-              <div
-                key={trip.id}
-                className={`
-                  group
-                  relative
-                  w-full
-                  overflow-hidden
-                  border-y
-                  border-white/10
-                  transition-all
-                  duration-500
-                  ${
-                    isExpanded
-                      ? "bg-white/[0.07]"
-                      : "bg-white/[0.035] hover:bg-white/[0.055]"
-                  }
-                `}
-              >
-
-                {/* =================================================
-                    CINEMATIC LIGHT
-                ================================================= */}
+              return (
 
                 <div
-                  className="
-                    absolute
-                    inset-0
-                    pointer-events-none
-                    bg-gradient-to-r
-                    from-orange-500/[0.08]
-                    via-transparent
-                    to-white/[0.03]
-                    opacity-70
-                  "
-                />
-
-
-                {/* =================================================
-                    COLLAPSED HEADER
-                ================================================= */}
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    toggleExpanded(
-                      trip.id
-                    )
-                  }
-                  className="
+                  key={trip.id}
+                  className={`
+                    group
                     relative
-                    z-10
                     w-full
-                    min-h-[120px]
-                    md:min-h-[150px]
-                    text-left
-                    flex
-                    items-stretch
-                  "
+                    overflow-hidden
+                    border-y
+                    border-white/10
+                    transition-all
+                    duration-500
+
+                    ${
+                      isExpanded
+                        ? "bg-white/[0.07]"
+                        : "bg-white/[0.035] hover:bg-white/[0.055]"
+                    }
+                  `}
                 >
 
                   {/* =================================================
-                      LEFT — FULL PROFILE IMAGE
+                      CINEMATIC LIGHT
                   ================================================= */}
 
                   <div
                     className="
+                      absolute
+                      inset-0
+                      pointer-events-none
+                      bg-gradient-to-r
+                      from-orange-500/[0.08]
+                      via-transparent
+                      to-white/[0.03]
+                      opacity-70
+                    "
+                  />
+
+
+                  {/* =================================================
+                      COLLAPSED HEADER
+                  ================================================= */}
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      toggleExpanded(
+                        trip.id
+                      )
+                    }
+                    className="
                       relative
-                      w-[24%]
-                      sm:w-[22%]
-                      md:w-[20%]
-                      lg:w-[18%]
-                      flex-shrink-0
-                      overflow-hidden
-                      bg-zinc-950
+                      z-10
+                      w-full
+                      min-h-[120px]
+                      md:min-h-[150px]
+                      text-left
+                      flex
+                      items-stretch
                     "
                   >
 
-                    {trip.userImage ? (
+                    {/* =================================================
+                        LEFT — PROFILE IMAGE
+                        IMAGE IS NOT EDITED
+                    ================================================= */}
 
-                      <img
-                        src={trip.userImage}
-                        alt={
-                          trip.userName ||
-                          "Rider"
-                        }
-                        className="
-                          absolute
-                          inset-0
-                          w-full
-                          h-full
-                          object-cover
-                          object-center
-                          select-none
-                          transition-transform
-                          duration-700
-                          group-hover:scale-105
-                        "
-                      />
+                    <div
+                      className="
+                        relative
+                        w-[25%]
+                        sm:w-[22%]
+                        md:w-[20%]
+                        lg:w-[18%]
+                        flex-shrink-0
+                        overflow-hidden
+                        bg-zinc-950
+                      "
+                    >
 
-                    ) : (
+                      {trip.userImage ? (
 
-                      <div
-                        className="
-                          absolute
-                          inset-0
-                          flex
-                          items-center
-                          justify-center
-                          bg-zinc-900
-                          text-4xl
-                          md:text-5xl
-                        "
-                      >
-                        👤
-                      </div>
+                        <img
+                          src={
+                            trip.userImage
+                          }
+                          alt={
+                            trip.userName ||
+                            "Rider"
+                          }
+                          className="
+                            absolute
+                            inset-0
+                            w-full
+                            h-full
+                            object-cover
+                            object-center
+                            select-none
+                          "
+                        />
 
-                    )}
+                      ) : (
+
+                        <div
+                          className="
+                            absolute
+                            inset-0
+                            flex
+                            items-center
+                            justify-center
+                            bg-zinc-900
+                            text-4xl
+                            md:text-5xl
+                          "
+                        >
+                          👤
+                        </div>
+
+                      )}
+
+                    </div>
 
 
-                    {/* IMAGE EDGE FADE */}
+                    {/* =================================================
+                        CENTER — BIKE + DATE
+                    ================================================= */}
 
                     <div
                       className="
                         absolute
-                        inset-y-0
-                        right-0
-                        w-16
-                        md:w-24
-                        bg-gradient-to-r
-                        from-transparent
-                        to-black
-                      "
-                    />
-
-                  </div>
-
-
-                  {/* =================================================
-                      CENTER — BIKE + DATE
-                      PERFECTLY CENTERED
-                  ================================================= */}
-
-                  <div
-                    className="
-                      flex-1
-                      min-w-0
-                      flex
-                      items-center
-                      justify-center
-                      px-2
-                      sm:px-4
-                      md:px-8
-                    "
-                  >
-
-                    <div
-                      className="
+                        left-1/2
+                        top-1/2
+                        -translate-x-1/2
+                        -translate-y-1/2
+                        w-[38%]
+                        sm:w-[36%]
+                        md:w-[34%]
+                        lg:w-[30%]
                         flex
                         flex-col
                         items-center
                         justify-center
                         text-center
                         gap-2
-                        md:gap-3
-                        min-w-0
+                        pointer-events-none
                       "
                     >
 
@@ -1015,13 +1092,13 @@ function FeedContent() {
                           items-center
                           justify-center
                           gap-2
-                          text-orange-400
                           max-w-full
+                          text-orange-400
                         "
                       >
 
                         <Bike
-                          size={18}
+                          size={17}
                           className="
                             flex-shrink-0
                           "
@@ -1029,11 +1106,13 @@ function FeedContent() {
 
                         <span
                           className="
+                            font-black
                             text-xs
                             sm:text-sm
                             md:text-base
-                            font-bold
+                            lg:text-lg
                             truncate
+                            max-w-full
                           "
                         >
                           {trip.bike ||
@@ -1068,7 +1147,8 @@ function FeedContent() {
                             text-[11px]
                             sm:text-xs
                             md:text-sm
-                            truncate
+                            lg:text-base
+                            whitespace-nowrap
                           "
                         >
 
@@ -1091,1064 +1171,1147 @@ function FeedContent() {
 
                     </div>
 
-                  </div>
-
-
-                  {/* =================================================
-                      RIGHT — DESTINATION
-                  ================================================= */}
-
-                  <div
-                    className="
-                      w-[36%]
-                      sm:w-[35%]
-                      md:w-[32%]
-                      lg:w-[30%]
-                      flex
-                      items-center
-                      justify-end
-                      gap-2
-                      md:gap-4
-                      px-3
-                      sm:px-4
-                      md:px-8
-                    "
-                  >
-
-                    <div
-                      className="
-                        text-right
-                        min-w-0
-                      "
-                    >
-
-                      <p
-                        className="
-                          hidden
-                          md:block
-                          text-[9px]
-                          text-zinc-500
-                          uppercase
-                          tracking-[0.25em]
-                          mb-1
-                        "
-                      >
-                        Destination
-                      </p>
-
-
-                      <h2
-                        className="
-                          text-lg
-                          sm:text-2xl
-                          md:text-4xl
-                          lg:text-5xl
-                          font-black
-                          leading-none
-                          tracking-tight
-                          truncate
-                        "
-                      >
-                        {trip.destination}
-                      </h2>
-
-                    </div>
-
-
-                    {/* EXPAND ICON */}
-
-                    <div
-                      className="
-                        w-8
-                        h-8
-                        md:w-10
-                        md:h-10
-                        rounded-full
-                        bg-white/5
-                        border
-                        border-white/10
-                        flex
-                        items-center
-                        justify-center
-                        flex-shrink-0
-                        transition-all
-                        duration-300
-                        group-hover:border-orange-500/50
-                      "
-                    >
-
-                      {isExpanded ? (
-
-                        <ChevronUp
-                          size={18}
-                          className="
-                            text-orange-500
-                          "
-                        />
-
-                      ) : (
-
-                        <ChevronDown
-                          size={18}
-                          className="
-                            text-zinc-400
-                          "
-                        />
-
-                      )}
-
-                    </div>
-
-                  </div>
-
-                </button>
-
-
-                {/* =================================================
-                    EXPANDED CONTENT
-                ================================================= */}
-
-                <div
-                  className={`
-                    relative
-                    overflow-hidden
-                    transition-all
-                    duration-500
-                    ${
-                      isExpanded
-                        ? "max-h-[1400px] opacity-100"
-                        : "max-h-0 opacity-0"
-                    }
-                  `}
-                >
-
-                  <div
-                    className="
-                      border-t
-                      border-white/10
-                      px-4
-                      md:px-8
-                      py-6
-                      md:py-8
-                    "
-                  >
 
                     {/* =================================================
-                        RIDER PROFILE
+                        RIGHT — DESTINATION
                     ================================================= */}
 
                     <div
                       className="
+                        ml-auto
+                        w-[34%]
+                        sm:w-[34%]
+                        md:w-[35%]
+                        lg:w-[35%]
                         flex
                         items-center
-                        justify-between
-                        gap-4
-                        mb-6
+                        justify-end
+                        gap-2
+                        md:gap-4
+                        px-3
+                        sm:px-4
+                        md:px-6
+                        lg:px-8
+                        min-w-0
                       "
                     >
 
-                      <Link
-                        href={`/rider/${encodeURIComponent(
-                          trip.userName
-                        )}`}
-                        onClick={(e) =>
-                          e.stopPropagation()
-                        }
+                      <div
                         className="
-                          flex
-                          items-center
-                          gap-3
-                          hover:opacity-80
-                          transition
+                          flex-1
+                          min-w-0
+                          text-right
                         "
                       >
 
-                        {trip.userImage ? (
+                        <p
+                          className="
+                            hidden
+                            md:block
+                            text-[9px]
+                            text-zinc-500
+                            uppercase
+                            tracking-[0.25em]
+                            mb-1
+                          "
+                        >
+                          Destination
+                        </p>
 
-                          <img
-                            src={trip.userImage}
-                            alt="Rider"
+
+                        <h2
+                          className="
+                            text-lg
+                            sm:text-2xl
+                            md:text-4xl
+                            lg:text-5xl
+                            xl:text-6xl
+                            font-black
+                            leading-[0.9]
+                            tracking-tight
+                            text-white
+                            break-words
+                            whitespace-normal
+                          "
+                        >
+                          {trip.destination ||
+                            "Destination TBA"}
+                        </h2>
+
+                      </div>
+
+
+                      {/* EXPAND BUTTON */}
+
+                      <div
+                        className="
+                          w-9
+                          h-9
+                          md:w-11
+                          md:h-11
+                          rounded-full
+                          bg-white/5
+                          border
+                          border-white/10
+                          flex
+                          items-center
+                          justify-center
+                          flex-shrink-0
+                          transition-all
+                          duration-300
+                          group-hover:border-orange-500/50
+                        "
+                      >
+
+                        {isExpanded ? (
+
+                          <ChevronUp
+                            size={19}
                             className="
-                              w-10
-                              h-10
-                              rounded-full
-                              object-cover
+                              text-orange-500
                             "
                           />
 
                         ) : (
 
-                          <div
+                          <ChevronDown
+                            size={19}
                             className="
-                              w-10
-                              h-10
-                              rounded-full
-                              bg-zinc-900
-                              flex
-                              items-center
-                              justify-center
+                              text-zinc-400
                             "
-                          >
-                            👤
-                          </div>
+                          />
 
                         )}
+
+                      </div>
+
+                    </div>
+
+                  </button>
+
+
+                  {/* =================================================
+                      EXPANDED CONTENT
+                  ================================================= */}
+
+                  <div
+                    className={`
+                      relative
+                      overflow-hidden
+                      transition-all
+                      duration-500
+
+                      ${
+                        isExpanded
+                          ? "max-h-[1600px] opacity-100"
+                          : "max-h-0 opacity-0"
+                      }
+                    `}
+                  >
+
+                    <div
+                      className="
+                        border-t
+                        border-white/10
+                        px-3
+                        sm:px-4
+                        md:px-6
+                        py-4
+                        md:py-5
+                      "
+                    >
+
+                      {/* =================================================
+                          RIDER PROFILE
+                      ================================================= */}
+
+                      <div
+                        className="
+                          flex
+                          flex-wrap
+                          items-center
+                          justify-between
+                          gap-3
+                          mb-4
+                        "
+                      >
+
+                        <Link
+                          href={`/rider/${encodeURIComponent(
+                            trip.userName ||
+                              "Rider"
+                          )}`}
+                          onClick={(e) =>
+                            e.stopPropagation()
+                          }
+                          className="
+                            flex
+                            items-center
+                            gap-2
+                            hover:opacity-80
+                            transition
+                          "
+                        >
+
+                          {trip.userImage ? (
+
+                            <img
+                              src={
+                                trip.userImage
+                              }
+                              alt="Rider"
+                              className="
+                                w-9
+                                h-9
+                                rounded-full
+                                object-cover
+                              "
+                            />
+
+                          ) : (
+
+                            <div
+                              className="
+                                w-9
+                                h-9
+                                rounded-full
+                                bg-zinc-900
+                                flex
+                                items-center
+                                justify-center
+                              "
+                            >
+                              👤
+                            </div>
+
+                          )}
+
+                          <div>
+
+                            <p
+                              className="
+                                text-[8px]
+                                text-zinc-500
+                                uppercase
+                                tracking-widest
+                              "
+                            >
+                              Ride hosted by
+                            </p>
+
+                            <p
+                              className="
+                                font-bold
+                                text-orange-400
+                                text-sm
+                              "
+                            >
+                              {trip.userName ||
+                                "Rider"}
+                            </p>
+
+                          </div>
+
+                        </Link>
+
+
+                        {/* RIDE TYPE */}
+
+                        {trip.rideType ===
+                        "group" ? (
+
+                          <span
+                            className="
+                              inline-flex
+                              items-center
+                              gap-1.5
+                              bg-blue-500/10
+                              border
+                              border-blue-400/20
+                              text-blue-300
+                              px-2.5
+                              py-1.5
+                              rounded-full
+                              text-[10px]
+                              font-bold
+                            "
+                          >
+
+                            <Users
+                              size={12}
+                            />
+
+                            Group Ride
+
+                          </span>
+
+                        ) : (
+
+                          <span
+                            className="
+                              inline-flex
+                              items-center
+                              gap-1.5
+                              bg-green-500/10
+                              border
+                              border-green-400/20
+                              text-green-300
+                              px-2.5
+                              py-1.5
+                              rounded-full
+                              text-[10px]
+                              font-bold
+                            "
+                          >
+
+                            <UserRound
+                              size={12}
+                            />
+
+                            Individual Ride
+
+                          </span>
+
+                        )}
+
+                      </div>
+
+
+                      {/* =================================================
+                          SMALLER DETAILS GRID
+                      ================================================= */}
+
+                      <div
+                        className="
+                          grid
+                          grid-cols-2
+                          sm:grid-cols-2
+                          lg:grid-cols-4
+                          gap-2
+                        "
+                      >
+
+                        {/* BIKE */}
+
+                        <div
+                          className="
+                            bg-black/40
+                            backdrop-blur-xl
+                            border
+                            border-white/10
+                            rounded-xl
+                            p-3
+                            min-w-0
+                          "
+                        >
+
+                          <div
+                            className="
+                              flex
+                              items-center
+                              gap-1.5
+                              text-orange-400
+                              mb-1.5
+                            "
+                          >
+
+                            <Bike
+                              size={14}
+                            />
+
+                            <span
+                              className="
+                                text-[9px]
+                                uppercase
+                                tracking-wider
+                              "
+                            >
+                              Bike
+                            </span>
+
+                          </div>
+
+                          <p
+                            className="
+                              font-bold
+                              text-xs
+                              md:text-sm
+                              break-words
+                            "
+                          >
+                            {trip.bike ||
+                              "Not specified"}
+                          </p>
+
+                        </div>
+
+
+                        {/* START */}
+
+                        <div
+                          className="
+                            bg-black/40
+                            backdrop-blur-xl
+                            border
+                            border-white/10
+                            rounded-xl
+                            p-3
+                            min-w-0
+                          "
+                        >
+
+                          <div
+                            className="
+                              flex
+                              items-center
+                              gap-1.5
+                              text-orange-400
+                              mb-1.5
+                            "
+                          >
+
+                            <MapPin
+                              size={14}
+                            />
+
+                            <span
+                              className="
+                                text-[9px]
+                                uppercase
+                                tracking-wider
+                              "
+                            >
+                              Starting From
+                            </span>
+
+                          </div>
+
+                          <p
+                            className="
+                              font-bold
+                              text-xs
+                              md:text-sm
+                              break-words
+                            "
+                          >
+                            {trip.startLocation ||
+                              "Not specified"}
+                          </p>
+
+                        </div>
+
+
+                        {/* DISTANCE */}
+
+                        <div
+                          className="
+                            bg-black/40
+                            backdrop-blur-xl
+                            border
+                            border-white/10
+                            rounded-xl
+                            p-3
+                            min-w-0
+                          "
+                        >
+
+                          <div
+                            className="
+                              flex
+                              items-center
+                              gap-1.5
+                              text-orange-400
+                              mb-1.5
+                            "
+                          >
+
+                            <Route
+                              size={14}
+                            />
+
+                            <span
+                              className="
+                                text-[9px]
+                                uppercase
+                                tracking-wider
+                              "
+                            >
+                              Distance
+                            </span>
+
+                          </div>
+
+                          <p
+                            className="
+                              font-bold
+                              text-xs
+                              md:text-sm
+                            "
+                          >
+                            {trip.distance
+                              ? `${trip.distance} KM`
+                              : "Not specified"}
+                          </p>
+
+                        </div>
+
+
+                        {/* DEPARTURE */}
+
+                        <div
+                          className="
+                            bg-black/40
+                            backdrop-blur-xl
+                            border
+                            border-white/10
+                            rounded-xl
+                            p-3
+                            min-w-0
+                          "
+                        >
+
+                          <div
+                            className="
+                              flex
+                              items-center
+                              gap-1.5
+                              text-orange-400
+                              mb-1.5
+                            "
+                          >
+
+                            <CalendarDays
+                              size={14}
+                            />
+
+                            <span
+                              className="
+                                text-[9px]
+                                uppercase
+                                tracking-wider
+                              "
+                            >
+                              Departure
+                            </span>
+
+                          </div>
+
+                          <p
+                            className="
+                              font-bold
+                              text-xs
+                              md:text-sm
+                              break-words
+                            "
+                          >
+
+                            {trip.tripDate
+                              ? new Date(
+                                  trip.tripDate
+                                ).toLocaleString(
+                                  "en-IN",
+                                  {
+                                    day: "numeric",
+                                    month: "short",
+                                    year: "numeric",
+                                    hour: "numeric",
+                                    minute: "2-digit",
+                                  }
+                                )
+                              : "TBA"}
+
+                          </p>
+
+                        </div>
+
+                      </div>
+
+
+                      {/* =================================================
+                          SMALLER CONTRIBUTION
+                      ================================================= */}
+
+                      <div
+                        className="
+                          mt-3
+                          bg-orange-500
+                          text-black
+                          rounded-xl
+                          px-3
+                          py-2.5
+                          inline-flex
+                          items-center
+                          gap-3
+                          min-w-0
+                        "
+                      >
+
+                        <IndianRupee
+                          size={15}
+                        />
 
                         <div>
 
                           <p
                             className="
-                              text-[9px]
-                              text-zinc-500
+                              text-[8px]
                               uppercase
-                              tracking-widest
+                              tracking-wider
+                              font-black
+                              leading-none
                             "
                           >
-                            Ride hosted by
+                            Contribution
                           </p>
 
                           <p
                             className="
-                              font-bold
-                              text-orange-400
+                              font-black
+                              text-base
+                              leading-tight
+                              mt-0.5
                             "
                           >
-                            {trip.userName ||
-                              "Rider"}
+                            ₹{trip.tripPrice ||
+                              0}
                           </p>
 
                         </div>
 
-                      </Link>
+                      </div>
 
 
-                      {/* RIDE TYPE */}
+                      {/* =================================================
+                          SMALLER RIDE STORY
+                      ================================================= */}
 
-                      {trip.rideType ===
-                      "group" ? (
+                      {trip.caption && (
 
-                        <span
+                        <div
                           className="
-                            inline-flex
-                            items-center
-                            gap-2
-                            bg-blue-500/10
+                            mt-3
+                            bg-black/30
                             border
-                            border-blue-400/20
-                            text-blue-300
-                            px-3
-                            py-2
-                            rounded-full
-                            text-xs
-                            font-bold
+                            border-white/10
+                            rounded-xl
+                            p-3
                           "
                         >
 
-                          <Users
-                            size={14}
-                          />
+                          <p
+                            className="
+                              text-orange-400
+                              text-[9px]
+                              font-black
+                              uppercase
+                              tracking-widest
+                              mb-1.5
+                            "
+                          >
+                            📝 Ride Story
+                          </p>
 
-                          Group Ride
+                          <p
+                            className="
+                              text-zinc-300
+                              leading-relaxed
+                              text-xs
+                              md:text-sm
+                            "
+                          >
+                            "{trip.caption}"
+                          </p>
 
-                        </span>
+                        </div>
 
-                      ) : (
+                      )}
 
-                        <span
+
+                      {/* =================================================
+                          SMALLER ITINERARY
+                      ================================================= */}
+
+                      {trip.itinerary && (
+
+                        <div
                           className="
-                            inline-flex
-                            items-center
-                            gap-2
-                            bg-green-500/10
+                            mt-3
+                            bg-black/40
                             border
-                            border-green-400/20
-                            text-green-300
-                            px-3
-                            py-2
-                            rounded-full
-                            text-xs
-                            font-bold
+                            border-white/10
+                            rounded-xl
+                            p-3
                           "
                         >
 
-                          <UserRound
-                            size={14}
+                          <p
+                            className="
+                              text-orange-400
+                              text-[9px]
+                              font-black
+                              uppercase
+                              tracking-widest
+                              mb-1.5
+                            "
+                          >
+                            🗺️ Itinerary
+                          </p>
+
+                          <p
+                            className="
+                              text-zinc-300
+                              leading-relaxed
+                              text-xs
+                              md:text-sm
+                              whitespace-pre-line
+                            "
+                          >
+                            {trip.itinerary}
+                          </p>
+
+                        </div>
+
+                      )}
+
+
+                      {/* =================================================
+                          SMALLER ACTIONS
+                      ================================================= */}
+
+                      <div
+                        className="
+                          mt-4
+                          flex
+                          flex-wrap
+                          items-center
+                          gap-2
+                        "
+                      >
+
+                        {/* LIKE */}
+
+                        <button
+                          onClick={() =>
+                            likeTrip(
+                              trip.id,
+                              trip.likes ||
+                                0
+                            )
+                          }
+                          className="
+                            flex
+                            items-center
+                            gap-1.5
+                            bg-white/5
+                            hover:bg-red-500/10
+                            border
+                            border-white/10
+                            px-3
+                            py-2
+                            rounded-full
+                            transition
+                          "
+                        >
+
+                          <Heart
+                            size={16}
+                            className="
+                              text-red-400
+                            "
                           />
 
-                          Individual Ride
+                          <span
+                            className="
+                              text-xs
+                              font-bold
+                            "
+                          >
+                            {trip.likes ||
+                              0}
+                          </span>
 
-                        </span>
+                        </button>
+
+
+                        {/* COMMENT */}
+
+                        <button
+                          onClick={() =>
+                            toggleComments(
+                              trip.id
+                            )
+                          }
+                          className="
+                            flex
+                            items-center
+                            gap-1.5
+                            bg-white/5
+                            hover:bg-blue-500/10
+                            border
+                            border-white/10
+                            px-3
+                            py-2
+                            rounded-full
+                            transition
+                          "
+                        >
+
+                          <MessageCircle
+                            size={16}
+                            className="
+                              text-sky-400
+                            "
+                          />
+
+                          <span
+                            className="
+                              text-xs
+                              font-bold
+                            "
+                          >
+                            {(
+                              trip.comments ||
+                              []
+                            ).length}
+                          </span>
+
+                        </button>
+
+
+                        {/* SHARE */}
+
+                        <button
+                          onClick={() =>
+                            router.push(
+                              `/share/${trip.id}`
+                            )
+                          }
+                          className="
+                            flex
+                            items-center
+                            gap-1.5
+                            bg-white/5
+                            hover:bg-green-500/10
+                            border
+                            border-white/10
+                            px-3
+                            py-2
+                            rounded-full
+                            transition
+                          "
+                        >
+
+                          <Share2
+                            size={16}
+                            className="
+                              text-green-400
+                            "
+                          />
+
+                          <span
+                            className="
+                              text-xs
+                              font-bold
+                            "
+                          >
+                            Share
+                          </span>
+
+                        </button>
+
+
+                        {/* SAVE */}
+
+                        <button
+                          onClick={() =>
+                            toggleSaveTrip(
+                              trip.id
+                            )
+                          }
+                          className="
+                            flex
+                            items-center
+                            gap-1.5
+                            bg-white/5
+                            hover:bg-yellow-500/10
+                            border
+                            border-white/10
+                            px-3
+                            py-2
+                            rounded-full
+                            transition
+                          "
+                        >
+
+                          <Bookmark
+                            size={16}
+                            className={
+                              savedTrips.includes(
+                                trip.id
+                              )
+                                ? "fill-yellow-400 text-yellow-400"
+                                : "text-white"
+                            }
+                          />
+
+                          <span
+                            className="
+                              hidden
+                              sm:inline
+                              text-xs
+                              font-bold
+                            "
+                          >
+
+                            {savedTrips.includes(
+                              trip.id
+                            )
+                              ? "Saved"
+                              : "Save"}
+
+                          </span>
+
+                        </button>
+
+
+                        {/* JOIN */}
+
+                        <button
+                          onClick={() =>
+                            requestToJoin(
+                              trip
+                            )
+                          }
+                          className="
+                            ml-auto
+                            flex
+                            items-center
+                            gap-1.5
+                            bg-orange-500
+                            hover:bg-orange-400
+                            text-black
+                            px-4
+                            py-2
+                            rounded-full
+                            text-xs
+                            font-black
+                            shadow-lg
+                            shadow-orange-500/20
+                            hover:scale-105
+                            transition
+                          "
+                        >
+
+                          <Rocket
+                            size={16}
+                          />
+
+                          {trip.rideType ===
+                          "group"
+                            ? "Join Ride"
+                            : "Ride Along"}
+
+                        </button>
+
+                      </div>
+
+
+                      {/* =================================================
+                          COMMENTS
+                      ================================================= */}
+
+                      {openComments.includes(
+                        trip.id
+                      ) && (
+
+                        <div
+                          className="
+                            mt-3
+                            bg-black/40
+                            border
+                            border-white/10
+                            rounded-xl
+                            p-3
+                          "
+                          onClick={(e) =>
+                            e.stopPropagation()
+                          }
+                        >
+
+                          <input
+                            type="text"
+                            placeholder="Write a comment and press Enter..."
+                            className="
+                              w-full
+                              p-3
+                              rounded-lg
+                              bg-black
+                              border
+                              border-zinc-700
+                              text-white
+                              text-sm
+                              outline-none
+                              focus:border-orange-500
+                            "
+                            onKeyDown={(e) => {
+
+                              if (
+                                e.key ===
+                                "Enter"
+                              ) {
+
+                                addComment(
+                                  trip.id,
+                                  e.currentTarget
+                                    .value
+                                );
+
+                                e.currentTarget
+                                  .value =
+                                  "";
+
+                              }
+
+                            }}
+                          />
+
+
+                          <div
+                            className="
+                              mt-3
+                              space-y-1.5
+                              max-h-52
+                              overflow-y-auto
+                            "
+                          >
+
+                            {(
+                              trip.comments ||
+                              []
+                            ).map(
+                              (
+                                comment: any,
+                                index: number
+                              ) => (
+
+                                <div
+                                  key={index}
+                                  className="
+                                    bg-black
+                                    border
+                                    border-white/10
+                                    rounded-lg
+                                    p-2.5
+                                  "
+                                >
+
+                                  <div
+                                    className="
+                                      flex
+                                      items-center
+                                      gap-2
+                                      mb-1.5
+                                    "
+                                  >
+
+                                    {comment.image ? (
+
+                                      <img
+                                        src={
+                                          comment.image
+                                        }
+                                        alt="User"
+                                        className="
+                                          w-7
+                                          h-7
+                                          rounded-full
+                                          object-cover
+                                        "
+                                      />
+
+                                    ) : (
+
+                                      <div
+                                        className="
+                                          w-7
+                                          h-7
+                                          rounded-full
+                                          bg-zinc-800
+                                          flex
+                                          items-center
+                                          justify-center
+                                          text-xs
+                                        "
+                                      >
+                                        👤
+                                      </div>
+
+                                    )}
+
+                                    <span
+                                      className="
+                                        text-orange-500
+                                        font-bold
+                                        text-xs
+                                      "
+                                    >
+                                      {comment.user}
+                                    </span>
+
+                                  </div>
+
+
+                                  <p
+                                    className="
+                                      text-zinc-300
+                                      text-xs
+                                    "
+                                  >
+                                    {comment.text}
+                                  </p>
+
+                                </div>
+
+                              )
+                            )}
+
+
+                            {(
+                              trip.comments ||
+                              []
+                            ).length ===
+                              0 && (
+
+                              <p
+                                className="
+                                  text-center
+                                  text-zinc-500
+                                  py-3
+                                  text-xs
+                                "
+                              >
+                                No comments yet.
+                                Be the first!
+                              </p>
+
+                            )}
+
+                          </div>
+
+                        </div>
 
                       )}
 
                     </div>
 
-
-                    {/* =================================================
-                        DETAILS GRID
-                    ================================================= */}
-
-                    <div
-                      className="
-                        grid
-                        grid-cols-1
-                        sm:grid-cols-2
-                        lg:grid-cols-4
-                        gap-3
-                      "
-                    >
-
-                      {/* START */}
-
-                      <div
-                        className="
-                          bg-black/40
-                          backdrop-blur-xl
-                          border
-                          border-white/10
-                          rounded-2xl
-                          p-4
-                        "
-                      >
-
-                        <div
-                          className="
-                            flex
-                            items-center
-                            gap-2
-                            text-orange-400
-                            mb-2
-                          "
-                        >
-
-                          <MapPin
-                            size={16}
-                          />
-
-                          <span
-                            className="
-                              text-[10px]
-                              uppercase
-                              tracking-wider
-                            "
-                          >
-                            Starting From
-                          </span>
-
-                        </div>
-
-                        <p
-                          className="
-                            font-bold
-                            text-sm
-                            md:text-base
-                          "
-                        >
-                          {trip.startLocation ||
-                            "Not specified"}
-                        </p>
-
-                      </div>
-
-
-                      {/* DISTANCE */}
-
-                      <div
-                        className="
-                          bg-black/40
-                          backdrop-blur-xl
-                          border
-                          border-white/10
-                          rounded-2xl
-                          p-4
-                        "
-                      >
-
-                        <div
-                          className="
-                            flex
-                            items-center
-                            gap-2
-                            text-orange-400
-                            mb-2
-                          "
-                        >
-
-                          <Route
-                            size={16}
-                          />
-
-                          <span
-                            className="
-                              text-[10px]
-                              uppercase
-                              tracking-wider
-                            "
-                          >
-                            Distance
-                          </span>
-
-                        </div>
-
-                        <p
-                          className="
-                            font-bold
-                            text-sm
-                            md:text-base
-                          "
-                        >
-                          {trip.distance
-                            ? `${trip.distance} KM`
-                            : "Not specified"}
-                        </p>
-
-                      </div>
-
-
-                      {/* DEPARTURE */}
-
-                      <div
-                        className="
-                          bg-black/40
-                          backdrop-blur-xl
-                          border
-                          border-white/10
-                          rounded-2xl
-                          p-4
-                        "
-                      >
-
-                        <div
-                          className="
-                            flex
-                            items-center
-                            gap-2
-                            text-orange-400
-                            mb-2
-                          "
-                        >
-
-                          <CalendarDays
-                            size={16}
-                          />
-
-                          <span
-                            className="
-                              text-[10px]
-                              uppercase
-                              tracking-wider
-                            "
-                          >
-                            Departure
-                          </span>
-
-                        </div>
-
-                        <p
-                          className="
-                            font-bold
-                            text-sm
-                            md:text-base
-                          "
-                        >
-
-                          {trip.tripDate
-                            ? new Date(
-                                trip.tripDate
-                              ).toLocaleString(
-                                "en-IN",
-                                {
-                                  day: "numeric",
-                                  month: "short",
-                                  year: "numeric",
-                                  hour: "numeric",
-                                  minute: "2-digit",
-                                }
-                              )
-                            : "TBA"}
-
-                        </p>
-
-                      </div>
-
-
-                      {/* PRICE */}
-
-                      <div
-                        className="
-                          bg-orange-500
-                          text-black
-                          rounded-2xl
-                          p-4
-                        "
-                      >
-
-                        <div
-                          className="
-                            flex
-                            items-center
-                            gap-2
-                            mb-2
-                          "
-                        >
-
-                          <IndianRupee
-                            size={16}
-                          />
-
-                          <span
-                            className="
-                              text-[10px]
-                              uppercase
-                              tracking-wider
-                              font-black
-                            "
-                          >
-                            Contribution
-                          </span>
-
-                        </div>
-
-                        <p
-                          className="
-                            font-black
-                            text-lg
-                          "
-                        >
-                          ₹{trip.tripPrice || 0}
-                        </p>
-
-                      </div>
-
-                    </div>
-
-
-                    {/* =================================================
-                        CAPTION
-                    ================================================= */}
-
-                    {trip.caption && (
-
-                      <div
-                        className="
-                          mt-4
-                          bg-black/40
-                          border
-                          border-white/10
-                          rounded-2xl
-                          p-5
-                        "
-                      >
-
-                        <p
-                          className="
-                            text-orange-400
-                            text-xs
-                            font-black
-                            uppercase
-                            tracking-widest
-                            mb-2
-                          "
-                        >
-                          📝 Ride Story
-                        </p>
-
-                        <p
-                          className="
-                            text-zinc-300
-                            leading-relaxed
-                            text-sm
-                            md:text-base
-                          "
-                        >
-                          "{trip.caption}"
-                        </p>
-
-                      </div>
-
-                    )}
-
-
-                    {/* =================================================
-                        ITINERARY
-                    ================================================= */}
-
-                    {trip.itinerary && (
-
-                      <div
-                        className="
-                          mt-4
-                          bg-black/40
-                          border
-                          border-white/10
-                          rounded-2xl
-                          p-5
-                        "
-                      >
-
-                        <p
-                          className="
-                            text-orange-400
-                            text-xs
-                            font-black
-                            uppercase
-                            tracking-widest
-                            mb-2
-                          "
-                        >
-                          🗺️ Itinerary
-                        </p>
-
-                        <p
-                          className="
-                            text-zinc-300
-                            whitespace-pre-line
-                            text-sm
-                            md:text-base
-                          "
-                        >
-                          {trip.itinerary}
-                        </p>
-
-                      </div>
-
-                    )}
-
-
-                    {/* =================================================
-                        ACTIONS
-                    ================================================= */}
-
-                    <div
-                      className="
-                        mt-6
-                        flex
-                        flex-wrap
-                        items-center
-                        gap-3
-                      "
-                      onClick={(e) =>
-                        e.stopPropagation()
-                      }
-                    >
-
-                      {/* LIKE */}
-
-                      <button
-                        onClick={() =>
-                          likeTrip(
-                            trip.id,
-                            trip.likes || 0
-                          )
-                        }
-                        className="
-                          flex
-                          items-center
-                          gap-2
-                          bg-white/5
-                          hover:bg-red-500/10
-                          border
-                          border-white/10
-                          px-4
-                          py-3
-                          rounded-full
-                          transition
-                        "
-                      >
-
-                        <Heart
-                          size={18}
-                          className="
-                            text-red-400
-                          "
-                        />
-
-                        <span
-                          className="
-                            text-sm
-                            font-bold
-                          "
-                        >
-                          {trip.likes || 0}
-                        </span>
-
-                      </button>
-
-
-                      {/* COMMENT */}
-
-                      <button
-                        onClick={() =>
-                          toggleComments(
-                            trip.id
-                          )
-                        }
-                        className="
-                          flex
-                          items-center
-                          gap-2
-                          bg-white/5
-                          hover:bg-blue-500/10
-                          border
-                          border-white/10
-                          px-4
-                          py-3
-                          rounded-full
-                          transition
-                        "
-                      >
-
-                        <MessageCircle
-                          size={18}
-                          className="
-                            text-sky-400
-                          "
-                        />
-
-                        <span
-                          className="
-                            text-sm
-                            font-bold
-                          "
-                        >
-                          {(
-                            trip.comments ||
-                            []
-                          ).length}
-                        </span>
-
-                      </button>
-
-
-                      {/* SHARE */}
-
-                      <button
-                        onClick={() =>
-                          router.push(
-                            `/share/${trip.id}`
-                          )
-                        }
-                        className="
-                          flex
-                          items-center
-                          gap-2
-                          bg-white/5
-                          hover:bg-green-500/10
-                          border
-                          border-white/10
-                          px-4
-                          py-3
-                          rounded-full
-                          transition
-                        "
-                      >
-
-                        <Share2
-                          size={18}
-                          className="
-                            text-green-400
-                          "
-                        />
-
-                        <span
-                          className="
-                            hidden
-                            sm:inline
-                            text-sm
-                            font-bold
-                          "
-                        >
-                          Share
-                        </span>
-
-                      </button>
-
-
-                      {/* SAVE */}
-
-                      <button
-                        onClick={() =>
-                          toggleSaveTrip(
-                            trip.id
-                          )
-                        }
-                        className="
-                          flex
-                          items-center
-                          gap-2
-                          bg-white/5
-                          hover:bg-yellow-500/10
-                          border
-                          border-white/10
-                          px-4
-                          py-3
-                          rounded-full
-                          transition
-                        "
-                      >
-
-                        <Bookmark
-                          size={18}
-                          className={
-                            savedTrips.includes(
-                              trip.id
-                            )
-                              ? "fill-yellow-400 text-yellow-400"
-                              : "text-white"
-                          }
-                        />
-
-                        <span
-                          className="
-                            hidden
-                            sm:inline
-                            text-sm
-                            font-bold
-                          "
-                        >
-
-                          {savedTrips.includes(
-                            trip.id
-                          )
-                            ? "Saved"
-                            : "Save"}
-
-                        </span>
-
-                      </button>
-
-
-                      {/* JOIN */}
-
-                      <button
-                        onClick={() =>
-                          requestToJoin(
-                            trip
-                          )
-                        }
-                        className="
-                          ml-auto
-                          flex
-                          items-center
-                          gap-2
-                          bg-orange-500
-                          hover:bg-orange-400
-                          text-black
-                          px-5
-                          py-3
-                          rounded-full
-                          font-black
-                          shadow-lg
-                          shadow-orange-500/20
-                          hover:scale-105
-                          transition
-                        "
-                      >
-
-                        <Rocket
-                          size={18}
-                        />
-
-                        {trip.rideType ===
-                        "group"
-                          ? "Join Ride"
-                          : "Ride Along"}
-
-                      </button>
-
-                    </div>
-
-
-                    {/* =================================================
-                        COMMENTS
-                    ================================================= */}
-
-                    {openComments.includes(
-                      trip.id
-                    ) && (
-
-                      <div
-                        className="
-                          mt-5
-                          bg-black/40
-                          border
-                          border-white/10
-                          rounded-2xl
-                          p-4
-                        "
-                        onClick={(e) =>
-                          e.stopPropagation()
-                        }
-                      >
-
-                        <input
-                          type="text"
-                          placeholder="Write a comment and press Enter..."
-                          className="
-                            w-full
-                            p-4
-                            rounded-xl
-                            bg-black
-                            border
-                            border-zinc-700
-                            text-white
-                            outline-none
-                            focus:border-orange-500
-                          "
-                          onKeyDown={(e) => {
-
-                            if (
-                              e.key ===
-                              "Enter"
-                            ) {
-
-                              addComment(
-                                trip.id,
-                                e.currentTarget
-                                  .value
-                              );
-
-                              e.currentTarget
-                                .value =
-                                "";
-
-                            }
-
-                          }}
-                        />
-
-
-                        <div
-                          className="
-                            mt-4
-                            space-y-2
-                            max-h-60
-                            overflow-y-auto
-                          "
-                        >
-
-                          {(
-                            trip.comments ||
-                            []
-                          ).map(
-                            (
-                              comment: any,
-                              index: number
-                            ) => (
-
-                              <div
-                                key={index}
-                                className="
-                                  bg-black
-                                  border
-                                  border-white/10
-                                  rounded-xl
-                                  p-3
-                                "
-                              >
-
-                                <div
-                                  className="
-                                    flex
-                                    items-center
-                                    gap-2
-                                    mb-2
-                                  "
-                                >
-
-                                  {comment.image ? (
-
-                                    <img
-                                      src={
-                                        comment.image
-                                      }
-                                      alt="User"
-                                      className="
-                                        w-8
-                                        h-8
-                                        rounded-full
-                                        object-cover
-                                      "
-                                    />
-
-                                  ) : (
-
-                                    <div
-                                      className="
-                                        w-8
-                                        h-8
-                                        rounded-full
-                                        bg-zinc-800
-                                        flex
-                                        items-center
-                                        justify-center
-                                      "
-                                    >
-                                      👤
-                                    </div>
-
-                                  )}
-
-                                  <span
-                                    className="
-                                      text-orange-500
-                                      font-bold
-                                      text-sm
-                                    "
-                                  >
-                                    {comment.user}
-                                  </span>
-
-                                </div>
-
-                                <p
-                                  className="
-                                    text-zinc-300
-                                    text-sm
-                                  "
-                                >
-                                  {comment.text}
-                                </p>
-
-                              </div>
-
-                            )
-                          )}
-
-
-                          {(
-                            trip.comments ||
-                            []
-                          ).length === 0 && (
-
-                            <p
-                              className="
-                                text-center
-                                text-zinc-500
-                                py-4
-                              "
-                            >
-                              No comments yet.
-                              Be the first!
-                            </p>
-
-                          )}
-
-                        </div>
-
-                      </div>
-
-                    )}
-
                   </div>
 
                 </div>
 
-              </div>
+              );
 
-            );
-
-          })}
+            }
+          )}
 
 
           {/* =================================================
@@ -2170,7 +2333,12 @@ function FeedContent() {
 
               <div>
 
-                <div className="text-6xl mb-5">
+                <div
+                  className="
+                    text-6xl
+                    mb-5
+                  "
+                >
                   🏍️
                 </div>
 
@@ -2234,9 +2402,18 @@ export default function FeedPage() {
           "
         >
 
-          <div className="text-center">
+          <div
+            className="
+              text-center
+            "
+          >
 
-            <div className="text-5xl mb-4">
+            <div
+              className="
+                text-5xl
+                mb-4
+              "
+            >
               🏍️
             </div>
 
