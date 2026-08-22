@@ -576,7 +576,7 @@ export default function FeedPage() {
          */
 
         setCommentPost(
-          (current) => {
+  (current: any) => {
 
             if (
               current &&
@@ -758,7 +758,7 @@ export default function FeedPage() {
          */
 
         setCommentPost(
-          (current) => {
+          (current: any) => {
 
             if (
               current &&
