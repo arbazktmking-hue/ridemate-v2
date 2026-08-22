@@ -937,25 +937,27 @@ function FeedContent() {
 
               return (
 
-                <div
-                  key={trip.id}
-                  className={`
-                    group
-                    relative
-                    w-full
-                    overflow-hidden
-                    border-y
-                    border-white/10
-                    transition-all
-                    duration-500
+              <div
+  key={trip.id}
+  className={`
+    group
+    relative
+    w-full
+    overflow-hidden
+    rounded-2xl
+    border-2
+    border-orange-500/80
+    transition-all
+    duration-500
+    shadow-[0_0_18px_rgba(249,115,22,0.10)]
 
-                    ${
-                      isExpanded
-                        ? "bg-white/[0.07]"
-                        : "bg-white/[0.035] hover:bg-white/[0.055]"
-                    }
-                  `}
-                >
+    ${
+      isExpanded
+        ? "bg-white/[0.07] shadow-[0_0_28px_rgba(249,115,22,0.18)]"
+        : "bg-white/[0.035] hover:bg-white/[0.055] hover:border-orange-400"
+    }
+  `}
+>
 
                   {/* =================================================
                       CINEMATIC LIGHT
@@ -1058,8 +1060,8 @@ function FeedContent() {
   className="
     absolute
     inset-0
-    border-2
-    border-orange-500
+    border-r
+    border-orange-500/50
     pointer-events-none
     z-20
   "
@@ -1071,234 +1073,286 @@ function FeedContent() {
                     </div>
 
 
+                  {/* =================================================
+    CENTER — RIDER + BIKE + DATE
+    EXACT SCREEN CENTER
+================================================= */}
+
+<div
+  className="
+    absolute
+    left-1/2
+    top-1/2
+    -translate-x-1/2
+    -translate-y-1/2
+    w-[42%]
+    sm:w-[40%]
+    md:w-[38%]
+    lg:w-[34%]
+    flex
+    flex-col
+    items-center
+    justify-center
+    text-center
+    gap-1
+    md:gap-2
+    pointer-events-none
+"
+>
+
+  {/* RIDER USERNAME */}
+
+  <div
+    className="
+      max-w-full
+      text-[9px]
+      sm:text-[10px]
+      md:text-xs
+      lg:text-sm
+      font-bold
+      uppercase
+      tracking-[0.12em]
+      text-zinc-500
+      truncate
+  "
+  >
+    {trip.userName || "Rider"}
+  </div>
+
+
+  {/* BIKE */}
+
+  <div
+    className="
+      flex
+      items-center
+      justify-center
+      gap-1.5
+      md:gap-2
+      max-w-full
+      text-orange-400
+    "
+  >
+
+    <Bike
+      size={15}
+      className="
+        flex-shrink-0
+        sm:w-[16px]
+        sm:h-[16px]
+        md:w-[17px]
+        md:h-[17px]
+    "
+    />
+
+    <span
+      className="
+        font-black
+        text-xs
+        sm:text-sm
+        md:text-base
+        lg:text-lg
+        truncate
+        max-w-full
+    "
+    >
+      {trip.bike || "Bike not specified"}
+    </span>
+
+  </div>
+
+
+  {/* DATE */}
+
+  <div
+    className="
+      flex
+      items-center
+      justify-center
+      gap-1.5
+      md:gap-2
+      text-zinc-400
+      max-w-full
+    "
+  >
+
+    <CalendarDays
+      size={14}
+      className="
+        flex-shrink-0
+        md:w-4
+        md:h-4
+      "
+    />
+
+    <span
+      className="
+        text-[10px]
+        sm:text-xs
+        md:text-sm
+        lg:text-base
+        whitespace-nowrap
+      "
+    >
+
+      {trip.tripDate
+        ? new Date(
+            trip.tripDate
+          ).toLocaleDateString(
+            "en-IN",
+            {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            }
+          )
+        : "Departure TBA"}
+
+    </span>
+
+  </div>
+
+</div>
+
+
                     {/* =================================================
-                        CENTER — BIKE + DATE
-                    ================================================= */}
+    RIGHT — DESTINATION
+================================================= */}
 
-                    <div
-                      className="
-                        absolute
-                        left-1/2
-                        top-1/2
-                        -translate-x-1/2
-                        -translate-y-1/2
-                        w-[38%]
-                        sm:w-[36%]
-                        md:w-[34%]
-                        lg:w-[30%]
-                        flex
-                        flex-col
-                        items-center
-                        justify-center
-                        text-center
-                        gap-2
-                        pointer-events-none
-                      "
-                    >
+<div
+  className="
+    ml-auto
+    w-[38%]
+    sm:w-[37%]
+    md:w-[36%]
+    lg:w-[36%]
+    flex
+    items-center
+    justify-end
+    px-3
+    sm:px-4
+    md:px-6
+    lg:px-8
+    min-w-0
+    relative
+    h-full
+  "
+>
 
-                      {/* BIKE */}
+  <div
+    className="
+      w-full
+      min-w-0
+      text-right
+      pr-7
+      sm:pr-8
+      md:pr-9
+    "
+  >
 
-                      <div
-                        className="
-                          flex
-                          items-center
-                          justify-center
-                          gap-2
-                          max-w-full
-                          text-orange-400
-                        "
-                      >
+    {/* DESTINATION LABEL */}
 
-                        <Bike
-                          size={17}
-                          className="
-                            flex-shrink-0
-                          "
-                        />
-
-                        <span
-                          className="
-                            font-black
-                            text-xs
-                            sm:text-sm
-                            md:text-base
-                            lg:text-lg
-                            truncate
-                            max-w-full
-                          "
-                        >
-                          {trip.bike ||
-                            "Bike not specified"}
-                        </span>
-
-                      </div>
+    <p
+      className="
+        hidden
+        md:block
+        text-[9px]
+        text-zinc-500
+        uppercase
+        tracking-[0.25em]
+        mb-1
+      "
+    >
+      Destination
+    </p>
 
 
-                      {/* DATE */}
+    {/* DESTINATION NAME */}
 
-                      <div
-                        className="
-                          flex
-                          items-center
-                          justify-center
-                          gap-2
-                          text-zinc-400
-                          max-w-full
-                        "
-                      >
+    <h2
+      className="
+        text-base
+        sm:text-xl
+        md:text-4xl
+        lg:text-5xl
+        xl:text-6xl
+        font-black
+        leading-[0.95]
+        tracking-tight
+        text-white
+        break-words
+        whitespace-normal
+      "
+    >
+      {trip.destination ||
+        "Destination TBA"}
+    </h2>
 
-                        <CalendarDays
-                          size={16}
-                          className="
-                            flex-shrink-0
-                          "
-                        />
-
-                        <span
-                          className="
-                            text-[11px]
-                            sm:text-xs
-                            md:text-sm
-                            lg:text-base
-                            whitespace-nowrap
-                          "
-                        >
-
-                          {trip.tripDate
-                            ? new Date(
-                                trip.tripDate
-                              ).toLocaleDateString(
-                                "en-IN",
-                                {
-                                  day: "numeric",
-                                  month: "short",
-                                  year: "numeric",
-                                }
-                              )
-                            : "Departure TBA"}
-
-                        </span>
-
-                      </div>
-
-                    </div>
+  </div>
 
 
-                    {/* =================================================
-                        RIGHT — DESTINATION
-                    ================================================= */}
+  {/* =================================================
+      SMALL EXPAND BUTTON
+      BOTTOM RIGHT
+  ================================================= */}
 
-                    <div
-                      className="
-                        ml-auto
-                        w-[34%]
-                        sm:w-[34%]
-                        md:w-[35%]
-                        lg:w-[35%]
-                        flex
-                        items-center
-                        justify-end
-                        gap-2
-                        md:gap-4
-                        px-3
-                        sm:px-4
-                        md:px-6
-                        lg:px-8
-                        min-w-0
-                      "
-                    >
+  <div
+    className="
+      absolute
+      right-2
+      bottom-2
+      sm:right-3
+      sm:bottom-3
+      md:right-4
+      md:bottom-4
+      w-7
+      h-7
+      sm:w-8
+      sm:h-8
+      md:w-9
+      md:h-9
+      rounded-full
+      bg-black/40
+      border
+      border-orange-500/50
+      flex
+      items-center
+      justify-center
+      flex-shrink-0
+      transition-all
+      duration-300
+      group-hover:border-orange-500
+      group-hover:bg-orange-500/10
+    "
+  >
 
-                      <div
-                        className="
-                          flex-1
-                          min-w-0
-                          text-right
-                        "
-                      >
+    {isExpanded ? (
 
-                        <p
-                          className="
-                            hidden
-                            md:block
-                            text-[9px]
-                            text-zinc-500
-                            uppercase
-                            tracking-[0.25em]
-                            mb-1
-                          "
-                        >
-                          Destination
-                        </p>
+      <ChevronUp
+        size={14}
+        className="
+          text-orange-500
+          sm:w-4
+          sm:h-4
+        "
+      />
 
+    ) : (
 
-                        <h2
-                          className="
-                            text-lg
-                            sm:text-2xl
-                            md:text-4xl
-                            lg:text-5xl
-                            xl:text-6xl
-                            font-black
-                            leading-[0.9]
-                            tracking-tight
-                            text-white
-                            break-words
-                            whitespace-normal
-                          "
-                        >
-                          {trip.destination ||
-                            "Destination TBA"}
-                        </h2>
+      <ChevronDown
+        size={14}
+        className="
+          text-zinc-400
+          sm:w-4
+          sm:h-4
+        "
+      />
 
-                      </div>
+    )}
 
+  </div>
 
-                      {/* EXPAND BUTTON */}
-
-                      <div
-                        className="
-                          w-9
-                          h-9
-                          md:w-11
-                          md:h-11
-                          rounded-full
-                          bg-white/5
-                          border
-                          border-white/10
-                          flex
-                          items-center
-                          justify-center
-                          flex-shrink-0
-                          transition-all
-                          duration-300
-                          group-hover:border-orange-500/50
-                        "
-                      >
-
-                        {isExpanded ? (
-
-                          <ChevronUp
-                            size={19}
-                            className="
-                              text-orange-500
-                            "
-                          />
-
-                        ) : (
-
-                          <ChevronDown
-                            size={19}
-                            className="
-                              text-zinc-400
-                            "
-                          />
-
-                        )}
-
-                      </div>
-
-                    </div>
-
+</div>
                   </button>
 
 
