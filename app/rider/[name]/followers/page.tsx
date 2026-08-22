@@ -6,10 +6,11 @@ import Link from "next/link";
 
 import {
   collection,
-  getDocs
+  getDocs,
 } from "firebase/firestore";
 
 import { db } from "../../../firebase";
+
 export default function FollowersPage() {
 
   const params = useParams();
@@ -25,29 +26,40 @@ export default function FollowersPage() {
 
     const loadFollowers = async () => {
 
-      const snapshot = await getDocs(
-        collection(db, "follows")
-      );
+      try {
 
-      const list: any[] = [];
+        const snapshot = await getDocs(
+          collection(db, "follows")
+        );
 
-      snapshot.forEach((doc) => {
+        const list: any[] = [];
 
-        const follow = doc.data();
+        snapshot.forEach((doc) => {
 
-        if (
-          follow.following === riderName
-        ) {
+          const follow = doc.data();
 
-          list.push({
-            name: follow.follower,
-          });
+          if (
+            follow.following === riderName
+          ) {
 
-        }
+            list.push({
+              name: follow.follower,
+            });
 
-      });
+          }
 
-      setFollowers(list);
+        });
+
+        setFollowers(list);
+
+      } catch (error) {
+
+        console.error(
+          "Failed to load followers:",
+          error
+        );
+
+      }
 
     };
 
@@ -57,28 +69,95 @@ export default function FollowersPage() {
 
   return (
 
-    <main className="min-h-screen bg-black text-white px-6 py-10">
+    <main
+      className="
+        min-h-screen
+        bg-black
+        text-white
+        px-6
+        pt-28
+        pb-10
+      "
+    >
 
-      <div className="max-w-4xl mx-auto">
+      <div
+        className="
+          max-w-4xl
+          mx-auto
+        "
+      >
 
-        <h1 className="text-5xl font-black text-orange-500 mb-8">
+        {/* =========================================
+            PAGE HEADING
+        ========================================= */}
+
+        <h1
+          className="
+            text-4xl
+            sm:text-5xl
+            font-black
+            text-orange-500
+            mb-8
+          "
+        >
           Followers 👥
         </h1>
 
-        <div className="space-y-4">
+
+        {/* =========================================
+            FOLLOWERS LIST
+        ========================================= */}
+
+        <div
+          className="
+            space-y-4
+          "
+        >
 
           {followers.map(
             (follower, index) => (
 
               <Link
                 key={index}
-                href={`/rider/${encodeURIComponent(follower.name)}`}
-                className="block bg-zinc-900 p-4 rounded-2xl border border-zinc-800 hover:border-orange-500"
+                href={`/rider/${encodeURIComponent(
+                  follower.name
+                )}`}
+                className="
+                  block
+                  bg-zinc-900
+                  p-4
+                  rounded-2xl
+                  border
+                  border-zinc-800
+                  hover:border-orange-500
+                  transition
+                "
               >
+
                 {follower.name}
+
               </Link>
 
             )
+          )}
+
+
+          {/* =========================================
+              EMPTY STATE
+          ========================================= */}
+
+          {followers.length === 0 && (
+
+            <div
+              className="
+                text-center
+                py-12
+                text-zinc-500
+              "
+            >
+              No followers yet.
+            </div>
+
           )}
 
         </div>
