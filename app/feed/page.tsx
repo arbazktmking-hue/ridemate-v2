@@ -1071,36 +1071,34 @@ function FeedContent() {
                       )}
 
                     </div>
-
-
-                  {/* =================================================
+{/* =================================================
     CENTER — RIDER + BIKE + DATE
-    EXACT SCREEN CENTER
 ================================================= */}
 
 <div
   className="
     absolute
-    left-1/2
+    left-[25%]
+    sm:left-[24%]
+    md:left-[23%]
+    lg:left-[21%]
     top-1/2
-    -translate-x-1/2
     -translate-y-1/2
-    w-[42%]
-    sm:w-[40%]
-    md:w-[38%]
-    lg:w-[34%]
+    w-[38%]
+    sm:w-[38%]
+    md:w-[37%]
+    lg:w-[35%]
     flex
     flex-col
     items-center
     justify-center
     text-center
     gap-1
-    md:gap-2
     pointer-events-none
-"
+  "
 >
 
-  {/* RIDER USERNAME */}
+  {/* USERNAME */}
 
   <div
     className="
@@ -1114,7 +1112,7 @@ function FeedContent() {
       tracking-[0.12em]
       text-zinc-500
       truncate
-  "
+    "
   >
     {trip.userName || "Rider"}
   </div>
@@ -1138,11 +1136,9 @@ function FeedContent() {
       size={15}
       className="
         flex-shrink-0
-        sm:w-[16px]
-        sm:h-[16px]
         md:w-[17px]
         md:h-[17px]
-    "
+      "
     />
 
     <span
@@ -1154,7 +1150,7 @@ function FeedContent() {
         lg:text-lg
         truncate
         max-w-full
-    "
+      "
     >
       {trip.bike || "Bike not specified"}
     </span>
@@ -1172,17 +1168,12 @@ function FeedContent() {
       gap-1.5
       md:gap-2
       text-zinc-400
-      max-w-full
     "
   >
 
     <CalendarDays
       size={14}
-      className="
-        flex-shrink-0
-        md:w-4
-        md:h-4
-      "
+      className="flex-shrink-0"
     />
 
     <span
@@ -1190,11 +1181,9 @@ function FeedContent() {
         text-[10px]
         sm:text-xs
         md:text-sm
-        lg:text-base
         whitespace-nowrap
       "
     >
-
       {trip.tripDate
         ? new Date(
             trip.tripDate
@@ -1207,134 +1196,79 @@ function FeedContent() {
             }
           )
         : "Departure TBA"}
-
     </span>
 
   </div>
 
 </div>
-
 {/* =================================================
-    RIGHT — DESTINATION
+    RIGHT — DESTINATION + ARROW
 ================================================= */}
 
 <div
   className="
-    relative
-    ml-auto
-    w-[34%]
-    sm:w-[34%]
-    md:w-[35%]
-    lg:w-[35%]
-    min-w-0
+    absolute
+    right-0
+    top-0
     h-full
-    flex-shrink-0
+    w-[35%]
+    sm:w-[35%]
+    md:w-[35%]
+    lg:w-[36%]
+    flex
+    flex-col
+    items-center
+    justify-center
+    px-2
+    sm:px-4
+    md:px-6
   "
 >
 
-  {/* =================================================
-      DESTINATION — PERFECTLY CENTERED
-  ================================================= */}
+  {/* DESTINATION */}
 
-  <div
+  <h2
     className="
-      absolute
-      inset-0
-      flex
-      items-center
-      justify-center
-      px-2
-      sm:px-4
-      md:px-6
-      lg:px-8
-      pb-1
-      md:pb-0
+      w-full
+      text-center
+      font-black
+      leading-[0.9]
+      tracking-tight
+      text-white
+      text-base
+      sm:text-xl
+      md:text-3xl
+      lg:text-4xl
+      xl:text-5xl
+      break-words
+      whitespace-normal
+      overflow-wrap-anywhere
     "
   >
-
-    <div
-      className="
-        w-full
-        min-w-0
-        text-center
-      "
-    >
-
-      {/* DESTINATION LABEL */}
-
-      <p
-        className="
-          hidden
-          md:block
-          text-[9px]
-          text-zinc-500
-          uppercase
-          tracking-[0.25em]
-          mb-1
-        "
-      >
-        Destination
-      </p>
+    {trip.destination ||
+      "Destination TBA"}
+  </h2>
 
 
-      {/* DESTINATION NAME */}
-
-      <h2
-        className="
-          w-full
-          font-black
-          leading-[0.9]
-          tracking-tight
-          text-white
-          text-lg
-          sm:text-2xl
-          md:text-4xl
-          lg:text-5xl
-          xl:text-6xl
-          break-words
-          whitespace-normal
-          overflow-wrap-anywhere
-        "
-      >
-        {trip.destination ||
-          "Destination TBA"}
-      </h2>
-
-    </div>
-
-  </div>
-
-
-  {/* =================================================
-      EXPAND ARROW — BOTTOM RIGHT
-  ================================================= */}
+  {/* ARROW — BELOW DESTINATION */}
 
   <div
     className="
-      absolute
-      right-2
-      bottom-2
-      sm:right-3
-      sm:bottom-3
-      md:right-4
-      md:bottom-4
+      mt-2
       w-7
       h-7
       sm:w-8
       sm:h-8
-      md:w-9
-      md:h-9
       rounded-full
       bg-black/60
       border
-      border-white/10
+      border-orange-500/50
       flex
       items-center
       justify-center
-      flex-shrink-0
       transition-all
       duration-300
-      group-hover:border-orange-500/60
+      group-hover:border-orange-500
       group-hover:bg-orange-500/10
     "
   >
@@ -1342,23 +1276,15 @@ function FeedContent() {
     {isExpanded ? (
 
       <ChevronUp
-        size={15}
-        className="
-          text-orange-500
-          sm:w-4
-          sm:h-4
-        "
+        size={14}
+        className="text-orange-500"
       />
 
     ) : (
 
       <ChevronDown
-        size={15}
-        className="
-          text-zinc-400
-          sm:w-4
-          sm:h-4
-        "
+        size={14}
+        className="text-zinc-400"
       />
 
     )}
