@@ -1214,86 +1214,99 @@ function FeedContent() {
 
 </div>
 
-
-                    {/* =================================================
+{/* =================================================
     RIGHT — DESTINATION
 ================================================= */}
 
 <div
   className="
-    ml-auto
-    w-[38%]
-    sm:w-[37%]
-    md:w-[36%]
-    lg:w-[36%]
-    flex
-    items-center
-    justify-end
-    px-3
-    sm:px-4
-    md:px-6
-    lg:px-8
-    min-w-0
     relative
+    ml-auto
+    w-[34%]
+    sm:w-[34%]
+    md:w-[35%]
+    lg:w-[35%]
+    min-w-0
     h-full
+    flex-shrink-0
   "
 >
 
+  {/* =================================================
+      DESTINATION — PERFECTLY CENTERED
+  ================================================= */}
+
   <div
     className="
-      w-full
-      min-w-0
-      text-right
-      pr-7
-      sm:pr-8
-      md:pr-9
+      absolute
+      inset-0
+      flex
+      items-center
+      justify-center
+      px-2
+      sm:px-4
+      md:px-6
+      lg:px-8
+      pb-1
+      md:pb-0
     "
   >
 
-    {/* DESTINATION LABEL */}
-
-    <p
+    <div
       className="
-        hidden
-        md:block
-        text-[9px]
-        text-zinc-500
-        uppercase
-        tracking-[0.25em]
-        mb-1
+        w-full
+        min-w-0
+        text-center
       "
     >
-      Destination
-    </p>
+
+      {/* DESTINATION LABEL */}
+
+      <p
+        className="
+          hidden
+          md:block
+          text-[9px]
+          text-zinc-500
+          uppercase
+          tracking-[0.25em]
+          mb-1
+        "
+      >
+        Destination
+      </p>
 
 
-    {/* DESTINATION NAME */}
+      {/* DESTINATION NAME */}
 
-    <h2
-      className="
-        text-base
-        sm:text-xl
-        md:text-4xl
-        lg:text-5xl
-        xl:text-6xl
-        font-black
-        leading-[0.95]
-        tracking-tight
-        text-white
-        break-words
-        whitespace-normal
-      "
-    >
-      {trip.destination ||
-        "Destination TBA"}
-    </h2>
+      <h2
+        className="
+          w-full
+          font-black
+          leading-[0.9]
+          tracking-tight
+          text-white
+          text-lg
+          sm:text-2xl
+          md:text-4xl
+          lg:text-5xl
+          xl:text-6xl
+          break-words
+          whitespace-normal
+          overflow-wrap-anywhere
+        "
+      >
+        {trip.destination ||
+          "Destination TBA"}
+      </h2>
+
+    </div>
 
   </div>
 
 
   {/* =================================================
-      SMALL EXPAND BUTTON
-      BOTTOM RIGHT
+      EXPAND ARROW — BOTTOM RIGHT
   ================================================= */}
 
   <div
@@ -1312,16 +1325,16 @@ function FeedContent() {
       md:w-9
       md:h-9
       rounded-full
-      bg-black/40
+      bg-black/60
       border
-      border-orange-500/50
+      border-white/10
       flex
       items-center
       justify-center
       flex-shrink-0
       transition-all
       duration-300
-      group-hover:border-orange-500
+      group-hover:border-orange-500/60
       group-hover:bg-orange-500/10
     "
   >
@@ -1329,7 +1342,7 @@ function FeedContent() {
     {isExpanded ? (
 
       <ChevronUp
-        size={14}
+        size={15}
         className="
           text-orange-500
           sm:w-4
@@ -1340,7 +1353,7 @@ function FeedContent() {
     ) : (
 
       <ChevronDown
-        size={14}
+        size={15}
         className="
           text-zinc-400
           sm:w-4
