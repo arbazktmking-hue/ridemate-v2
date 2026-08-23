@@ -118,6 +118,10 @@ function FeedContent() {
           );
 
 
+        /* =====================================================
+           SHARED TRIP
+        ===================================================== */
+
         if (sharedTripId) {
 
           const sharedTrip =
@@ -430,6 +434,7 @@ function FeedContent() {
             "notifications"
           ),
           {
+
             user:
               trip.userName,
 
@@ -441,6 +446,7 @@ function FeedContent() {
 
             read:
               false,
+
           }
         );
 
@@ -524,10 +530,12 @@ function FeedContent() {
       await updateDoc(
         tripRef,
         {
+
           comments:
             arrayUnion(
               newComment
             ),
+
         }
       );
 
@@ -551,6 +559,7 @@ function FeedContent() {
             "notifications"
           ),
           {
+
             user:
               trip.userName,
 
@@ -562,6 +571,7 @@ function FeedContent() {
 
             read:
               false,
+
           }
         );
 
@@ -575,6 +585,7 @@ function FeedContent() {
               trip.id ===
               tripId
                 ? {
+
                     ...trip,
 
                     comments: [
@@ -582,6 +593,7 @@ function FeedContent() {
                         []),
                       newComment,
                     ],
+
                   }
                 : trip
           )
@@ -694,6 +706,10 @@ function FeedContent() {
         }
 
 
+        /* =====================================================
+           SAVE COMPLETE TRIP INFORMATION
+        ===================================================== */
+
         await addDoc(
           collection(
             db,
@@ -720,6 +736,13 @@ function FeedContent() {
 
             startLocation:
               trip.startLocation ||
+              "",
+
+            /* NEW CITY FIELD */
+
+            startCity:
+              trip.startCity ||
+              trip.city ||
               "",
 
             distance:
@@ -751,6 +774,10 @@ function FeedContent() {
           }
         );
 
+
+        /* =====================================================
+           NOTIFICATION
+        ===================================================== */
 
         await addDoc(
           collection(
@@ -808,7 +835,9 @@ function FeedContent() {
 
     setOpenComments(
       (prev) =>
-        prev.includes(tripId)
+        prev.includes(
+          tripId
+        )
           ? prev.filter(
               (id) =>
                 id !== tripId
@@ -843,7 +872,11 @@ function FeedContent() {
         "
       >
 
-        <div className="text-center">
+        <div
+          className="
+            text-center
+          "
+        >
 
           <div
             className="
@@ -853,6 +886,7 @@ function FeedContent() {
           >
             🏍️
           </div>
+
 
           <p
             className="
@@ -890,7 +924,7 @@ function FeedContent() {
     >
 
       {/* =====================================================
-          CINEMATIC BACKGROUND
+          BACKGROUND
       ===================================================== */}
 
       <div
@@ -935,29 +969,49 @@ function FeedContent() {
                 trip.id;
 
 
+              /*
+               * NEW:
+               * Support both the new startCity field
+               * and possible older city field.
+               */
+
+              const startCity =
+                trip.startCity ||
+                trip.city ||
+                "";
+
+
+              const startDisplay =
+                trip.startLocation
+                  ? startCity
+                    ? `${trip.startLocation}, ${startCity}`
+                    : trip.startLocation
+                  : "Not specified";
+
+
               return (
 
-              <div
-  key={trip.id}
-  className={`
-    group
-    relative
-    w-full
-    overflow-hidden
-    rounded-2xl
-    border-2
-    border-orange-500/80
-    transition-all
-    duration-500
-    shadow-[0_0_18px_rgba(249,115,22,0.10)]
+                <div
+                  key={trip.id}
+                  className={`
+                    group
+                    relative
+                    w-full
+                    overflow-hidden
+                    rounded-2xl
+                    border-2
+                    border-orange-500/80
+                    transition-all
+                    duration-500
+                    shadow-[0_0_18px_rgba(249,115,22,0.10)]
 
-    ${
-      isExpanded
-        ? "bg-white/[0.07] shadow-[0_0_28px_rgba(249,115,22,0.18)]"
-        : "bg-white/[0.035] hover:bg-white/[0.055] hover:border-orange-400"
-    }
-  `}
->
+                    ${
+                      isExpanded
+                        ? "bg-white/[0.07] shadow-[0_0_28px_rgba(249,115,22,0.18)]"
+                        : "bg-white/[0.035] hover:bg-white/[0.055] hover:border-orange-400"
+                    }
+                  `}
+                >
 
                   {/* =================================================
                       CINEMATIC LIGHT
@@ -1002,21 +1056,20 @@ function FeedContent() {
 
                     {/* =================================================
                         LEFT — PROFILE IMAGE
-                        IMAGE IS NOT EDITED
                     ================================================= */}
 
-                   <div
-  className="
-    relative
-    w-[25%]
-    sm:w-[22%]
-    md:w-[20%]
-    lg:w-[18%]
-    flex-shrink-0
-    overflow-hidden
-    bg-zinc-950
-  "
->
+                    <div
+                      className="
+                        relative
+                        w-[25%]
+                        sm:w-[22%]
+                        md:w-[20%]
+                        lg:w-[18%]
+                        flex-shrink-0
+                        overflow-hidden
+                        bg-zinc-950
+                      "
+                    >
 
                       {trip.userImage ? (
 
@@ -1036,6 +1089,9 @@ function FeedContent() {
                             object-cover
                             object-center
                             select-none
+                            transition-transform
+                            duration-700
+                            group-hover:scale-105
                           "
                         />
 
@@ -1054,244 +1110,274 @@ function FeedContent() {
                           "
                         >
                           👤
-                          {/* ORANGE PROFILE IMAGE BOUNDARY */}
-
-<div
-  className="
-    absolute
-    inset-0
-    border-r
-    border-orange-500/50
-    pointer-events-none
-    z-20
-  "
-/>
                         </div>
 
                       )}
 
+                      <div
+                        className="
+                          absolute
+                          inset-0
+                          border-r
+                          border-orange-500/50
+                          pointer-events-none
+                          z-20
+                        "
+                      />
+
                     </div>
-{/* =================================================
-    CENTER — RIDER + BIKE + DATE
-================================================= */}
-
-<div
-  className="
-    absolute
-    left-[25%]
-    sm:left-[24%]
-    md:left-[23%]
-    lg:left-[21%]
-    top-1/2
-    -translate-y-1/2
-    w-[38%]
-    sm:w-[38%]
-    md:w-[37%]
-    lg:w-[35%]
-    flex
-    flex-col
-    items-center
-    justify-center
-    text-center
-    gap-1
-    pointer-events-none
-  "
->
-
-  {/* USERNAME */}
-
-  <div
-    className="
-      max-w-full
-      text-[9px]
-      sm:text-[10px]
-      md:text-xs
-      lg:text-sm
-      font-bold
-      uppercase
-      tracking-[0.12em]
-      text-zinc-500
-      truncate
-    "
-  >
-    {trip.userName || "Rider"}
-  </div>
 
 
-  {/* BIKE */}
+                    {/* =================================================
+                        CENTER — RIDER + BIKE + DATE
+                    ================================================= */}
 
-  <div
-    className="
-      flex
-      items-center
-      justify-center
-      gap-1.5
-      md:gap-2
-      max-w-full
-      text-orange-400
-    "
-  >
+                    <div
+                      className="
+                        absolute
+                        left-[25%]
+                        sm:left-[24%]
+                        md:left-[23%]
+                        lg:left-[21%]
+                        top-1/2
+                        -translate-y-1/2
+                        w-[38%]
+                        sm:w-[38%]
+                        md:w-[37%]
+                        lg:w-[35%]
+                        flex
+                        flex-col
+                        items-center
+                        justify-center
+                        text-center
+                        gap-1
+                        pointer-events-none
+                      "
+                    >
 
-    <Bike
-      size={15}
-      className="
-        flex-shrink-0
-        md:w-[17px]
-        md:h-[17px]
-      "
-    />
+                      {/* USERNAME */}
 
-    <span
-      className="
-        font-black
-        text-xs
-        sm:text-sm
-        md:text-base
-        lg:text-lg
-        truncate
-        max-w-full
-      "
-    >
-      {trip.bike || "Bike not specified"}
-    </span>
-
-  </div>
-
-
-  {/* DATE */}
-
-  <div
-    className="
-      flex
-      items-center
-      justify-center
-      gap-1.5
-      md:gap-2
-      text-zinc-400
-    "
-  >
-
-    <CalendarDays
-      size={14}
-      className="flex-shrink-0"
-    />
-
-    <span
-      className="
-        text-[10px]
-        sm:text-xs
-        md:text-sm
-        whitespace-nowrap
-      "
-    >
-      {trip.tripDate
-        ? new Date(
-            trip.tripDate
-          ).toLocaleDateString(
-            "en-IN",
-            {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            }
-          )
-        : "Departure TBA"}
-    </span>
-
-  </div>
-
-</div>
-{/* =================================================
-    RIGHT — DESTINATION + ARROW
-================================================= */}
-
-<div
-  className="
-    absolute
-    right-0
-    top-0
-    h-full
-    w-[35%]
-    sm:w-[35%]
-    md:w-[35%]
-    lg:w-[36%]
-    flex
-    flex-col
-    items-center
-    justify-center
-    px-2
-    sm:px-4
-    md:px-6
-  "
->
-
-  {/* DESTINATION */}
-
-  <h2
-    className="
-      w-full
-      text-center
-      font-black
-      leading-[0.9]
-      tracking-tight
-      text-white
-      text-base
-      sm:text-xl
-      md:text-3xl
-      lg:text-4xl
-      xl:text-5xl
-      break-words
-      whitespace-normal
-      overflow-wrap-anywhere
-    "
-  >
-    {trip.destination ||
-      "Destination TBA"}
-  </h2>
+                      <div
+                        className="
+                          max-w-full
+                          text-[9px]
+                          sm:text-[10px]
+                          md:text-xs
+                          lg:text-sm
+                          font-bold
+                          uppercase
+                          tracking-[0.12em]
+                          text-zinc-500
+                          truncate
+                        "
+                      >
+                        {trip.userName ||
+                          "Rider"}
+                      </div>
 
 
-  {/* ARROW — BELOW DESTINATION */}
+                      {/* BIKE */}
 
-  <div
-    className="
-      mt-2
-      w-7
-      h-7
-      sm:w-8
-      sm:h-8
-      rounded-full
-      bg-black/60
-      border
-      border-orange-500/50
-      flex
-      items-center
-      justify-center
-      transition-all
-      duration-300
-      group-hover:border-orange-500
-      group-hover:bg-orange-500/10
-    "
-  >
+                      <div
+                        className="
+                          flex
+                          items-center
+                          justify-center
+                          gap-1.5
+                          md:gap-2
+                          max-w-full
+                          text-orange-400
+                        "
+                      >
 
-    {isExpanded ? (
+                        <Bike
+                          size={15}
+                          className="
+                            flex-shrink-0
+                            md:w-[17px]
+                            md:h-[17px]
+                          "
+                        />
 
-      <ChevronUp
-        size={14}
-        className="text-orange-500"
-      />
+                        <span
+                          className="
+                            font-black
+                            text-xs
+                            sm:text-sm
+                            md:text-base
+                            lg:text-lg
+                            truncate
+                            max-w-full
+                          "
+                        >
+                          {trip.bike ||
+                            "Bike not specified"}
+                        </span>
 
-    ) : (
+                      </div>
 
-      <ChevronDown
-        size={14}
-        className="text-zinc-400"
-      />
 
-    )}
+                      {/* DATE */}
 
-  </div>
+                      <div
+                        className="
+                          flex
+                          items-center
+                          justify-center
+                          gap-1.5
+                          md:gap-2
+                          text-zinc-400
+                        "
+                      >
 
-</div>
+                        <CalendarDays
+                          size={14}
+                          className="
+                            flex-shrink-0
+                          "
+                        />
+
+                        <span
+                          className="
+                            text-[10px]
+                            sm:text-xs
+                            md:text-sm
+                            whitespace-nowrap
+                          "
+                        >
+
+                          {trip.tripDate
+                            ? new Date(
+                                trip.tripDate
+                              ).toLocaleDateString(
+                                "en-IN",
+                                {
+                                  day:
+                                    "numeric",
+                                  month:
+                                    "short",
+                                  year:
+                                    "numeric",
+                                }
+                              )
+                            : "Departure TBA"}
+
+                        </span>
+
+                      </div>
+
+                    </div>
+
+
+                    {/* =================================================
+                        RIGHT — DESTINATION + ARROW
+                    ================================================= */}
+
+                    <div
+                      className="
+                        absolute
+                        right-0
+                        top-0
+                        h-full
+                        w-[35%]
+                        sm:w-[35%]
+                        md:w-[35%]
+                        lg:w-[36%]
+                        flex
+                        flex-col
+                        items-center
+                        justify-center
+                        px-2
+                        sm:px-4
+                        md:px-6
+                      "
+                    >
+
+                      <p
+                        className="
+                          text-[8px]
+                          sm:text-[9px]
+                          md:text-xs
+                          uppercase
+                          tracking-[0.25em]
+                          text-orange-500
+                          mb-1
+                        "
+                      >
+                        Destination
+                      </p>
+
+
+                      <h2
+                        className="
+                          w-full
+                          text-center
+                          font-black
+                          leading-[0.9]
+                          tracking-tight
+                          text-white
+                          text-base
+                          sm:text-xl
+                          md:text-3xl
+                          lg:text-4xl
+                          xl:text-5xl
+                          break-words
+                          whitespace-normal
+                          overflow-wrap-anywhere
+                        "
+                      >
+                        {trip.destination ||
+                          "Destination TBA"}
+                      </h2>
+
+
+                      {/* ARROW */}
+
+                      <div
+                        className="
+                          mt-2
+                          w-7
+                          h-7
+                          sm:w-8
+                          sm:h-8
+                          rounded-full
+                          bg-black/60
+                          border
+                          border-orange-500/50
+                          flex
+                          items-center
+                          justify-center
+                          transition-all
+                          duration-300
+                          group-hover:border-orange-500
+                          group-hover:bg-orange-500/10
+                        "
+                      >
+
+                        {isExpanded ? (
+
+                          <ChevronUp
+                            size={14}
+                            className="
+                              text-orange-500
+                            "
+                          />
+
+                        ) : (
+
+                          <ChevronDown
+                            size={14}
+                            className="
+                              text-zinc-400
+                            "
+                          />
+
+                        )}
+
+                      </div>
+
+                    </div>
+
                   </button>
 
 
@@ -1321,13 +1407,12 @@ function FeedContent() {
                         px-3
                         sm:px-4
                         md:px-6
-                        py-4
-                        md:py-5
+                        py-5
                       "
                     >
 
                       {/* =================================================
-                          RIDER PROFILE
+                          RIDER + RIDE TYPE
                       ================================================= */}
 
                       <div
@@ -1335,9 +1420,8 @@ function FeedContent() {
                           flex
                           flex-wrap
                           items-center
-                          justify-between
                           gap-3
-                          mb-4
+                          mb-5
                         "
                       >
 
@@ -1352,7 +1436,7 @@ function FeedContent() {
                           className="
                             flex
                             items-center
-                            gap-2
+                            gap-3
                             hover:opacity-80
                             transition
                           "
@@ -1366,10 +1450,12 @@ function FeedContent() {
                               }
                               alt="Rider"
                               className="
-                                w-9
-                                h-9
+                                w-10
+                                h-10
                                 rounded-full
                                 object-cover
+                                border
+                                border-orange-500
                               "
                             />
 
@@ -1377,10 +1463,12 @@ function FeedContent() {
 
                             <div
                               className="
-                                w-9
-                                h-9
+                                w-10
+                                h-10
                                 rounded-full
                                 bg-zinc-900
+                                border
+                                border-orange-500
                                 flex
                                 items-center
                                 justify-center
@@ -1395,7 +1483,7 @@ function FeedContent() {
 
                             <p
                               className="
-                                text-[8px]
+                                text-[9px]
                                 text-zinc-500
                                 uppercase
                                 tracking-widest
@@ -1408,7 +1496,6 @@ function FeedContent() {
                               className="
                                 font-bold
                                 text-orange-400
-                                text-sm
                               "
                             >
                               {trip.userName ||
@@ -1429,21 +1516,21 @@ function FeedContent() {
                             className="
                               inline-flex
                               items-center
-                              gap-1.5
+                              gap-2
                               bg-blue-500/10
                               border
                               border-blue-400/20
                               text-blue-300
-                              px-2.5
-                              py-1.5
+                              px-3
+                              py-2
                               rounded-full
-                              text-[10px]
+                              text-xs
                               font-bold
                             "
                           >
 
                             <Users
-                              size={12}
+                              size={14}
                             />
 
                             Group Ride
@@ -1456,21 +1543,21 @@ function FeedContent() {
                             className="
                               inline-flex
                               items-center
-                              gap-1.5
+                              gap-2
                               bg-green-500/10
                               border
                               border-green-400/20
                               text-green-300
-                              px-2.5
-                              py-1.5
+                              px-3
+                              py-2
                               rounded-full
-                              text-[10px]
+                              text-xs
                               font-bold
                             "
                           >
 
                             <UserRound
-                              size={12}
+                              size={14}
                             />
 
                             Individual Ride
@@ -1483,75 +1570,22 @@ function FeedContent() {
 
 
                       {/* =================================================
-                          SMALLER DETAILS GRID
+                          DETAILS GRID
                       ================================================= */}
 
                       <div
                         className="
                           grid
-                          grid-cols-2
+                          grid-cols-1
                           sm:grid-cols-2
                           lg:grid-cols-4
-                          gap-2
+                          gap-3
                         "
                       >
 
-                        {/* BIKE */}
-
-                        <div
-                          className="
-                            bg-black/40
-                            backdrop-blur-xl
-                            border
-                            border-white/10
-                            rounded-xl
-                            p-3
-                            min-w-0
-                          "
-                        >
-
-                          <div
-                            className="
-                              flex
-                              items-center
-                              gap-1.5
-                              text-orange-400
-                              mb-1.5
-                            "
-                          >
-
-                            <Bike
-                              size={14}
-                            />
-
-                            <span
-                              className="
-                                text-[9px]
-                                uppercase
-                                tracking-wider
-                              "
-                            >
-                              Bike
-                            </span>
-
-                          </div>
-
-                          <p
-                            className="
-                              font-bold
-                              text-xs
-                              md:text-sm
-                              break-words
-                            "
-                          >
-                            {trip.bike ||
-                              "Not specified"}
-                          </p>
-
-                        </div>
-
-
-                        {/* START */}
+                        {/* =================================================
+                            STARTING LOCATION
+                        ================================================= */}
 
                         <div
                           className="
@@ -1591,6 +1625,7 @@ function FeedContent() {
 
                           </div>
 
+
                           <p
                             className="
                               font-bold
@@ -1599,14 +1634,17 @@ function FeedContent() {
                               break-words
                             "
                           >
-                            {trip.startLocation ||
-                              "Not specified"}
+
+                            {startDisplay}
+
                           </p>
 
                         </div>
 
 
-                        {/* DISTANCE */}
+                        {/* =================================================
+                            DISTANCE
+                        ================================================= */}
 
                         <div
                           className="
@@ -1646,6 +1684,7 @@ function FeedContent() {
 
                           </div>
 
+
                           <p
                             className="
                               font-bold
@@ -1653,15 +1692,19 @@ function FeedContent() {
                               md:text-sm
                             "
                           >
+
                             {trip.distance
                               ? `${trip.distance} KM`
                               : "Not specified"}
+
                           </p>
 
                         </div>
 
 
-                        {/* DEPARTURE */}
+                        {/* =================================================
+                            DEPARTURE
+                        ================================================= */}
 
                         <div
                           className="
@@ -1701,6 +1744,7 @@ function FeedContent() {
 
                           </div>
 
+
                           <p
                             className="
                               font-bold
@@ -1716,11 +1760,16 @@ function FeedContent() {
                                 ).toLocaleString(
                                   "en-IN",
                                   {
-                                    day: "numeric",
-                                    month: "short",
-                                    year: "numeric",
-                                    hour: "numeric",
-                                    minute: "2-digit",
+                                    day:
+                                      "numeric",
+                                    month:
+                                      "short",
+                                    year:
+                                      "numeric",
+                                    hour:
+                                      "numeric",
+                                    minute:
+                                      "2-digit",
                                   }
                                 )
                               : "TBA"}
@@ -1729,56 +1778,60 @@ function FeedContent() {
 
                         </div>
 
-                      </div>
 
+                        {/* =================================================
+                            PRICE
+                        ================================================= */}
 
-                      {/* =================================================
-                          SMALLER CONTRIBUTION
-                      ================================================= */}
+                        <div
+                          className="
+                            bg-orange-500
+                            text-black
+                            rounded-xl
+                            p-3
+                            min-w-0
+                          "
+                        >
 
-                      <div
-                        className="
-                          mt-3
-                          bg-orange-500
-                          text-black
-                          rounded-xl
-                          px-3
-                          py-2.5
-                          inline-flex
-                          items-center
-                          gap-3
-                          min-w-0
-                        "
-                      >
+                          <div
+                            className="
+                              flex
+                              items-center
+                              gap-1.5
+                              mb-1.5
+                            "
+                          >
 
-                        <IndianRupee
-                          size={15}
-                        />
+                            <IndianRupee
+                              size={14}
+                            />
 
-                        <div>
+                            <span
+                              className="
+                                text-[9px]
+                                uppercase
+                                tracking-wider
+                                font-bold
+                              "
+                            >
+                              Contribution
+                            </span>
+
+                          </div>
+
 
                           <p
                             className="
-                              text-[8px]
-                              uppercase
-                              tracking-wider
                               font-black
-                              leading-none
+                              text-sm
+                              md:text-base
                             "
                           >
-                            Contribution
-                          </p>
 
-                          <p
-                            className="
-                              font-black
-                              text-base
-                              leading-tight
-                              mt-0.5
-                            "
-                          >
-                            ₹{trip.tripPrice ||
-                              0}
+                            {trip.tripPrice
+                              ? `₹${trip.tripPrice}`
+                              : "₹0"}
+
                           </p>
 
                         </div>
@@ -1787,7 +1840,62 @@ function FeedContent() {
 
 
                       {/* =================================================
-                          SMALLER RIDE STORY
+                          BIKE
+                      ================================================= */}
+
+                      <div
+                        className="
+                          mt-3
+                          bg-black/40
+                          border
+                          border-white/10
+                          rounded-xl
+                          p-3
+                        "
+                      >
+
+                        <div
+                          className="
+                            flex
+                            items-center
+                            gap-2
+                            text-orange-400
+                            mb-1
+                          "
+                        >
+
+                          <Bike
+                            size={15}
+                          />
+
+                          <span
+                            className="
+                              text-[9px]
+                              uppercase
+                              tracking-wider
+                            "
+                          >
+                            Bike
+                          </span>
+
+                        </div>
+
+
+                        <p
+                          className="
+                            font-bold
+                            text-sm
+                          "
+                        >
+                          {trip.bike ||
+                            "Bike not specified"}
+                        </p>
+
+                      </div>
+
+
+                      {/* =================================================
+                          RIDE STORY
                       ================================================= */}
 
                       {trip.caption && (
@@ -1795,36 +1903,36 @@ function FeedContent() {
                         <div
                           className="
                             mt-3
-                            bg-black/30
+                            bg-black/40
                             border
                             border-white/10
                             rounded-xl
-                            p-3
+                            p-4
                           "
                         >
 
                           <p
                             className="
                               text-orange-400
-                              text-[9px]
-                              font-black
+                              text-xs
+                              font-bold
+                              mb-2
                               uppercase
-                              tracking-widest
-                              mb-1.5
+                              tracking-wider
                             "
                           >
-                            📝 Ride Story
+                            Ride Story
                           </p>
 
                           <p
                             className="
                               text-zinc-300
-                              leading-relaxed
-                              text-xs
-                              md:text-sm
+                              text-sm
+                              leading-6
+                              whitespace-pre-wrap
                             "
                           >
-                            "{trip.caption}"
+                            {trip.caption}
                           </p>
 
                         </div>
@@ -1833,7 +1941,7 @@ function FeedContent() {
 
 
                       {/* =================================================
-                          SMALLER ITINERARY
+                          ITINERARY
                       ================================================= */}
 
                       {trip.itinerary && (
@@ -1845,18 +1953,18 @@ function FeedContent() {
                             border
                             border-white/10
                             rounded-xl
-                            p-3
+                            p-4
                           "
                         >
 
                           <p
                             className="
                               text-orange-400
-                              text-[9px]
-                              font-black
+                              text-xs
+                              font-bold
+                              mb-2
                               uppercase
-                              tracking-widest
-                              mb-1.5
+                              tracking-wider
                             "
                           >
                             🗺️ Itinerary
@@ -1865,10 +1973,9 @@ function FeedContent() {
                           <p
                             className="
                               text-zinc-300
-                              leading-relaxed
-                              text-xs
-                              md:text-sm
-                              whitespace-pre-line
+                              text-sm
+                              leading-6
+                              whitespace-pre-wrap
                             "
                           >
                             {trip.itinerary}
@@ -1880,54 +1987,59 @@ function FeedContent() {
 
 
                       {/* =================================================
-                          SMALLER ACTIONS
+                          ACTION BAR
                       ================================================= */}
 
                       <div
                         className="
-                          mt-4
+                          mt-5
                           flex
                           flex-wrap
                           items-center
-                          gap-2
+                          gap-3
                         "
                       >
 
                         {/* LIKE */}
 
                         <button
-                          onClick={() =>
+                          type="button"
+                          onClick={(e) => {
+
+                            e.stopPropagation();
+
                             likeTrip(
                               trip.id,
                               trip.likes ||
                                 0
-                            )
-                          }
+                            );
+
+                          }}
                           className="
                             flex
                             items-center
-                            gap-1.5
-                            bg-white/5
-                            hover:bg-red-500/10
+                            gap-2
+                            bg-black/50
                             border
                             border-white/10
-                            px-3
-                            py-2
+                            px-4
+                            py-3
                             rounded-full
+                            hover:border-red-500/50
                             transition
                           "
                         >
 
                           <Heart
-                            size={16}
+                            size={18}
                             className="
-                              text-red-400
+                              text-white
                             "
                           />
 
                           <span
                             className="
-                              text-xs
+                              text-sm
                               font-bold
                             "
                           >
@@ -1938,39 +2050,41 @@ function FeedContent() {
                         </button>
 
 
-                        {/* COMMENT */}
+                        {/* COMMENTS */}
 
                         <button
-                          onClick={() =>
+                          type="button"
+                          onClick={(e) => {
+
+                            e.stopPropagation();
+
                             toggleComments(
                               trip.id
-                            )
-                          }
+                            );
+
+                          }}
                           className="
                             flex
                             items-center
-                            gap-1.5
-                            bg-white/5
-                            hover:bg-blue-500/10
+                            gap-2
+                            bg-black/50
                             border
                             border-white/10
-                            px-3
-                            py-2
+                            px-4
+                            py-3
                             rounded-full
+                            hover:border-orange-500/50
                             transition
                           "
                         >
 
                           <MessageCircle
-                            size={16}
-                            className="
-                              text-sky-400
-                            "
+                            size={18}
                           />
 
                           <span
                             className="
-                              text-xs
+                              text-sm
                               font-bold
                             "
                           >
@@ -1978,48 +2092,7 @@ function FeedContent() {
                               trip.comments ||
                               []
                             ).length}
-                          </span>
 
-                        </button>
-
-
-                        {/* SHARE */}
-
-                        <button
-                          onClick={() =>
-                            router.push(
-                              `/share/${trip.id}`
-                            )
-                          }
-                          className="
-                            flex
-                            items-center
-                            gap-1.5
-                            bg-white/5
-                            hover:bg-green-500/10
-                            border
-                            border-white/10
-                            px-3
-                            py-2
-                            rounded-full
-                            transition
-                          "
-                        >
-
-                          <Share2
-                            size={16}
-                            className="
-                              text-green-400
-                            "
-                          />
-
-                          <span
-                            className="
-                              text-xs
-                              font-bold
-                            "
-                          >
-                            Share
                           </span>
 
                         </button>
@@ -2028,28 +2101,33 @@ function FeedContent() {
                         {/* SAVE */}
 
                         <button
-                          onClick={() =>
+                          type="button"
+                          onClick={(e) => {
+
+                            e.stopPropagation();
+
                             toggleSaveTrip(
                               trip.id
-                            )
-                          }
+                            );
+
+                          }}
                           className="
                             flex
                             items-center
-                            gap-1.5
-                            bg-white/5
-                            hover:bg-yellow-500/10
+                            gap-2
+                            bg-black/50
                             border
                             border-white/10
-                            px-3
-                            py-2
+                            px-4
+                            py-3
                             rounded-full
+                            hover:border-yellow-500/50
                             transition
                           "
                         >
 
                           <Bookmark
-                            size={16}
+                            size={18}
                             className={
                               savedTrips.includes(
                                 trip.id
@@ -2063,7 +2141,7 @@ function FeedContent() {
                             className="
                               hidden
                               sm:inline
-                              text-xs
+                              text-sm
                               font-bold
                             "
                           >
@@ -2082,23 +2160,27 @@ function FeedContent() {
                         {/* JOIN */}
 
                         <button
-                          onClick={() =>
+                          type="button"
+                          onClick={(e) => {
+
+                            e.stopPropagation();
+
                             requestToJoin(
                               trip
-                            )
-                          }
+                            );
+
+                          }}
                           className="
                             ml-auto
                             flex
                             items-center
-                            gap-1.5
+                            gap-2
                             bg-orange-500
                             hover:bg-orange-400
                             text-black
-                            px-4
-                            py-2
+                            px-5
+                            py-3
                             rounded-full
-                            text-xs
                             font-black
                             shadow-lg
                             shadow-orange-500/20
@@ -2108,7 +2190,7 @@ function FeedContent() {
                         >
 
                           <Rocket
-                            size={16}
+                            size={18}
                           />
 
                           {trip.rideType ===
@@ -2131,12 +2213,12 @@ function FeedContent() {
 
                         <div
                           className="
-                            mt-3
+                            mt-5
                             bg-black/40
                             border
                             border-white/10
-                            rounded-xl
-                            p-3
+                            rounded-2xl
+                            p-4
                           "
                           onClick={(e) =>
                             e.stopPropagation()
@@ -2148,13 +2230,12 @@ function FeedContent() {
                             placeholder="Write a comment and press Enter..."
                             className="
                               w-full
-                              p-3
-                              rounded-lg
+                              p-4
+                              rounded-xl
                               bg-black
                               border
                               border-zinc-700
                               text-white
-                              text-sm
                               outline-none
                               focus:border-orange-500
                             "
@@ -2183,9 +2264,9 @@ function FeedContent() {
 
                           <div
                             className="
-                              mt-3
-                              space-y-1.5
-                              max-h-52
+                              mt-4
+                              space-y-2
+                              max-h-60
                               overflow-y-auto
                             "
                           >
@@ -2202,103 +2283,78 @@ function FeedContent() {
                                 <div
                                   key={index}
                                   className="
-                                    bg-black
+                                    bg-black/40
                                     border
-                                    border-white/10
-                                    rounded-lg
-                                    p-2.5
+                                    border-white/5
+                                    rounded-xl
+                                    p-3
+                                    flex
+                                    gap-3
                                   "
                                 >
 
-                                  <div
-                                    className="
-                                      flex
-                                      items-center
-                                      gap-2
-                                      mb-1.5
-                                    "
-                                  >
+                                  {comment.image ? (
 
-                                    {comment.image ? (
-
-                                      <img
-                                        src={
-                                          comment.image
-                                        }
-                                        alt="User"
-                                        className="
-                                          w-7
-                                          h-7
-                                          rounded-full
-                                          object-cover
-                                        "
-                                      />
-
-                                    ) : (
-
-                                      <div
-                                        className="
-                                          w-7
-                                          h-7
-                                          rounded-full
-                                          bg-zinc-800
-                                          flex
-                                          items-center
-                                          justify-center
-                                          text-xs
-                                        "
-                                      >
-                                        👤
-                                      </div>
-
-                                    )}
-
-                                    <span
+                                    <img
+                                      src={
+                                        comment.image
+                                      }
+                                      alt={
+                                        comment.user
+                                      }
                                       className="
-                                        text-orange-500
+                                        w-9
+                                        h-9
+                                        rounded-full
+                                        object-cover
+                                      "
+                                    />
+
+                                  ) : (
+
+                                    <div
+                                      className="
+                                        w-9
+                                        h-9
+                                        rounded-full
+                                        bg-zinc-800
+                                        flex
+                                        items-center
+                                        justify-center
+                                      "
+                                    >
+                                      👤
+                                    </div>
+
+                                  )}
+
+
+                                  <div>
+
+                                    <p
+                                      className="
                                         font-bold
-                                        text-xs
+                                        text-sm
                                       "
                                     >
                                       {comment.user}
-                                    </span>
+                                    </p>
+
+                                    <p
+                                      className="
+                                        text-zinc-400
+                                        text-sm
+                                        mt-1
+                                      "
+                                    >
+                                      {comment.text}
+                                    </p>
 
                                   </div>
-
-
-                                  <p
-                                    className="
-                                      text-zinc-300
-                                      text-xs
-                                    "
-                                  >
-                                    {comment.text}
-                                  </p>
 
                                 </div>
 
                               )
-                            )}
-
-
-                            {(
-                              trip.comments ||
-                              []
-                            ).length ===
-                              0 && (
-
-                              <p
-                                className="
-                                  text-center
-                                  text-zinc-500
-                                  py-3
-                                  text-xs
-                                "
-                              >
-                                No comments yet.
-                                Be the first!
-                              </p>
-
                             )}
 
                           </div>
@@ -2347,6 +2403,7 @@ function FeedContent() {
                   🏍️
                 </div>
 
+
                 <h2
                   className="
                     text-3xl
@@ -2355,6 +2412,7 @@ function FeedContent() {
                 >
                   No rides yet
                 </h2>
+
 
                 <p
                   className="
@@ -2422,7 +2480,13 @@ export default function FeedPage() {
               🏍️
             </div>
 
-            Loading...
+            <p
+              className="
+                text-zinc-400
+              "
+            >
+              Loading...
+            </p>
 
           </div>
 

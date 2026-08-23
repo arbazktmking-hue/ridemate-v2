@@ -14,6 +14,240 @@ import {
 import { db } from "../firebase";
 import { useRouter } from "next/navigation";
 
+/*
+=========================================================
+INDIAN CITIES
+=========================================================
+*/
+
+const INDIAN_CITIES = [
+  "Agartala",
+  "Agra",
+  "Ahmedabad",
+  "Ahmednagar",
+  "Aizawl",
+  "Ajmer",
+  "Akola",
+  "Alappuzha",
+  "Aligarh",
+  "Allahabad",
+  "Alwar",
+  "Amaravati",
+  "Ambala",
+  "Amravati",
+  "Amritsar",
+  "Anand",
+  "Anantapur",
+  "Aurangabad",
+  "Asansol",
+  "Baddi",
+  "Bahadurgarh",
+  "Bareilly",
+  "Bathinda",
+  "Belagavi",
+  "Bellary",
+  "Bengaluru",
+  "Bangalore",
+  "Berhampur",
+  "Bhagalpur",
+  "Bharatpur",
+  "Bharuch",
+  "Bhavnagar",
+  "Bhilai",
+  "Bhilwara",
+  "Bhopal",
+  "Bhubaneswar",
+  "Bhuj",
+  "Bidar",
+  "Bikaner",
+  "Bilaspur",
+  "Bokaro",
+  "Bokaro Steel City",
+  "Chandigarh",
+  "Chandrapur",
+  "Chennai",
+  "Chikkamagaluru",
+  "Chittoor",
+  "Coimbatore",
+  "Cooch Behar",
+  "Cuttack",
+  "Daman",
+  "Darbhanga",
+  "Darjeeling",
+  "Dehradun",
+  "Delhi",
+  "Deoghar",
+  "Dewas",
+  "Dhanbad",
+  "Dharwad",
+  "Dibrugarh",
+  "Dimapur",
+  "Durg",
+  "Durgapur",
+  "Erode",
+  "Faridabad",
+  "Firozabad",
+  "Gandhinagar",
+  "Gangtok",
+  "Gaya",
+  "Ghaziabad",
+  "Goa",
+  "Gorakhpur",
+  "Greater Noida",
+  "Gulbarga",
+  "Guntur",
+  "Gurgaon",
+  "Gurugram",
+  "Guwahati",
+  "Gwalior",
+  "Haldia",
+  "Haridwar",
+  "Hassan",
+  "Hathras",
+  "Hazaribagh",
+  "Hisar",
+  "Hosur",
+  "Hubballi",
+  "Hubli",
+  "Hyderabad",
+  "Imphal",
+  "Indore",
+  "Itanagar",
+  "Jabalpur",
+  "Jaipur",
+  "Jalandhar",
+  "Jalgaon",
+  "Jalna",
+  "Jammu",
+  "Jamnagar",
+  "Jamshedpur",
+  "Jhansi",
+  "Jodhpur",
+  "Jorhat",
+  "Junagadh",
+  "Kakinada",
+  "Kalaburagi",
+  "Kalyan",
+  "Kanchipuram",
+  "Kannur",
+  "Kanpur",
+  "Kanyakumari",
+  "Karimnagar",
+  "Karnal",
+  "Kasaragod",
+  "Kashipur",
+  "Katihar",
+  "Katra",
+  "Kavaratti",
+  "Khammam",
+  "Kochi",
+  "Kohima",
+  "Kolhapur",
+  "Kolkata",
+  "Kollam",
+  "Kota",
+  "Kottayam",
+  "Kozhikode",
+  "Kullu",
+  "Kurnool",
+  "Kurukshetra",
+  "Latur",
+  "Leh",
+  "Lucknow",
+  "Ludhiana",
+  "Madgaon",
+  "Madurai",
+  "Mahabalipuram",
+  "Malegaon",
+  "Mangalore",
+  "Mangaluru",
+  "Manali",
+  "Manipal",
+  "Meerut",
+  "Moradabad",
+  "Mumbai",
+  "Mysore",
+  "Mysuru",
+  "Muzaffarnagar",
+  "Muzaffarpur",
+  "Nagercoil",
+  "Nagpur",
+  "Nainital",
+  "Nanded",
+  "Nashik",
+  "Navi Mumbai",
+  "Navsari",
+  "Nellore",
+  "New Delhi",
+  "Noida",
+  "Panaji",
+  "Panipat",
+  "Pathankot",
+  "Patiala",
+  "Patna",
+  "Pimpri-Chinchwad",
+  "Pondicherry",
+  "Port Blair",
+  "Prayagraj",
+  "Puducherry",
+  "Pune",
+  "Puri",
+  "Raipur",
+  "Rajahmundry",
+  "Rajkot",
+  "Ranchi",
+  "Ratlam",
+  "Rishikesh",
+  "Rohtak",
+  "Roorkee",
+  "Rourkela",
+  "Sagar",
+  "Saharanpur",
+  "Salem",
+  "Sambalpur",
+  "Satara",
+  "Shillong",
+  "Shimla",
+  "Shivamogga",
+  "Siliguri",
+  "Silchar",
+  "Sirohi",
+  "Sirsa",
+  "Solan",
+  "Solapur",
+  "Srinagar",
+  "Surat",
+  "Thane",
+  "Thanjavur",
+  "Thiruvananthapuram",
+  "Thrissur",
+  "Tinsukia",
+  "Tiruchirappalli",
+  "Tirunelveli",
+  "Tirupati",
+  "Tiruppur",
+  "Tumakuru",
+  "Udaipur",
+  "Udupi",
+  "Ujjain",
+  "Vadodara",
+  "Valsad",
+  "Varanasi",
+  "Vasai-Virar",
+  "Vellore",
+  "Vijayawada",
+  "Visakhapatnam",
+  "Warangal",
+  "Wardha",
+  "Yamunanagar",
+];
+
+
+/*
+=========================================================
+CREATE TRIP
+=========================================================
+*/
 
 function CreateTripContent() {
 
@@ -28,9 +262,11 @@ function CreateTripContent() {
     );
 
 
-  /* =========================================================
-     LOAD USER PROFILE IMAGE
-  ========================================================= */
+  /*
+  =========================================================
+  PROFILE IMAGE
+  =========================================================
+  */
 
   const [tripImage, setTripImage] =
     useState("");
@@ -61,9 +297,11 @@ function CreateTripContent() {
   }, []);
 
 
-  /* =========================================================
-     GET EDIT ID
-  ========================================================= */
+  /*
+  =========================================================
+  GET EDIT ID
+  =========================================================
+  */
 
   useEffect(() => {
 
@@ -83,14 +321,24 @@ function CreateTripContent() {
     !!editId;
 
 
-  /* =========================================================
-     FORM STATES
-  ========================================================= */
+  /*
+  =========================================================
+  FORM STATES
+  =========================================================
+  */
 
   const [destination, setDestination] =
     useState("");
 
   const [startLocation, setStartLocation] =
+    useState("");
+
+  /*
+  NEW:
+  STARTING CITY
+  */
+
+  const [startCity, setStartCity] =
     useState("");
 
   const [bike, setBike] =
@@ -112,9 +360,11 @@ function CreateTripContent() {
     useState("");
 
 
-  /* =========================================================
-     LOAD EXISTING TRIP WHEN EDITING
-  ========================================================= */
+  /*
+  =========================================================
+  LOAD EXISTING TRIP WHEN EDITING
+  =========================================================
+  */
 
   useEffect(() => {
 
@@ -144,48 +394,67 @@ function CreateTripContent() {
 
           setDestination(
             trip.destination ||
-              ""
+            ""
           );
+
 
           setStartLocation(
             trip.startLocation ||
-              ""
+            ""
           );
+
+
+          /*
+          LOAD CITY
+          */
+
+          setStartCity(
+            trip.startCity ||
+            ""
+          );
+
 
           setBike(
             trip.bike ||
-              ""
+            ""
           );
+
 
           setCaption(
             trip.caption ||
-              ""
+            ""
           );
+
 
           setDistance(
             trip.distance ||
-              ""
+            ""
           );
+
 
           setTripDate(
             trip.tripDate ||
-              ""
+            ""
           );
+
 
           setItinerary(
             trip.itinerary ||
-              ""
+            ""
           );
+
 
           setTripPrice(
             trip.tripPrice ||
-              ""
+            ""
           );
+
 
           setRideType(
             trip.rideType ||
-              "individual"
+            "individual"
           );
+
 
         } catch (error) {
 
@@ -204,9 +473,11 @@ function CreateTripContent() {
   }, [editId]);
 
 
-  /* =========================================================
-     POST / UPDATE TRIP
-  ========================================================= */
+  /*
+  =========================================================
+  POST / UPDATE TRIP
+  =========================================================
+  */
 
   const postTrip =
     async () => {
@@ -232,12 +503,40 @@ function CreateTripContent() {
         }
 
 
+        /*
+        MAKE SURE CITY IS SELECTED
+        */
+
+        if (!startCity.trim()) {
+
+          alert(
+            "Please select your starting city."
+          );
+
+          return;
+
+        }
+
+
+        if (!startLocation.trim()) {
+
+          alert(
+            "Please enter your starting location."
+          );
+
+          return;
+
+        }
+
+
         let tripData;
 
 
-        /* =====================================================
-           EDIT EXISTING TRIP
-        ===================================================== */
+        /*
+        =====================================================
+        EDIT EXISTING TRIP
+        =====================================================
+        */
 
         if (
           isEditing &&
@@ -267,6 +566,12 @@ function CreateTripContent() {
 
             destination,
 
+            /*
+            NEW CITY FIELD
+            */
+
+            startCity,
+
             startLocation,
 
             distance,
@@ -295,9 +600,12 @@ function CreateTripContent() {
 
         }
 
-        /* =====================================================
-           CREATE NEW TRIP
-        ===================================================== */
+
+        /*
+        =====================================================
+        CREATE NEW TRIP
+        =====================================================
+        */
 
         else {
 
@@ -310,6 +618,12 @@ function CreateTripContent() {
 
             destination,
 
+            /*
+            NEW CITY FIELD
+            */
+
+            startCity,
+
             startLocation,
 
             distance,
@@ -339,9 +653,11 @@ function CreateTripContent() {
         }
 
 
-        /* =====================================================
-           UPDATE EXISTING TRIP
-        ===================================================== */
+        /*
+        =====================================================
+        UPDATE EXISTING TRIP
+        =====================================================
+        */
 
         if (
           isEditing &&
@@ -372,9 +688,11 @@ function CreateTripContent() {
         }
 
 
-        /* =====================================================
-           CREATE NEW TRIP
-        ===================================================== */
+        /*
+        =====================================================
+        CREATE NEW TRIP
+        =====================================================
+        */
 
         await addDoc(
           collection(
@@ -403,13 +721,17 @@ function CreateTripContent() {
         );
 
 
-        /* =====================================================
-           RESET FORM
-        ===================================================== */
+        /*
+        =====================================================
+        RESET FORM
+        =====================================================
+        */
 
         setDestination("");
 
         setStartLocation("");
+
+        setStartCity("");
 
         setDistance("");
 
@@ -440,9 +762,11 @@ function CreateTripContent() {
     };
 
 
-  /* =========================================================
-     UI
-  ========================================================= */
+  /*
+  =========================================================
+  UI
+  =========================================================
+  */
 
   return (
 
@@ -464,6 +788,7 @@ function CreateTripContent() {
           mb-8
         "
       >
+
 
         {/* =====================================================
             PROFILE IMAGE
@@ -587,30 +912,206 @@ function CreateTripContent() {
 
 
           {/* ===================================================
-              STARTING LOCATION
+              STARTING LOCATION CARD
           =================================================== */}
 
-          <input
-            type="text"
-            placeholder="Starting Location"
-            value={startLocation}
-            onChange={(e) =>
-              setStartLocation(
-                e.target.value
-              )
-            }
+          <div
             className="
-              w-full
-              p-4
-              rounded-2xl
               bg-black
               border
               border-zinc-700
-              text-white
-              outline-none
-              focus:border-orange-500
+              rounded-2xl
+              p-4
+              space-y-4
             "
-          />
+          >
+
+            <div>
+
+              <label
+                className="
+                  block
+                  text-orange-400
+                  font-bold
+                  mb-2
+                "
+              >
+                📍 Starting Location
+              </label>
+
+              <p
+                className="
+                  text-zinc-500
+                  text-xs
+                  mb-3
+                "
+              >
+                Select your city first, then enter
+                the exact starting point.
+              </p>
+
+            </div>
+
+
+            {/* =================================================
+                STARTING CITY
+            ================================================= */}
+
+            <div>
+
+              <label
+                className="
+                  block
+                  text-zinc-300
+                  text-sm
+                  font-semibold
+                  mb-2
+                "
+              >
+                Starting City
+              </label>
+
+
+              <input
+                type="text"
+                list="indian-cities"
+                placeholder="Search your city..."
+                value={startCity}
+                onChange={(e) =>
+                  setStartCity(
+                    e.target.value
+                  )
+                }
+                className="
+                  w-full
+                  p-4
+                  rounded-2xl
+                  bg-zinc-950
+                  border
+                  border-zinc-700
+                  text-white
+                  outline-none
+                  focus:border-orange-500
+                "
+              />
+
+
+              <datalist id="indian-cities">
+
+                {INDIAN_CITIES.map(
+                  (city) => (
+
+                    <option
+                      key={city}
+                      value={city}
+                    />
+
+                  )
+                )}
+
+              </datalist>
+
+            </div>
+
+
+            {/* =================================================
+                EXACT STARTING LOCATION
+            ================================================= */}
+
+            <div>
+
+              <label
+                className="
+                  block
+                  text-zinc-300
+                  text-sm
+                  font-semibold
+                  mb-2
+                "
+              >
+                Exact Starting Point
+              </label>
+
+
+              <input
+                type="text"
+                placeholder="Example: HSR Layout"
+                value={startLocation}
+                onChange={(e) =>
+                  setStartLocation(
+                    e.target.value
+                  )
+                }
+                className="
+                  w-full
+                  p-4
+                  rounded-2xl
+                  bg-zinc-950
+                  border
+                  border-zinc-700
+                  text-white
+                  outline-none
+                  focus:border-orange-500
+                "
+              />
+
+            </div>
+
+
+            {/* =================================================
+                PREVIEW
+            ================================================= */}
+
+            {(startLocation ||
+              startCity) && (
+
+              <div
+                className="
+                  bg-orange-500/10
+                  border
+                  border-orange-500/20
+                  rounded-xl
+                  p-3
+                "
+              >
+
+                <p
+                  className="
+                    text-[10px]
+                    uppercase
+                    tracking-widest
+                    text-orange-400
+                    font-bold
+                    mb-1
+                  "
+                >
+                  Explore Trips Preview
+                </p>
+
+
+                <p
+                  className="
+                    text-white
+                    font-bold
+                  "
+                >
+                  📍{" "}
+                  {startLocation ||
+                    "Starting point"}
+
+                  {startCity && (
+                    <>
+                      , {startCity}
+                    </>
+                  )}
+
+                </p>
+
+              </div>
+
+            )}
+
+          </div>
 
 
           {/* ===================================================

@@ -102,7 +102,7 @@ function SavedTripsContent() {
 
 
         /* =====================================================
-           GET SAVED TRIP IDs FOR CURRENT USER
+           GET SAVED TRIP IDs
         ===================================================== */
 
         const savedSnapshot =
@@ -127,7 +127,7 @@ function SavedTripsContent() {
 
             if (
               data.user ===
-              user.name &&
+                user.name &&
               data.tripId
             ) {
 
@@ -372,31 +372,12 @@ function SavedTripsContent() {
       );
 
 
-      /*
-       * Remove the trip immediately
-       * from the Saved Trips page.
-       */
-
       setTrips(
-        (prevTrips) =>
-          prevTrips.filter(
+        (prev) =>
+          prev.filter(
             (trip) =>
-              trip.id !==
-              tripId
+              trip.id !== tripId
           )
-      );
-
-
-      /*
-       * If the removed trip was expanded,
-       * close it.
-       */
-
-      setExpandedTrip(
-        (current) =>
-          current === tripId
-            ? null
-            : current
       );
 
     } catch (error) {
@@ -466,6 +447,7 @@ function SavedTripsContent() {
             "notifications"
           ),
           {
+
             user:
               trip.userName,
 
@@ -477,6 +459,7 @@ function SavedTripsContent() {
 
             read:
               false,
+
           }
         );
 
@@ -544,24 +527,14 @@ function SavedTripsContent() {
         );
 
 
-      if (!user.name) {
-
-        alert(
-          "Please login first."
-        );
-
-        return;
-
-      }
-
-
       const newComment = {
 
         user:
           user.name,
 
         image:
-          user.image || "",
+          user.image ||
+          "",
 
         text:
           commentText,
@@ -600,6 +573,7 @@ function SavedTripsContent() {
             "notifications"
           ),
           {
+
             user:
               trip.userName,
 
@@ -611,6 +585,7 @@ function SavedTripsContent() {
 
             read:
               false,
+
           }
         );
 
@@ -772,6 +747,14 @@ function SavedTripsContent() {
               trip.startLocation ||
               "",
 
+            /* NEW CITY FIELD */
+
+            startCity:
+              trip.startCity ||
+              trip.cityName ||
+              trip.city ||
+              "",
+
             distance:
               trip.distance ||
               "",
@@ -915,7 +898,7 @@ function SavedTripsContent() {
           <p
             className="
               text-zinc-400
-          "
+            "
           >
             Loading saved rides...
           </p>
@@ -1049,6 +1032,21 @@ function SavedTripsContent() {
                 trip.id;
 
 
+              /*
+               * CITY COMPATIBILITY
+               *
+               * New trips should use startCity.
+               * These fallbacks also support older trips.
+               */
+
+              const startCity =
+                trip.startCity ||
+                trip.cityName ||
+                trip.city ||
+                trip.startLocationCity ||
+                "";
+
+
               return (
 
                 <div
@@ -1166,13 +1164,10 @@ function SavedTripsContent() {
                             md:text-5xl
                           "
                         >
-
                           👤
-
                         </div>
 
                       )}
-
 
                       <div
                         className="
@@ -1215,8 +1210,6 @@ function SavedTripsContent() {
                       "
                     >
 
-                      {/* USERNAME */}
-
                       <div
                         className="
                           max-w-full
@@ -1231,14 +1224,10 @@ function SavedTripsContent() {
                           truncate
                         "
                       >
-
                         {trip.userName ||
                           "Rider"}
-
                       </div>
 
-
-                      {/* BIKE */}
 
                       <div
                         className="
@@ -1272,16 +1261,12 @@ function SavedTripsContent() {
                             max-w-full
                           "
                         >
-
                           {trip.bike ||
                             "Bike not specified"}
-
                         </span>
 
                       </div>
 
-
-                      {/* DATE */}
 
                       <div
                         className="
@@ -1296,9 +1281,7 @@ function SavedTripsContent() {
 
                         <CalendarDays
                           size={14}
-                          className="
-                            flex-shrink-0
-                          "
+                          className="flex-shrink-0"
                         />
 
                         <span
@@ -1309,7 +1292,6 @@ function SavedTripsContent() {
                             whitespace-nowrap
                           "
                         >
-
                           {trip.tripDate
                             ? new Date(
                                 trip.tripDate
@@ -1325,7 +1307,6 @@ function SavedTripsContent() {
                                 }
                               )
                             : "Departure TBA"}
-
                         </span>
 
                       </div>
@@ -1334,7 +1315,7 @@ function SavedTripsContent() {
 
 
                     {/* =================================================
-                        RIGHT — DESTINATION + ARROW
+                        RIGHT — DESTINATION
                     ================================================= */}
 
                     <div
@@ -1375,10 +1356,8 @@ function SavedTripsContent() {
                           overflow-wrap-anywhere
                         "
                       >
-
                         {trip.destination ||
                           "Destination TBA"}
-
                       </h2>
 
 
@@ -1407,18 +1386,14 @@ function SavedTripsContent() {
 
                           <ChevronUp
                             size={14}
-                            className="
-                              text-orange-500
-                            "
+                            className="text-orange-500"
                           />
 
                         ) : (
 
                           <ChevronDown
                             size={14}
-                            className="
-                              text-zinc-400
-                            "
+                            className="text-zinc-400"
                           />
 
                         )}
@@ -1687,7 +1662,9 @@ function SavedTripsContent() {
                         </div>
 
 
-                        {/* START */}
+                        {/* =================================================
+                            STARTING LOCATION + CITY
+                        ================================================= */}
 
                         <div
                           className="
@@ -1727,6 +1704,7 @@ function SavedTripsContent() {
 
                           </div>
 
+
                           <p
                             className="
                               font-bold
@@ -1735,8 +1713,13 @@ function SavedTripsContent() {
                               break-words
                             "
                           >
-                            {trip.startLocation ||
-                              "Not specified"}
+
+                            {trip.startLocation
+                              ? startCity
+                                ? `${trip.startLocation}, ${startCity}`
+                                : trip.startLocation
+                              : "Not specified"}
+
                           </p>
 
                         </div>
@@ -1781,6 +1764,7 @@ function SavedTripsContent() {
                             </span>
 
                           </div>
+
 
                           <p
                             className="
@@ -1836,6 +1820,7 @@ function SavedTripsContent() {
                             </span>
 
                           </div>
+
 
                           <p
                             className="
@@ -2178,10 +2163,10 @@ function SavedTripsContent() {
                             flex
                             items-center
                             gap-1.5
-                            bg-yellow-500/10
-                            hover:bg-yellow-500/20
+                            bg-white/5
+                            hover:bg-yellow-500/10
                             border
-                            border-yellow-500/30
+                            border-white/10
                             px-3
                             py-2
                             rounded-full
@@ -2203,7 +2188,6 @@ function SavedTripsContent() {
                               sm:inline
                               text-xs
                               font-bold
-                              text-yellow-300
                             "
                           >
                             Saved
@@ -2304,7 +2288,6 @@ function SavedTripsContent() {
                                     .value
                                 );
 
-
                                 e.currentTarget
                                   .value =
                                   "";
@@ -2386,7 +2369,6 @@ function SavedTripsContent() {
                                       </div>
 
                                     )}
-
 
                                     <span
                                       className="
@@ -2479,9 +2461,8 @@ function SavedTripsContent() {
                     mb-5
                   "
                 >
-                  🔖
+                  🏍️
                 </div>
-
 
                 <h2
                   className="
@@ -2492,7 +2473,6 @@ function SavedTripsContent() {
                   No saved trips
                 </h2>
 
-
                 <p
                   className="
                     text-zinc-400
@@ -2502,7 +2482,6 @@ function SavedTripsContent() {
                   Trips you save will
                   appear here.
                 </p>
-
 
                 <Link
                   href="/explore"
