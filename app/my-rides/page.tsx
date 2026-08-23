@@ -22,6 +22,8 @@ export default function MyRidesPage() {
   useEffect(() => {
     const loadRides = async () => {
       try {
+        setLoading(true);
+
         const currentUser = JSON.parse(
           localStorage.getItem("ridemateUser") || "{}"
         );
@@ -31,21 +33,71 @@ export default function MyRidesPage() {
           return;
         }
 
+        // =====================================================
+        // LOAD TRIPS
+        // =====================================================
+
         const tripsSnapshot = await getDocs(
           collection(db, "trips")
         );
+
+        // Create an easy lookup:
+        // tripId -> trip data
+        const tripsMap: Record<string, any> = {};
+
+        tripsSnapshot.forEach((tripDoc) => {
+          tripsMap[tripDoc.id] = {
+            id: tripDoc.id,
+            ...tripDoc.data(),
+          };
+        });
+
+        // =====================================================
+        // LOAD RIDE REQUESTS
+        // =====================================================
 
         const requestsSnapshot = await getDocs(
           collection(db, "rideRequests")
         );
 
-        const rides: any[] = [];
+        const upcoming: any[] = [];
         const history: any[] = [];
 
         const now = new Date();
 
         // =====================================================
-        // TRIPS POSTED BY THE CURRENT USER
+        // HELPER
+        // =====================================================
+
+        const isTripCompletedOrPast = (trip: any) => {
+          // ---------------------------------------------------
+          // EXPLICITLY COMPLETED
+          // ---------------------------------------------------
+
+          if (trip.status === "completed") {
+            return true;
+          }
+
+          // ---------------------------------------------------
+          // PAST TRIP DATE
+          // ---------------------------------------------------
+
+          if (trip.tripDate) {
+            const tripDate = new Date(trip.tripDate);
+
+            if (
+              !isNaN(tripDate.getTime()) &&
+              tripDate < now
+            ) {
+              return true;
+            }
+          }
+
+          return false;
+        };
+
+        // =====================================================
+        // TRIPS POSTED BY CURRENT USER
         // =====================================================
 
         tripsSnapshot.forEach((tripDoc) => {
@@ -57,10 +109,12 @@ export default function MyRidesPage() {
             "OWNER:",
             trip.userName,
             "CURRENT USER:",
-            currentUser.name
+            currentUser.name,
+            "STATUS:",
+            trip.status
           );
 
-          // Only process trips owned by this user
+          // Only process trips owned by current user
           if (trip.userName !== currentUser.name) {
             return;
           }
@@ -72,115 +126,226 @@ export default function MyRidesPage() {
             canEdit: true,
           };
 
-          // -----------------------------------------------------
-          // COMPLETED TRIPS → HISTORY
-          // -----------------------------------------------------
+          // ---------------------------------------------------
+          // COMPLETED / PAST → HISTORY
+          // ---------------------------------------------------
 
-          if (trip.status === "completed") {
+          if (isTripCompletedOrPast(trip)) {
             history.push(tripData);
             return;
           }
 
-          // -----------------------------------------------------
-          // PAST TRIPS WITH A VALID DATE → HISTORY
-          // -----------------------------------------------------
+          // ---------------------------------------------------
+          // OTHERWISE → UPCOMING
+          // ---------------------------------------------------
 
-          if (trip.tripDate) {
-            const tripDate = new Date(trip.tripDate);
-
-            if (
-              !isNaN(tripDate.getTime()) &&
-              tripDate < now
-            ) {
-              history.push(tripData);
-              return;
-            }
-          }
-
-          // -----------------------------------------------------
-          // ALL OTHER HOST TRIPS → UPCOMING
-          //
-          // This includes trips where tripDate is missing.
-          // This is important because old trips may not have
-          // tripDate saved correctly.
-          // -----------------------------------------------------
-
-          rides.push(tripData);
+          upcoming.push(tripData);
         });
 
         // =====================================================
-        // TRIPS JOINED BY THE CURRENT USER
+        // TRIPS JOINED BY CURRENT USER
         // =====================================================
 
         requestsSnapshot.forEach((requestDoc) => {
           const request = requestDoc.data();
 
+          // Only approved requests belonging to current user
           if (
-            request.requester === currentUser.name &&
-            request.status === "approved"
+            request.requester !== currentUser.name ||
+            request.status !== "approved"
           ) {
-            rides.push({
-              id: request.tripId,
+            return;
+          }
 
-              destination:
-                request.destination || "RideMate Trip",
+          // ---------------------------------------------------
+          // FIND THE REAL TRIP
+          // ---------------------------------------------------
 
-              userName:
-                request.tripOwner || "",
+          const actualTrip =
+            tripsMap[request.tripId];
+
+          // ---------------------------------------------------
+          // IMPORTANT:
+          //
+          // If the trip still exists, ALWAYS use the actual
+          // trip's current status/date.
+          //
+          // This is what makes completion sync between
+          // host and rider.
+          // ---------------------------------------------------
+
+          if (actualTrip) {
+            const joinedTrip = {
+              ...actualTrip,
+
+              id: actualTrip.id,
 
               role: "Rider",
 
+              canEdit: false,
+
+              // Keep the requester's relevant information
+              // where needed.
+              tripOwner:
+                actualTrip.userName ||
+                request.tripOwner ||
+                "",
+
+              destination:
+                actualTrip.destination ||
+                request.destination ||
+                "RideMate Trip",
+
               tripDate:
-                request.tripDate || null,
+                actualTrip.tripDate ||
+                request.tripDate ||
+                null,
 
               bike:
+                actualTrip.bike ||
                 request.bike ||
                 "RideMate Trip",
 
               startLocation:
-                request.startLocation || "",
+                actualTrip.startLocation ||
+                request.startLocation ||
+                "",
+
               distance:
-                request.distance || "",
+                actualTrip.distance ||
+                request.distance ||
+                "",
 
               tripPrice:
-                request.tripPrice || "",
+                actualTrip.tripPrice ??
+                request.tripPrice ??
+                "",
 
               rideType:
-                request.rideType || "",
+                actualTrip.rideType ||
+                request.rideType ||
+                "",
+            };
 
-              // Joined ride is NOT owned by current user
-              canEdit: false,
-            });
+            // -------------------------------------------------
+            // CHECK ACTUAL TRIP STATUS
+            // -------------------------------------------------
+
+            if (
+              isTripCompletedOrPast(actualTrip)
+            ) {
+              history.push(joinedTrip);
+            } else {
+              upcoming.push(joinedTrip);
+            }
+
+            return;
           }
+
+          // ===================================================
+          // FALLBACK
+          //
+          // If the original trip somehow cannot be found,
+          // use the information stored inside rideRequests.
+          // ===================================================
+
+          const fallbackRide = {
+            id: request.tripId,
+
+            destination:
+              request.destination ||
+              "RideMate Trip",
+
+            userName:
+              request.tripOwner ||
+              "",
+
+            role: "Rider",
+
+            tripDate:
+              request.tripDate ||
+              null,
+
+            bike:
+              request.bike ||
+              "RideMate Trip",
+
+            startLocation:
+              request.startLocation ||
+              "",
+
+            distance:
+              request.distance ||
+              "",
+
+            tripPrice:
+              request.tripPrice ||
+              "",
+
+            rideType:
+              request.rideType ||
+              "",
+
+            canEdit: false,
+          };
+
+          // If the request has a past date,
+          // put it into history.
+          if (
+            fallbackRide.tripDate
+          ) {
+            const fallbackDate =
+              new Date(
+                fallbackRide.tripDate
+              );
+
+            if (
+              !isNaN(
+                fallbackDate.getTime()
+              ) &&
+              fallbackDate < now
+            ) {
+              history.push(
+                fallbackRide
+              );
+              return;
+            }
+          }
+
+          upcoming.push(
+            fallbackRide
+          );
         });
 
         // =====================================================
         // REMOVE DUPLICATE UPCOMING RIDES
         // =====================================================
 
-        const uniqueRides = rides.filter(
-          (ride, index, self) =>
-            index ===
-            self.findIndex(
-              (r) => r.id === ride.id
-            )
-        );
+        const uniqueUpcoming =
+          upcoming.filter(
+            (ride, index, self) =>
+              index ===
+              self.findIndex(
+                (r) => r.id === ride.id
+              )
+          );
 
         // =====================================================
         // REMOVE DUPLICATE HISTORY
         // =====================================================
 
-        const uniqueHistory = history.filter(
-          (ride, index, self) =>
-            index ===
-            self.findIndex(
-              (r) => r.id === ride.id
-            )
-        );
+        const uniqueHistory =
+          history.filter(
+            (ride, index, self) =>
+              index ===
+              self.findIndex(
+                (r) => r.id === ride.id
+              )
+          );
 
         console.log(
           "UPCOMING RIDES:",
-          uniqueRides
+          uniqueUpcoming
         );
 
         console.log(
@@ -188,9 +353,13 @@ export default function MyRidesPage() {
           uniqueHistory
         );
 
-        setUpcomingRides(uniqueRides);
-        setRideHistory(uniqueHistory);
+        setUpcomingRides(
+          uniqueUpcoming
+        );
 
+        setRideHistory(
+          uniqueHistory
+        );
       } catch (error) {
         console.error(
           "Failed to load rides:",
@@ -319,9 +488,7 @@ export default function MyRidesPage() {
                   className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6"
                 >
 
-                  {/* =================================================
-                      HEADER
-                  ================================================= */}
+                  {/* HEADER */}
 
                   <div className="flex justify-between items-start gap-4">
 
@@ -350,22 +517,17 @@ export default function MyRidesPage() {
                       </p>
 
                       {trip.bike && (
-
                         <p className="text-zinc-400 mt-2">
                           🏍 {trip.bike}
                         </p>
-
                       )}
 
                     </div>
 
-                    {/* =================================================
-                        EDIT BUTTON
-                        ONLY FOR RIDES POSTED BY CURRENT USER
-                    ================================================= */}
+                    {/* EDIT */}
 
                     {trip.canEdit === true && (
-                      
+
                       <button
                         onClick={() =>
                           editRide(trip.id)
@@ -391,14 +553,12 @@ export default function MyRidesPage() {
 
                   </div>
 
-                  {/* =================================================
-                      EXTRA INFORMATION
-                  ================================================= */}
+                  {/* EXTRA INFORMATION */}
 
                   {(trip.startLocation ||
-  trip.distance ||
-  trip.tripPrice !== undefined ||
-  trip.rideType) && (
+                    trip.distance ||
+                    trip.tripPrice !== undefined ||
+                    trip.rideType) && (
 
                     <div className="
                       mt-5
@@ -411,12 +571,8 @@ export default function MyRidesPage() {
                       gap-3
                     ">
 
-                      {/* START */}
-
                       {trip.startLocation && (
-
                         <div className="bg-black rounded-xl p-3">
-
                           <span className="text-zinc-500 text-sm">
                             Start
                           </span>
@@ -424,17 +580,11 @@ export default function MyRidesPage() {
                           <p className="font-bold">
                             📍 {trip.startLocation}
                           </p>
-
                         </div>
-
                       )}
 
-                      {/* DISTANCE */}
-
                       {trip.distance && (
-
                         <div className="bg-black rounded-xl p-3">
-
                           <span className="text-zinc-500 text-sm">
                             Distance
                           </span>
@@ -442,18 +592,13 @@ export default function MyRidesPage() {
                           <p className="font-bold">
                             🛣️ {trip.distance} KM
                           </p>
-
                         </div>
-
                       )}
-
-                      {/* PRICE */}
 
                       {trip.tripPrice !== undefined &&
                         trip.tripPrice !== "" && (
 
                         <div className="bg-black rounded-xl p-3">
-
                           <span className="text-zinc-500 text-sm">
                             Contribution
                           </span>
@@ -461,35 +606,24 @@ export default function MyRidesPage() {
                           <p className="font-bold">
                             ₹{trip.tripPrice}
                           </p>
-
                         </div>
-
                       )}
 
-                      {/* RIDE TYPE */}
-
                       {trip.rideType && (
-
                         <div className="bg-black rounded-xl p-3">
-
                           <span className="text-zinc-500 text-sm">
                             Ride Type
                           </span>
 
                           <p className="font-bold">
-
                             {trip.rideType === "group"
                               ? "👥 Group Ride"
                               : "👤 Individual Ride"}
-
                           </p>
-
                         </div>
-
                       )}
 
                     </div>
-
                   )}
 
                 </div>
@@ -499,7 +633,6 @@ export default function MyRidesPage() {
             )}
 
           </div>
-
         )}
 
         {/* =================================================
@@ -556,11 +689,9 @@ export default function MyRidesPage() {
                       </p>
 
                       {trip.bike && (
-
                         <p className="text-zinc-400 mt-2">
                           🏍 {trip.bike}
                         </p>
-
                       )}
 
                     </div>
