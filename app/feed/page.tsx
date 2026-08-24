@@ -39,7 +39,39 @@ import {
 
 function FeedContent() {
   const searchParams = useSearchParams();
+const formatPostedDate = (value: any) => {
+  if (!value) return "";
 
+  try {
+    let date: Date;
+
+    if (
+      typeof value === "object" &&
+      typeof value.toDate === "function"
+    ) {
+      date = value.toDate();
+    } else if (
+      typeof value === "object" &&
+      value.seconds !== undefined
+    ) {
+      date = new Date(value.seconds * 1000);
+    } else {
+      date = new Date(value);
+    }
+
+    if (isNaN(date.getTime())) return "";
+
+    return date.toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return "";
+  }
+};
   /* =========================================================
      URL PARAMETERS
   ========================================================= */
