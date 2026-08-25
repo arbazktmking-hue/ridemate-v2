@@ -14,6 +14,7 @@ import {
   addDoc,
   setDoc,
   deleteDoc,
+  runTransaction,
 } from "firebase/firestore";
 
 import { db } from "../firebase";
@@ -22,6 +23,7 @@ import {
   Heart,
   MessageCircle,
   Bookmark,
+  Send,
 } from "lucide-react";
 
 
@@ -43,16 +45,19 @@ export default function FeedPage() {
   const [commentPost, setCommentPost] =
     useState<any>(null);
 
+  const [currentUserName, setCurrentUserName] =
+    useState<string>("");
+
+  /* =========================================================
+     COMMENT INPUT STATE
+  ========================================================= */
+
+  const [commentText, setCommentText] =
+    useState<string>("");
+
 
   /* =========================================================
      LOAD FOLLOWER-ONLY POSTS
-     
-     SHOW:
-     1. Posts from people current user follows
-     2. Current user's own posts
-     
-     HIDE:
-     Posts from everyone else
   ========================================================= */
 
   useEffect(() => {
@@ -73,18 +78,18 @@ export default function FeedPage() {
           );
 
 
-        const currentUserName =
+        const userName =
           currentUser.name ||
           currentUser.username ||
           "";
 
 
-        /*
-         * If there is no logged-in user,
-         * don't load a personalized feed.
-         */
+        setCurrentUserName(
+          userName
+        );
 
-        if (!currentUserName) {
+
+        if (!userName) {
 
           console.log(
             "No logged-in user found."
@@ -121,16 +126,9 @@ export default function FeedPage() {
               followDoc.data();
 
 
-            /*
-             * Existing RideMate structure:
-             *
-             * follower
-             * following
-             */
-
             if (
               follow.follower ===
-              currentUserName
+              userName
             ) {
 
               if (
@@ -150,20 +148,17 @@ export default function FeedPage() {
 
 
         /*
-         * Always include the current user.
-         *
-         * This means users can see their
-         * own posts even if they follow nobody.
+         * Always include current user's own posts.
          */
 
         followingUsers.add(
-          currentUserName
+          userName
         );
 
 
         console.log(
           "Current user:",
-          currentUserName
+          userName
         );
 
         console.log(
@@ -211,17 +206,6 @@ export default function FeedPage() {
             const post =
               postDoc.data();
 
-
-            /*
-             * Only include:
-             *
-             * - posts made by someone the
-             *   current user follows
-             *
-             * OR
-             *
-             * - posts made by the current user
-             */
 
             if (
               post.userName &&
@@ -470,33 +454,19 @@ export default function FeedPage() {
 
 
   /* =========================================================
-     LIKE POST
+     LIKE POST - ONE LIKE PER USER
   ========================================================= */
 
   const likeTrip =
     async (
-      id: string,
-      currentLikes: number
-    ) => {
+      id: string
+    ): Promise<boolean> => {
 
       try {
 
-        const tripRef =
-          doc(
-            db,
-            "feedPosts",
-            id
-          );
-
-
-        await updateDoc(
-          tripRef,
-          {
-            likes:
-              currentLikes + 1,
-          }
-        );
-
+        /* =====================================================
+           GET CURRENT USER
+        ===================================================== */
 
         const currentUser =
           JSON.parse(
@@ -506,6 +476,252 @@ export default function FeedPage() {
           );
 
 
+        const userName =
+          currentUser.name ||
+          currentUser.username ||
+          "";
+
+
+        if (!userName) {
+
+          alert(
+            "Please login first."
+          );
+
+          return false;
+
+        }
+
+
+        const tripRef =
+          doc(
+            db,
+            "feedPosts",
+            id
+          );
+
+
+        let wasLiked =
+          false;
+
+        let newLikeCount =
+          0;
+
+
+        /* =====================================================
+           FIRESTORE TRANSACTION
+
+           Prevents same user from
+           increasing like count more than once.
+        ===================================================== */
+
+        await runTransaction(
+          db,
+          async (transaction) => {
+
+            const tripSnapshot =
+              await transaction.get(
+                tripRef
+              );
+
+
+            if (
+              !tripSnapshot.exists()
+            ) {
+
+              throw new Error(
+                "Post does not exist."
+              );
+
+            }
+
+
+            const tripData =
+              tripSnapshot.data();
+
+
+            const likedBy =
+              Array.isArray(
+                tripData.likedBy
+              )
+                ? tripData.likedBy
+                : [];
+
+
+            /* =================================================
+               USER ALREADY LIKED THIS POST
+            ================================================= */
+
+            if (
+              likedBy.includes(
+                userName
+              )
+            ) {
+
+              wasLiked =
+                false;
+
+              newLikeCount =
+                tripData.likes || 0;
+
+              return;
+
+            }
+
+
+            /* =================================================
+               NEW LIKE
+            ================================================= */
+
+            wasLiked =
+              true;
+
+
+            newLikeCount =
+              (tripData.likes || 0) +
+              1;
+
+
+            transaction.update(
+              tripRef,
+              {
+
+                likes:
+                  newLikeCount,
+
+                likedBy:
+                  [
+                    ...likedBy,
+                    userName,
+                  ],
+
+              }
+            );
+
+          }
+        );
+
+
+        /* =====================================================
+           IF ALREADY LIKED - DO NOTHING
+        ===================================================== */
+
+        if (!wasLiked) {
+
+          setTrips(
+            (prevTrips) =>
+              prevTrips.map(
+                (trip) =>
+                  trip.id === id
+                    ? {
+                        ...trip,
+
+                        likes:
+                          newLikeCount,
+
+                        likedBy:
+                          Array.isArray(
+                            trip.likedBy
+                          )
+                            ? trip.likedBy.includes(
+                                userName
+                              )
+                              ? trip.likedBy
+                              : [
+                                  ...trip.likedBy,
+                                  userName,
+                                ]
+                            : [
+                                userName,
+                              ],
+                      }
+                    : trip
+              )
+          );
+
+
+          return false;
+
+        }
+
+
+        /* =====================================================
+           UPDATE HOME FEED UI
+        ===================================================== */
+
+        setTrips(
+          (prevTrips) =>
+            prevTrips.map(
+              (trip) =>
+                trip.id === id
+                  ? {
+
+                      ...trip,
+
+                      likes:
+                        newLikeCount,
+
+                      likedBy: [
+                        ...(Array.isArray(
+                          trip.likedBy
+                        )
+                          ? trip.likedBy
+                          : []),
+
+                        userName,
+
+                      ],
+
+                    }
+                  : trip
+            )
+        );
+
+
+        /* =====================================================
+           UPDATE COMMENTS POPUP
+        ===================================================== */
+
+        setCommentPost(
+          (current: any) => {
+
+            if (
+              current &&
+              current.id === id
+            ) {
+
+              return {
+
+                ...current,
+
+                likes:
+                  newLikeCount,
+
+                likedBy: [
+                  ...(Array.isArray(
+                    current.likedBy
+                  )
+                    ? current.likedBy
+                    : []),
+
+                  userName,
+
+                ],
+
+              };
+
+            }
+
+            return current;
+
+          }
+        );
+
+
+        /* =====================================================
+           NOTIFICATION
+        ===================================================== */
+
         const trip =
           trips.find(
             (t) =>
@@ -513,15 +729,11 @@ export default function FeedPage() {
           );
 
 
-        /*
-         * Send notification to post owner.
-         */
-
         if (
           trip &&
           trip.userName &&
           trip.userName !==
-            currentUser.name
+            userName
         ) {
 
           await addDoc(
@@ -535,7 +747,7 @@ export default function FeedPage() {
                 trip.userName,
 
               text:
-                `${currentUser.name} liked your post ❤️`,
+                `${userName} liked your post ❤️`,
 
               createdAt:
                 Date.now(),
@@ -549,53 +761,7 @@ export default function FeedPage() {
         }
 
 
-        /*
-         * Update UI immediately.
-         */
-
-        setTrips(
-          (prevTrips) =>
-            prevTrips.map(
-              (trip) =>
-                trip.id === id
-                  ? {
-                      ...trip,
-
-                      likes:
-                        currentLikes +
-                        1,
-                    }
-                  : trip
-            )
-        );
-
-
-        /*
-         * Also update the currently
-         * open comments post if needed.
-         */
-
-        setCommentPost(
-  (current: any) => {
-
-            if (
-              current &&
-              current.id === id
-            ) {
-
-              return {
-                ...current,
-                likes:
-                  currentLikes +
-                  1,
-              };
-
-            }
-
-            return current;
-
-          }
-        );
+        return true;
 
 
       } catch (error) {
@@ -604,6 +770,8 @@ export default function FeedPage() {
           "Like error:",
           error
         );
+
+        return false;
 
       }
 
@@ -617,13 +785,13 @@ export default function FeedPage() {
   const addComment =
     async (
       tripId: string,
-      commentText: string
+      commentTextValue: string
     ) => {
 
       if (
-        !commentText.trim()
+        !commentTextValue.trim()
       )
-        return;
+        return false;
 
 
       try {
@@ -642,7 +810,7 @@ export default function FeedPage() {
             "Please login first."
           );
 
-          return;
+          return false;
 
         }
 
@@ -656,7 +824,7 @@ export default function FeedPage() {
             user.image || "",
 
           text:
-            commentText.trim(),
+            commentTextValue.trim(),
 
         };
 
@@ -688,9 +856,9 @@ export default function FeedPage() {
           );
 
 
-        /*
-         * Notify post owner.
-         */
+        /* =====================================================
+           NOTIFY POST OWNER
+        ===================================================== */
 
         if (
           trip &&
@@ -724,9 +892,9 @@ export default function FeedPage() {
         }
 
 
-        /*
-         * Update Home feed immediately.
-         */
+        /* =====================================================
+           UPDATE HOME FEED
+        ===================================================== */
 
         setTrips(
           (prevTrips) =>
@@ -752,10 +920,9 @@ export default function FeedPage() {
         );
 
 
-        /*
-         * Update comments popup
-         * immediately as well.
-         */
+        /* =====================================================
+           UPDATE COMMENTS POPUP
+        ===================================================== */
 
         setCommentPost(
           (current: any) => {
@@ -788,12 +955,54 @@ export default function FeedPage() {
         );
 
 
+        return true;
+
+
       } catch (error) {
 
         console.error(
           "Comment error:",
           error
         );
+
+        return false;
+
+      }
+
+    };
+
+
+  /* =========================================================
+     SEND COMMENT
+  ========================================================= */
+
+  const sendComment =
+    async () => {
+
+      if (
+        !commentPost ||
+        !commentText.trim()
+      ) {
+
+        return;
+
+      }
+
+
+      const textToSend =
+        commentText.trim();
+
+
+      const success =
+        await addComment(
+          commentPost.id,
+          textToSend
+        );
+
+
+      if (success) {
+
+        setCommentText("");
 
       }
 
@@ -909,26 +1118,30 @@ export default function FeedPage() {
                     relative
                     h-full
                   "
-                  onDoubleClick={() => {
+                  onDoubleClick={async () => {
 
-                    likeTrip(
-                      trip.id,
-                      trip.likes || 0
-                    );
-
-
-                    setHeartAnimation(
-                      trip.id
-                    );
-
-
-                    setTimeout(() => {
-
-                      setHeartAnimation(
-                        null
+                    const liked =
+                      await likeTrip(
+                        trip.id
                       );
 
-                    }, 800);
+
+                    if (liked) {
+
+                      setHeartAnimation(
+                        trip.id
+                      );
+
+
+                      setTimeout(() => {
+
+                        setHeartAnimation(
+                          null
+                        );
+
+                      }, 800);
+
+                    }
 
                   }}
                 >
@@ -1177,16 +1390,17 @@ export default function FeedPage() {
                     "
                   >
 
-                    {/* LIKE */}
+                    {/* =================================================
+                        LIKE
+                    ================================================= */}
 
                     <button
-                      onClick={(e) => {
+                      onClick={async (e) => {
 
                         e.stopPropagation();
 
-                        likeTrip(
-                          trip.id,
-                          trip.likes || 0
+                        await likeTrip(
+                          trip.id
                         );
 
                       }}
@@ -1198,11 +1412,22 @@ export default function FeedPage() {
                     >
 
                       <Heart
-                        className="
+                        className={`
                           w-8
                           h-8
-                          text-white
-                        "
+                          transition-all
+                          duration-200
+                          ${
+                            Array.isArray(
+                              trip.likedBy
+                            ) &&
+                            trip.likedBy.includes(
+                              currentUserName
+                            )
+                              ? "fill-red-500 text-red-500"
+                              : "text-white"
+                          }
+                        `}
                       />
 
                       <span
@@ -1218,12 +1443,16 @@ export default function FeedPage() {
                     </button>
 
 
-                    {/* COMMENT */}
+                    {/* =================================================
+                        COMMENT
+                    ================================================= */}
 
                     <button
                       onClick={(e) => {
 
                         e.stopPropagation();
+
+                        setCommentText("");
 
                         setCommentPost(
                           trip
@@ -1262,7 +1491,9 @@ export default function FeedPage() {
                     </button>
 
 
-                    {/* SAVE */}
+                    {/* =================================================
+                        SAVE
+                    ================================================= */}
 
                     <button
                       onClick={(e) => {
@@ -1443,9 +1674,13 @@ export default function FeedPage() {
             flex
             items-end
           "
-          onClick={() =>
-            setCommentPost(null)
-          }
+          onClick={() => {
+
+            setCommentPost(null);
+
+            setCommentText("");
+
+          }}
         >
 
           <div
@@ -1490,13 +1725,19 @@ export default function FeedPage() {
 
 
               <button
-                onClick={() =>
+                onClick={() => {
+
                   setCommentPost(
                     null
-                  )
-                }
+                  );
+
+                  setCommentText("");
+
+                }}
                 className="
                   text-2xl
+                  hover:text-orange-500
+                  transition
                 "
               >
                 ✕
@@ -1578,6 +1819,7 @@ export default function FeedPage() {
                             flex
                             items-center
                             justify-center
+                            flex-shrink-0
                           "
                         >
                           👤
@@ -1618,7 +1860,7 @@ export default function FeedPage() {
 
 
             {/* =================================================
-                COMMENT INPUT
+                COMMENT INPUT + SEND BUTTON
             ================================================= */}
 
             <div
@@ -1629,40 +1871,105 @@ export default function FeedPage() {
               "
             >
 
-              <input
-                type="text"
-                placeholder="Add a comment..."
+              <div
                 className="
-                  w-full
-                  p-4
-                  rounded-full
+                  flex
+                  items-center
+                  gap-2
                   bg-black
                   border
                   border-zinc-700
-                  outline-none
-                  focus:border-orange-500
+                  rounded-full
+                  p-1.5
+                  focus-within:border-orange-500
+                  transition
                 "
-                onKeyDown={(e) => {
+              >
 
-                  if (
-                    e.key ===
-                    "Enter"
-                  ) {
+                {/* =================================================
+                    COMMENT INPUT
+                ================================================= */}
 
-                    addComment(
-                      commentPost.id,
-                      e.currentTarget
-                        .value
-                    );
-
-
-                    e.currentTarget
-                      .value = "";
-
+                <input
+                  type="text"
+                  value={
+                    commentText
                   }
+                  onChange={(e) =>
+                    setCommentText(
+                      e.target.value
+                    )
+                  }
+                  placeholder="Add a comment..."
+                  className="
+                    flex-1
+                    bg-transparent
+                    px-4
+                    py-2.5
+                    text-white
+                    outline-none
+                    placeholder:text-zinc-500
+                  "
+                  onKeyDown={async (e) => {
 
-                }}
-              />
+                    if (
+                      e.key ===
+                      "Enter"
+                    ) {
+
+                      e.preventDefault();
+
+                      await sendComment();
+
+                    }
+
+                  }}
+                />
+
+
+                {/* =================================================
+                    SEND BUTTON
+                ================================================= */}
+
+                <button
+                  type="button"
+                  onClick={sendComment}
+                  disabled={
+                    !commentText.trim()
+                  }
+                  className="
+                    w-10
+                    h-10
+                    rounded-full
+                    flex
+                    items-center
+                    justify-center
+                    bg-orange-500
+                    text-black
+                    flex-shrink-0
+                    transition-all
+                    duration-200
+                    hover:bg-orange-400
+                    hover:scale-105
+                    active:scale-95
+                    disabled:opacity-30
+                    disabled:cursor-not-allowed
+                    disabled:hover:scale-100
+                  "
+                  aria-label="Send comment"
+                >
+
+                  <Send
+                    className="
+                      w-5
+                      h-5
+                      -rotate-12
+                    "
+                  />
+
+                </button>
+
+              </div>
 
             </div>
 
