@@ -9,6 +9,10 @@ import {
   doc,
   getDoc,
   updateDoc,
+  deleteDoc,
+  getDocs,
+  query,
+  where,
 } from "firebase/firestore";
 
 import { db } from "../firebase";
@@ -242,7 +246,6 @@ const INDIAN_CITIES = [
   "Yamunanagar",
 ];
 
-
 /*
 =========================================================
 CREATE TRIP
@@ -250,7 +253,6 @@ CREATE TRIP
 */
 
 function CreateTripContent() {
-
   const router = useRouter();
 
   const [editId, setEditId] =
@@ -261,7 +263,6 @@ function CreateTripContent() {
       "individual"
     );
 
-
   /*
   =========================================================
   PROFILE IMAGE
@@ -271,31 +272,21 @@ function CreateTripContent() {
   const [tripImage, setTripImage] =
     useState("");
 
-
   useEffect(() => {
-
     const savedUser =
       localStorage.getItem(
         "ridemateUser"
       );
 
     if (savedUser) {
-
       const user =
         JSON.parse(savedUser);
 
       if (user.image) {
-
-        setTripImage(
-          user.image
-        );
-
+        setTripImage(user.image);
       }
-
     }
-
   }, []);
-
 
   /*
   =========================================================
@@ -304,7 +295,6 @@ function CreateTripContent() {
   */
 
   useEffect(() => {
-
     const params =
       new URLSearchParams(
         window.location.search
@@ -313,13 +303,10 @@ function CreateTripContent() {
     setEditId(
       params.get("edit")
     );
-
   }, []);
-
 
   const isEditing =
     !!editId;
-
 
   /*
   =========================================================
@@ -332,11 +319,6 @@ function CreateTripContent() {
 
   const [startLocation, setStartLocation] =
     useState("");
-
-  /*
-  NEW:
-  STARTING CITY
-  */
 
   const [startCity, setStartCity] =
     useState("");
@@ -359,6 +341,14 @@ function CreateTripContent() {
   const [tripPrice, setTripPrice] =
     useState("");
 
+  /*
+  =========================================================
+  DELETE STATE
+  =========================================================
+  */
+
+  const [deletingTrip, setDeletingTrip] =
+    useState(false);
 
   /*
   =========================================================
@@ -367,15 +357,11 @@ function CreateTripContent() {
   */
 
   useEffect(() => {
-
     const loadTrip =
       async () => {
-
-        if (!editId)
-          return;
+        if (!editId) return;
 
         try {
-
           const snap =
             await getDoc(
               doc(
@@ -385,93 +371,80 @@ function CreateTripContent() {
               )
             );
 
-          if (!snap.exists())
+          if (!snap.exists()) {
+            alert(
+              "This trip no longer exists."
+            );
+
+            router.push(
+              "/my-rides"
+            );
+
             return;
+          }
 
           const trip =
             snap.data();
 
-
           setDestination(
             trip.destination ||
-            ""
+              ""
           );
-
 
           setStartLocation(
             trip.startLocation ||
-            ""
+              ""
           );
-
-
-          /*
-          LOAD CITY
-          */
 
           setStartCity(
             trip.startCity ||
-            ""
+              ""
           );
-
 
           setBike(
             trip.bike ||
-            ""
+              ""
           );
-
 
           setCaption(
             trip.caption ||
-            ""
+              ""
           );
-
 
           setDistance(
             trip.distance ||
-            ""
+              ""
           );
-
 
           setTripDate(
             trip.tripDate ||
-            ""
+              ""
           );
-
 
           setItinerary(
             trip.itinerary ||
-            ""
+              ""
           );
-
 
           setTripPrice(
             trip.tripPrice ||
-            ""
+              ""
           );
-
 
           setRideType(
             trip.rideType ||
-            "individual"
+              "individual"
           );
-
-
         } catch (error) {
-
           console.error(
             "Failed to load trip:",
             error
           );
-
         }
-
       };
 
-
     loadTrip();
-
-  }, [editId]);
-
+  }, [editId, router]);
 
   /*
   =========================================================
@@ -481,9 +454,7 @@ function CreateTripContent() {
 
   const postTrip =
     async () => {
-
       try {
-
         const user =
           JSON.parse(
             localStorage.getItem(
@@ -491,46 +462,35 @@ function CreateTripContent() {
             ) || "{}"
           );
 
-
         if (!user.name) {
-
           alert(
             "Please login first."
           );
 
           return;
-
         }
-
 
         /*
         MAKE SURE CITY IS SELECTED
         */
 
         if (!startCity.trim()) {
-
           alert(
             "Please select your starting city."
           );
 
           return;
-
         }
 
-
         if (!startLocation.trim()) {
-
           alert(
             "Please enter your starting location."
           );
 
           return;
-
         }
 
-
-        let tripData;
-
+        let tripData: any;
 
         /*
         =====================================================
@@ -542,21 +502,53 @@ function CreateTripContent() {
           isEditing &&
           editId
         ) {
+          const existingTripSnap =
+            await getDoc(
+              doc(
+                db,
+                "trips",
+                editId
+              )
+            );
+
+          if (!existingTripSnap.exists()) {
+            alert(
+              "This trip no longer exists."
+            );
+
+            router.push(
+              "/my-rides"
+            );
+
+            return;
+          }
 
           const existingTrip =
-            (
-              await getDoc(
-                doc(
-                  db,
-                  "trips",
-                  editId
-                )
-              )
-            ).data();
+            existingTripSnap.data();
 
+          /*
+          ===================================================
+          OWNER PROTECTION
+          ===================================================
+          */
+
+          if (
+            existingTrip.userName &&
+            existingTrip.userName !==
+              user.name
+          ) {
+            alert(
+              "You are not allowed to edit this trip."
+            );
+
+            router.push(
+              "/my-rides"
+            );
+
+            return;
+          }
 
           tripData = {
-
             ...existingTrip,
 
             status:
@@ -566,10 +558,6 @@ function CreateTripContent() {
 
             destination,
 
-            /*
-            NEW CITY FIELD
-            */
-
             startCity,
 
             startLocation,
@@ -595,11 +583,8 @@ function CreateTripContent() {
 
             userImage:
               user.image || "",
-
           };
-
         }
-
 
         /*
         =====================================================
@@ -608,19 +593,13 @@ function CreateTripContent() {
         */
 
         else {
-
           tripData = {
-
             status:
               "upcoming",
 
             rideType,
 
             destination,
-
-            /*
-            NEW CITY FIELD
-            */
 
             startCity,
 
@@ -647,11 +626,8 @@ function CreateTripContent() {
 
             userImage:
               user.image || "",
-
           };
-
         }
-
 
         /*
         =====================================================
@@ -663,7 +639,6 @@ function CreateTripContent() {
           isEditing &&
           editId
         ) {
-
           await updateDoc(
             doc(
               db,
@@ -673,20 +648,16 @@ function CreateTripContent() {
             tripData
           );
 
-
           alert(
             "✅ Trip updated successfully!"
           );
-
 
           router.push(
             "/my-rides"
           );
 
           return;
-
         }
-
 
         /*
         =====================================================
@@ -700,7 +671,6 @@ function CreateTripContent() {
             "trips"
           ),
           {
-
             ...tripData,
 
             createdAt:
@@ -711,15 +681,12 @@ function CreateTripContent() {
 
             comments:
               [],
-
           }
         );
-
 
         alert(
           "🔥 Trip Posted Successfully!"
         );
-
 
         /*
         =====================================================
@@ -728,26 +695,15 @@ function CreateTripContent() {
         */
 
         setDestination("");
-
         setStartLocation("");
-
         setStartCity("");
-
         setDistance("");
-
         setBike("");
-
         setCaption("");
-
         setTripDate("");
-
         setTripPrice("");
-
         setItinerary("");
-
-
       } catch (error) {
-
         console.error(
           "Failed to save trip:",
           error
@@ -756,11 +712,199 @@ function CreateTripContent() {
         alert(
           "Failed to save trip"
         );
-
       }
-
     };
 
+  /*
+  =========================================================
+  DELETE TRIP
+  =========================================================
+  */
+
+  const deleteTrip =
+    async () => {
+      if (
+        !isEditing ||
+        !editId ||
+        deletingTrip
+      ) {
+        return;
+      }
+
+      try {
+        /*
+        =====================================================
+        GET CURRENT USER
+        =====================================================
+        */
+
+        const user =
+          JSON.parse(
+            localStorage.getItem(
+              "ridemateUser"
+            ) || "{}"
+          );
+
+        if (!user.name) {
+          alert(
+            "Please login first."
+          );
+
+          return;
+        }
+
+        /*
+        =====================================================
+        GET TRIP
+        =====================================================
+        */
+
+        const tripRef =
+          doc(
+            db,
+            "trips",
+            editId
+          );
+
+        const tripSnap =
+          await getDoc(
+            tripRef
+          );
+
+        if (!tripSnap.exists()) {
+          alert(
+            "This trip has already been deleted."
+          );
+
+          router.push(
+            "/my-rides"
+          );
+
+          return;
+        }
+
+        const trip =
+          tripSnap.data();
+
+        /*
+        =====================================================
+        OWNER PROTECTION
+        =====================================================
+        */
+
+        if (
+          trip.userName !==
+          user.name
+        ) {
+          alert(
+            "You are not allowed to delete this trip."
+          );
+
+          return;
+        }
+
+        /*
+        =====================================================
+        CONFIRMATION
+        =====================================================
+        */
+
+        const confirmed =
+          window.confirm(
+            "⚠️ Delete this trip?\n\n" +
+            "This action cannot be undone.\n\n" +
+            "Any pending or approved ride requests for this trip will also be removed."
+          );
+
+        if (!confirmed) {
+          return;
+        }
+
+        setDeletingTrip(true);
+
+        /*
+        =====================================================
+        DELETE RELATED RIDE REQUESTS
+        =====================================================
+        */
+
+        try {
+          const requestsQuery =
+            query(
+              collection(
+                db,
+                "rideRequests"
+              ),
+              where(
+                "tripId",
+                "==",
+                editId
+              )
+            );
+
+          const requestsSnapshot =
+            await getDocs(
+              requestsQuery
+            );
+
+          await Promise.all(
+            requestsSnapshot.docs.map(
+              async (requestDoc) => {
+                await deleteDoc(
+                  requestDoc.ref
+                );
+              }
+            )
+          );
+        } catch (requestError) {
+          /*
+          We still continue with deleting
+          the trip if there is a problem
+          loading/deleting old requests.
+          */
+
+          console.warn(
+            "Could not delete related ride requests:",
+            requestError
+          );
+        }
+
+        /*
+        =====================================================
+        DELETE TRIP
+        =====================================================
+        */
+
+        await deleteDoc(
+          tripRef
+        );
+
+        alert(
+          "🗑️ Trip deleted successfully!"
+        );
+
+        /*
+        =====================================================
+        RETURN TO MY RIDES
+        =====================================================
+        */
+
+        router.push(
+          "/my-rides"
+        );
+      } catch (error) {
+        console.error(
+          "Failed to delete trip:",
+          error
+        );
+
+        alert(
+          "Failed to delete trip. Please try again."
+        );
+
+        setDeletingTrip(false);
+      }
+    };
 
   /*
   =========================================================
@@ -769,7 +913,6 @@ function CreateTripContent() {
   */
 
   return (
-
     <PageBackground>
 
       <div
@@ -789,13 +932,11 @@ function CreateTripContent() {
         "
       >
 
-
         {/* =====================================================
             PROFILE IMAGE
         ===================================================== */}
 
         {tripImage && (
-
           <div
             className="
               flex
@@ -819,9 +960,7 @@ function CreateTripContent() {
             />
 
           </div>
-
         )}
-
 
         <div
           className="
@@ -829,7 +968,6 @@ function CreateTripContent() {
             mt-8
           "
         >
-
 
           {/* ===================================================
               RIDE TYPE
@@ -849,7 +987,6 @@ function CreateTripContent() {
             >
               Ride Type
             </label>
-
 
             <select
               value={rideType}
@@ -883,7 +1020,6 @@ function CreateTripContent() {
 
           </div>
 
-
           {/* ===================================================
               DESTINATION
           =================================================== */}
@@ -909,7 +1045,6 @@ function CreateTripContent() {
               focus:border-orange-500
             "
           />
-
 
           {/* ===================================================
               STARTING LOCATION CARD
@@ -952,7 +1087,6 @@ function CreateTripContent() {
 
             </div>
 
-
             {/* =================================================
                 STARTING CITY
             ================================================= */}
@@ -970,7 +1104,6 @@ function CreateTripContent() {
               >
                 Starting City
               </label>
-
 
               <input
                 type="text"
@@ -995,24 +1128,20 @@ function CreateTripContent() {
                 "
               />
 
-
               <datalist id="indian-cities">
 
                 {INDIAN_CITIES.map(
                   (city) => (
-
                     <option
                       key={city}
                       value={city}
                     />
-
                   )
                 )}
 
               </datalist>
 
             </div>
-
 
             {/* =================================================
                 EXACT STARTING LOCATION
@@ -1031,7 +1160,6 @@ function CreateTripContent() {
               >
                 Exact Starting Point
               </label>
-
 
               <input
                 type="text"
@@ -1056,7 +1184,6 @@ function CreateTripContent() {
               />
 
             </div>
-
 
             {/* =================================================
                 PREVIEW
@@ -1088,7 +1215,6 @@ function CreateTripContent() {
                   Explore Trips Preview
                 </p>
 
-
                 <p
                   className="
                     text-white
@@ -1112,7 +1238,6 @@ function CreateTripContent() {
             )}
 
           </div>
-
 
           {/* ===================================================
               DISTANCE
@@ -1140,7 +1265,6 @@ function CreateTripContent() {
             "
           />
 
-
           {/* ===================================================
               DATE & TIME
           =================================================== */}
@@ -1165,7 +1289,6 @@ function CreateTripContent() {
               focus:border-orange-500
             "
           />
-
 
           {/* ===================================================
               TRIP PRICE
@@ -1193,7 +1316,6 @@ function CreateTripContent() {
             "
           />
 
-
           {/* ===================================================
               BIKE
           =================================================== */}
@@ -1219,7 +1341,6 @@ function CreateTripContent() {
               focus:border-orange-500
             "
           />
-
 
           {/* ===================================================
               STORY + ITINERARY
@@ -1251,7 +1372,6 @@ function CreateTripContent() {
                 📝 Ride Story
               </label>
 
-
               <textarea
                 placeholder="Tell riders about your trip..."
                 value={caption}
@@ -1271,7 +1391,6 @@ function CreateTripContent() {
               />
 
             </div>
-
 
             {/* ITINERARY */}
 
@@ -1293,7 +1412,6 @@ function CreateTripContent() {
               >
                 🗺️ Itinerary (Optional)
               </label>
-
 
               <textarea
                 value={itinerary}
@@ -1321,13 +1439,13 @@ function CreateTripContent() {
 
           </div>
 
-
           {/* ===================================================
-              POST BUTTON
+              SAVE CHANGES / POST TRIP
           =================================================== */}
 
           <button
             onClick={postTrip}
+            disabled={deletingTrip}
             className="
               w-full
               bg-orange-500
@@ -1339,6 +1457,8 @@ function CreateTripContent() {
               hover:bg-orange-400
               hover:scale-[1.02]
               transition
+              disabled:opacity-50
+              disabled:hover:scale-100
             "
           >
 
@@ -1348,15 +1468,54 @@ function CreateTripContent() {
 
           </button>
 
+          {/* ===================================================
+              DELETE TRIP
+              ONLY SHOWN WHILE EDITING
+          =================================================== */}
+
+          {isEditing && (
+            <div
+              className="
+                pt-2
+              "
+            >
+
+              <button
+                onClick={deleteTrip}
+                disabled={deletingTrip}
+                className="
+                  w-full
+                  bg-red-600/10
+                  border
+                  border-red-600/40
+                  text-red-400
+                  hover:bg-red-600
+                  hover:text-white
+                  py-4
+                  rounded-2xl
+                  text-lg
+                  font-black
+                  transition
+                  disabled:opacity-50
+                  disabled:cursor-not-allowed
+                "
+              >
+
+                {deletingTrip
+                  ? "Deleting Trip..."
+                  : "🗑️ Delete Trip"}
+
+              </button>
+
+            </div>
+          )}
+
         </div>
 
       </div>
 
     </PageBackground>
-
   );
-
 }
-
 
 export default CreateTripContent;

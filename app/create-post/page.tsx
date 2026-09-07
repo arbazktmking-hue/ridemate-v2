@@ -8,20 +8,27 @@ import {
   collection,
 } from "firebase/firestore";
 
-import { db } from "../firebase";
+import {
+  getStorage,
+  ref,
+  uploadBytes,
+  getDownloadURL,
+} from "firebase/storage";
+
+import { db, auth, app } from "../firebase";
 
 export default function CreatePostPage() {
-
   const router = useRouter();
 
   const [caption, setCaption] = useState("");
   const [selectedFile, setSelectedFile] =
     useState<File | null>(null);
 
+  const [uploading, setUploading] =
+    useState(false);
+
   const createPost = async () => {
-
     try {
-
       console.log("POST BUTTON CLICKED");
 
       const currentUser =
@@ -36,40 +43,123 @@ export default function CreatePostPage() {
         return;
       }
 
-      await addDoc(
-  collection(db, "feedPosts"),
-  {
-    userName:
-      currentUser.name,
+      if (!selectedFile) {
+        alert("Please select a photo or video.");
+        return;
+      }
 
-    userImage:
-      currentUser.image,
+      setUploading(true);
 
-    fileName:
-      selectedFile
-        ? selectedFile.name
-        : "",
-
-    mediaType:
-      selectedFile
-        ? selectedFile.type
-        : "",
-
-    mediaUrl:
-      selectedFile
-        ? selectedFile.name
-        : "",
-
-    caption,
-
-    likes: 0,
-
-    comments: 0,
-
-    createdAt:
-      Date.now(),
-  }
+      /*
+      ==========================================================
+      1. CREATE UNIQUE FILE NAME
+      ==========================================================
+      */
+console.log(
+  "Current RideMate user:",
+  currentUser
 );
+
+console.log(
+  "Firebase user:",
+  auth.currentUser
+);
+      const fileName =
+        `${Date.now()}_${selectedFile.name}`;
+
+      /*
+      ==========================================================
+      2. CREATE STORAGE LOCATION
+      ==========================================================
+      */
+
+      const storage =
+  getStorage(app);
+
+const storageRef =
+  ref(
+    storage,
+    `feedPosts/${currentUser.uid}/${fileName}`
+  );
+
+      /*
+      ==========================================================
+      3. UPLOAD FILE TO FIREBASE STORAGE
+      ==========================================================
+      */
+
+      console.log(
+        "Uploading file..."
+      );
+
+      await uploadBytes(
+        storageRef,
+        selectedFile
+      );
+
+      /*
+      ==========================================================
+      4. GET REAL DOWNLOAD URL
+      ==========================================================
+      */
+
+      const mediaUrl =
+        await getDownloadURL(
+          storageRef
+        );
+
+      console.log(
+        "Upload successful:",
+        mediaUrl
+      );
+
+      /*
+      ==========================================================
+      5. SAVE POST TO FIRESTORE
+      ==========================================================
+      */
+
+      await addDoc(
+        collection(
+          db,
+          "feedPosts"
+        ),
+        {
+          userName:
+            currentUser.name,
+
+          userImage:
+            currentUser.image || "",
+
+          fileName:
+            selectedFile.name,
+
+          mediaType:
+            selectedFile.type,
+
+          mediaUrl:
+            mediaUrl,
+
+          caption:
+            caption.trim(),
+
+          likes:
+            0,
+
+          likedBy:
+            [],
+
+          comments:
+            [],
+
+          createdAt:
+            Date.now(),
+        }
+      );
+
+      console.log(
+        "Post saved successfully"
+      );
 
       alert(
         "Post created 🔥"
@@ -79,11 +169,19 @@ export default function CreatePostPage() {
 
     } catch (error) {
 
-      console.error(error);
+      console.error(
+        "Error creating post:",
+        error
+      );
 
       alert(
-        "Error creating post"
+        "Error uploading post. Please try again."
       );
+
+    } finally {
+
+      setUploading(false);
+
     }
   };
 
@@ -98,7 +196,7 @@ export default function CreatePostPage() {
 
         <div className="bg-zinc-900 rounded-3xl p-8">
 
-          {/* Media Upload */}
+          {/* MEDIA */}
 
           <h2 className="text-2xl font-bold mb-2">
             Add Photo or Video
@@ -112,14 +210,18 @@ export default function CreatePostPage() {
             type="file"
             accept="image/*,video/*"
             onChange={(e) => {
+
               if (
                 e.target.files &&
                 e.target.files[0]
               ) {
+
                 setSelectedFile(
                   e.target.files[0]
                 );
+
               }
+
             }}
             className="
               w-full
@@ -129,29 +231,62 @@ export default function CreatePostPage() {
             "
           />
 
+          {/* FILE PREVIEW */}
+
           {selectedFile && (
-            <div className="mt-4 p-4 bg-black rounded-xl">
-              <p className="text-green-500">
+
+            <div className="mt-6">
+
+              <p className="text-green-500 font-bold mb-3">
                 Selected:
               </p>
 
-              <p>
+              <p className="mb-4">
                 {selectedFile.name}
               </p>
 
-              <p className="text-zinc-400 text-sm">
-                {selectedFile.type}
-              </p>
+              {selectedFile.type.startsWith(
+                "image"
+              ) ? (
+
+                <img
+                  src={URL.createObjectURL(
+                    selectedFile
+                  )}
+                  alt="Preview"
+                  className="
+                    max-h-96
+                    w-full
+                    object-contain
+                    rounded-2xl
+                    bg-black
+                  "
+                />
+
+              ) : (
+
+                <video
+                  src={URL.createObjectURL(
+                    selectedFile
+                  )}
+                  controls
+                  className="
+                    max-h-96
+                    w-full
+                    rounded-2xl
+                    bg-black
+                  "
+                />
+
+              )}
+
             </div>
+
           )}
 
-          <p className="text-sm text-zinc-500 mt-2 mb-8">
-            Actual upload to Firebase Storage will be enabled later 🚀
-          </p>
+          {/* CAPTION */}
 
-          {/* Caption */}
-
-          <h2 className="text-2xl font-bold mb-2">
+          <h2 className="text-2xl font-bold mt-8 mb-2">
             Write a caption
           </h2>
 
@@ -172,44 +307,16 @@ export default function CreatePostPage() {
               border
               border-zinc-700
               mt-3
+              outline-none
+              focus:border-orange-500
             "
           />
 
-          {/* Preview */}
-
-          <h2 className="text-2xl font-bold mt-8 mb-4">
-            Preview
-          </h2>
-
-          <div className="
-            bg-black
-            border
-            border-zinc-700
-            rounded-2xl
-            p-8
-            text-center
-          ">
-            {selectedFile ? (
-              <>
-                <p className="text-orange-500 font-bold">
-                  {selectedFile.name}
-                </p>
-
-                <p className="text-zinc-400">
-                  {selectedFile.type}
-                </p>
-              </>
-            ) : (
-              <p className="text-zinc-500">
-                📷 Select a photo or video
-              </p>
-            )}
-          </div>
-
-          {/* Post Button */}
+          {/* POST BUTTON */}
 
           <button
             onClick={createPost}
+            disabled={uploading}
             className="
               w-full
               mt-8
@@ -218,9 +325,17 @@ export default function CreatePostPage() {
               rounded-2xl
               text-2xl
               font-black
+              hover:bg-orange-400
+              transition
+              disabled:opacity-50
+              disabled:cursor-not-allowed
             "
           >
-            Post 🚀
+
+            {uploading
+              ? "Uploading... ⏳"
+              : "Post 🚀"}
+
           </button>
 
         </div>

@@ -489,7 +489,24 @@ export default function Navbar() {
                 <Route size={22} />
                 My Rides
               </a>
+{/* Help & Feedback */}
 
+<a
+  href="/help-feedback"
+  onClick={closeMenu}
+  className="
+    flex
+    items-center
+    gap-3
+    hover:text-orange-500
+    transition
+  "
+>
+  <span className="text-xl">
+    🆘
+  </span>
+  Help & Feedback
+</a>
               {/* About Us */}
 
               <a
