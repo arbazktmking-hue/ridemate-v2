@@ -32,6 +32,8 @@ type UserAccount = {
 };
 
 export default function AdminPage() {
+  const router = useRouter();
+
   // =========================================================
   // DASHBOARD STATS
   // =========================================================
@@ -65,25 +67,20 @@ export default function AdminPage() {
 
   const [userSearch, setUserSearch] = useState("");
 
-  const [selectedUser, setSelectedUser] =
-    useState<UserAccount | null>(null);
-
-  // =========================================================
-  // ADMIN
-  // =========================================================
-
-  const router = useRouter();
-
   // =========================================================
   // ADMIN ACCESS
   // =========================================================
 
   useEffect(() => {
-    const user = JSON.parse(
-      localStorage.getItem("ridemateUser") || "{}"
-    );
+    try {
+      const user = JSON.parse(
+        localStorage.getItem("ridemateUser") || "{}"
+      );
 
-    if (user.email !== "arbazktmking@gmail.com") {
+      if (user.email !== "arbazktmking@gmail.com") {
+        router.replace("/home");
+      }
+    } catch {
       router.replace("/home");
     }
   }, [router]);
@@ -174,7 +171,6 @@ export default function AdminPage() {
       setFeedback(feedbackData);
       setFeedbackCount(feedbackData.length);
 
-      // Load existing replies into text boxes
       const existingReplies: Record<
         string,
         string
@@ -214,7 +210,6 @@ export default function AdminPage() {
           ...userDoc.data(),
         }));
 
-      // Newest users first
       userData.sort((a, b) => {
         const dateA =
           typeof a.createdAt === "number"
@@ -251,7 +246,7 @@ export default function AdminPage() {
   }, []);
 
   // =========================================================
-  // SEND ADMIN REPLY
+  // ADMIN REPLY
   // =========================================================
 
   const sendReply = async (
@@ -268,11 +263,13 @@ export default function AdminPage() {
     try {
       setUpdatingFeedback(feedbackId);
 
+      const replyTime = Date.now();
+
       await updateDoc(
         doc(db, "feedback", feedbackId),
         {
           adminReply: reply,
-          repliedAt: Date.now(),
+          repliedAt: replyTime,
           status: "responded",
         }
       );
@@ -283,7 +280,7 @@ export default function AdminPage() {
             ? {
                 ...item,
                 adminReply: reply,
-                repliedAt: Date.now(),
+                repliedAt: replyTime,
                 status: "responded",
               }
             : item
@@ -399,6 +396,59 @@ export default function AdminPage() {
   };
 
   // =========================================================
+  // START ADMIN USER VIEW
+  // =========================================================
+
+  const viewAsUser = (
+    user: UserAccount
+  ) => {
+    const name =
+      user.username ||
+      user.name ||
+      "Unknown User";
+
+    const email =
+      user.email ||
+      "";
+
+    const uid =
+      user.uid ||
+      user.id;
+
+    const image =
+      user.image ||
+      user.photoURL ||
+      "";
+
+    /*
+      IMPORTANT:
+
+      We DO NOT replace ridemateUser.
+
+      Your actual admin login remains intact.
+
+      We create a separate temporary session describing
+      which user the admin is currently investigating.
+    */
+
+    const adminViewSession = {
+      active: true,
+      userId: uid,
+      userName: name,
+      userEmail: email,
+      userImage: image,
+      startedAt: Date.now(),
+    };
+
+    localStorage.setItem(
+      "ridemateAdminView",
+      JSON.stringify(adminViewSession)
+    );
+
+    router.push("/home");
+  };
+
+  // =========================================================
   // FILTER USERS
   // =========================================================
 
@@ -447,9 +497,7 @@ export default function AdminPage() {
     <main className="min-h-screen bg-black text-white p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
 
-        {/* =====================================================
-            HEADER
-        ===================================================== */}
+        {/* HEADER */}
 
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 mb-10">
 
@@ -486,9 +534,7 @@ export default function AdminPage() {
 
         </div>
 
-        {/* =====================================================
-            STATISTICS
-        ===================================================== */}
+        {/* STATISTICS */}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
 
@@ -544,9 +590,7 @@ export default function AdminPage() {
 
         </div>
 
-        {/* =====================================================
-            FEEDBACK CENTER
-        ===================================================== */}
+        {/* FEEDBACK CENTER */}
 
         <section className="mt-14">
 
@@ -604,8 +648,6 @@ export default function AdminPage() {
                     p-5 md:p-6
                   "
                 >
-
-                  {/* TOP */}
 
                   <div className="flex flex-col md:flex-row md:justify-between gap-4">
 
@@ -678,8 +720,6 @@ export default function AdminPage() {
 
                   </div>
 
-                  {/* USER MESSAGE */}
-
                   <div
                     className="
                       mt-6
@@ -700,8 +740,6 @@ export default function AdminPage() {
                     </p>
 
                   </div>
-
-                  {/* EXISTING ADMIN REPLY */}
 
                   {item.adminReply && (
                     <div
@@ -734,8 +772,6 @@ export default function AdminPage() {
 
                     </div>
                   )}
-
-                  {/* REPLY BOX */}
 
                   {item.status !==
                     "resolved" && (
@@ -853,9 +889,7 @@ export default function AdminPage() {
 
         </section>
 
-        {/* =====================================================
-            USER ACCOUNTS
-        ===================================================== */}
+        {/* USER ACCOUNTS */}
 
         <section className="mt-16">
 
@@ -868,7 +902,7 @@ export default function AdminPage() {
               </h2>
 
               <p className="text-zinc-500 mt-1">
-                View registered RideMate users and their account information.
+                View and investigate registered RideMate users.
               </p>
 
             </div>
@@ -1023,23 +1057,21 @@ export default function AdminPage() {
 
                       <button
                         onClick={() =>
-                          setSelectedUser(
-                            user
-                          )
+                          viewAsUser(user)
                         }
                         className="
                           w-full
                           mt-5
-                          bg-zinc-800
-                          hover:bg-orange-500
-                          hover:text-black
+                          bg-orange-500
+                          hover:bg-orange-600
+                          text-black
                           py-3
                           rounded-xl
                           font-black
                           transition
                         "
                       >
-                        View Account
+                        🛡️ View as User
                       </button>
 
                     </div>
@@ -1054,195 +1086,6 @@ export default function AdminPage() {
         </section>
 
       </div>
-
-      {/* =======================================================
-          USER ACCOUNT MODAL
-      ======================================================= */}
-
-      {selectedUser && (
-        <div
-          className="
-            fixed
-            inset-0
-            z-[9999]
-            bg-black/80
-            backdrop-blur-sm
-            flex
-            items-center
-            justify-center
-            p-4
-          "
-          onClick={() =>
-            setSelectedUser(null)
-          }
-        >
-
-          <div
-            className="
-              bg-zinc-950
-              border
-              border-zinc-800
-              rounded-3xl
-              w-full
-              max-w-2xl
-              max-h-[90vh]
-              overflow-y-auto
-              p-6
-            "
-            onClick={(e) =>
-              e.stopPropagation()
-            }
-          >
-
-            {/* MODAL HEADER */}
-
-            <div className="flex items-start justify-between gap-4">
-
-              <div>
-
-                <h2 className="text-2xl font-black text-orange-500">
-                  User Account
-                </h2>
-
-                <p className="text-zinc-500 text-sm mt-1">
-                  Complete account information stored in RideMate.
-                </p>
-
-              </div>
-
-              <button
-                onClick={() =>
-                  setSelectedUser(null)
-                }
-                className="
-                  w-10
-                  h-10
-                  rounded-full
-                  bg-zinc-900
-                  hover:bg-zinc-800
-                  flex
-                  items-center
-                  justify-center
-                  text-xl
-                "
-              >
-                ×
-              </button>
-
-            </div>
-
-            {/* PROFILE */}
-
-            <div className="mt-6 flex items-center gap-4">
-
-              {(
-                selectedUser.image ||
-                selectedUser.photoURL
-              ) ? (
-                <img
-                  src={
-                    selectedUser.image ||
-                    selectedUser.photoURL
-                  }
-                  alt={
-                    selectedUser.username ||
-                    selectedUser.name ||
-                    "User"
-                  }
-                  className="
-                    w-20
-                    h-20
-                    rounded-full
-                    object-cover
-                    border-2
-                    border-orange-500
-                  "
-                />
-              ) : (
-                <div
-                  className="
-                    w-20
-                    h-20
-                    rounded-full
-                    bg-zinc-800
-                    flex
-                    items-center
-                    justify-center
-                    text-3xl
-                  "
-                >
-                  👤
-                </div>
-              )}
-
-              <div>
-
-                <h3 className="text-xl font-black">
-                  {selectedUser.username ||
-                    selectedUser.name ||
-                    "Unknown User"}
-                </h3>
-
-                <p className="text-zinc-500">
-                  {selectedUser.email ||
-                    "No email"}
-                </p>
-
-              </div>
-
-            </div>
-
-            {/* ACCOUNT DATA */}
-
-            <div className="mt-8 space-y-3">
-
-              {Object.entries(
-                selectedUser
-              )
-                .filter(
-                  ([key]) =>
-                    key !== "image" &&
-                    key !== "photoURL"
-                )
-                .map(
-                  ([key, value]) => (
-                    <div
-                      key={key}
-                      className="
-                        bg-zinc-900
-                        border
-                        border-zinc-800
-                        rounded-xl
-                        p-4
-                      "
-                    >
-
-                      <p className="text-xs text-zinc-600 uppercase font-bold">
-                        {key}
-                      </p>
-
-                      <p className="text-zinc-300 text-sm mt-1 break-words whitespace-pre-wrap">
-                        {typeof value ===
-                        "object"
-                          ? JSON.stringify(
-                              value,
-                              null,
-                              2
-                            )
-                          : String(value)}
-                      </p>
-
-                    </div>
-                  )
-                )}
-
-            </div>
-
-          </div>
-
-        </div>
-      )}
-
     </main>
   );
 }
