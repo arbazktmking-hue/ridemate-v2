@@ -8,6 +8,19 @@ import {
 import { db } from "../firebase";
 import { useRouter } from "next/navigation";
 
+type AdminView = {
+  active?: boolean;
+  userId?: string;
+  userName?: string;
+  userEmail?: string;
+  userImage?: string;
+};
+
+type Ride = {
+  id: string;
+  [key: string]: any;
+};
+
 export default function MyRidesPage() {
   const router = useRouter();
 
@@ -15,100 +28,284 @@ export default function MyRidesPage() {
     "upcoming" | "history"
   >("upcoming");
 
-  const [upcomingRides, setUpcomingRides] = useState<any[]>([]);
-  const [rideHistory, setRideHistory] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [upcomingRides, setUpcomingRides] =
+    useState<Ride[]>([]);
 
-  const [expandedRide, setExpandedRide] = useState<string | null>(
-    null
-  );
+  const [rideHistory, setRideHistory] =
+    useState<Ride[]>([]);
 
-  // =========================================================
-  // LOAD RIDES
-  // =========================================================
+  const [loading, setLoading] =
+    useState(true);
+
+  const [expandedRide, setExpandedRide] =
+    useState<string | null>(null);
+
+  const [adminView, setAdminView] =
+    useState<AdminView | null>(null);
+
+  const [currentUserName, setCurrentUserName] =
+    useState("");
+
+  /* =========================================================
+     LOAD ACTIVE USER / ADMIN VIEW
+  ========================================================= */
+
+  useEffect(() => {
+    const loadViewUser = () => {
+      try {
+        const savedAdminView =
+          localStorage.getItem(
+            "ridemateAdminView"
+          );
+
+        if (savedAdminView) {
+          const parsedAdminView =
+            JSON.parse(savedAdminView);
+
+          if (parsedAdminView?.active) {
+            setAdminView(
+              parsedAdminView
+            );
+
+            setCurrentUserName(
+              parsedAdminView.userName ||
+                ""
+            );
+
+            return;
+          }
+        }
+
+        const savedUser =
+          localStorage.getItem(
+            "ridemateUser"
+          );
+
+        if (savedUser) {
+          const user =
+            JSON.parse(savedUser);
+
+          setAdminView(null);
+
+          setCurrentUserName(
+            user.name ||
+              user.username ||
+              ""
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Failed to load active user:",
+          error
+        );
+      }
+    };
+
+    loadViewUser();
+
+    const handleAdminViewChange =
+      () => {
+        loadViewUser();
+      };
+
+    window.addEventListener(
+      "ridemateAdminViewChanged",
+      handleAdminViewChange
+    );
+
+    window.addEventListener(
+      "storage",
+      handleAdminViewChange
+    );
+
+    return () => {
+      window.removeEventListener(
+        "ridemateAdminViewChanged",
+        handleAdminViewChange
+      );
+
+      window.removeEventListener(
+        "storage",
+        handleAdminViewChange
+      );
+    };
+  }, []);
+
+  const isAdminView =
+    adminView?.active === true;
+
+  /* =========================================================
+     LOAD RIDES
+  ========================================================= */
 
   useEffect(() => {
     const loadRides = async () => {
       try {
         setLoading(true);
 
-        const currentUser = JSON.parse(
-          localStorage.getItem("ridemateUser") || "{}"
+        /* =====================================================
+           DETERMINE ACTIVE USER
+        ===================================================== */
+
+        let activeUserName = "";
+
+        /*
+         * ADMIN INVESTIGATION MODE
+         */
+
+        const savedAdminView =
+          localStorage.getItem(
+            "ridemateAdminView"
+          );
+
+        if (savedAdminView) {
+          const parsedAdminView =
+            JSON.parse(savedAdminView);
+
+          if (
+            parsedAdminView?.active &&
+            parsedAdminView.userName
+          ) {
+            activeUserName =
+              parsedAdminView.userName;
+          }
+        }
+
+        /*
+         * NORMAL USER
+         */
+
+        if (!activeUserName) {
+          const currentUser =
+            JSON.parse(
+              localStorage.getItem(
+                "ridemateUser"
+              ) || "{}"
+            );
+
+          activeUserName =
+            currentUser.name ||
+            currentUser.username ||
+            "";
+        }
+
+        setCurrentUserName(
+          activeUserName
         );
 
-        if (!currentUser.name) {
+        if (!activeUserName) {
+          setUpcomingRides([]);
+          setRideHistory([]);
           setLoading(false);
           return;
         }
 
-        // =====================================================
-        // LOAD ALL TRIPS
-        // =====================================================
-
-        const tripsSnapshot = await getDocs(
-          collection(db, "trips")
+        console.log(
+          "My Rides active user:",
+          activeUserName
         );
 
-        const tripsMap: Record<string, any> = {};
+        /* =====================================================
+           LOAD ALL TRIPS
+        ===================================================== */
 
-        tripsSnapshot.forEach((tripDoc) => {
-          tripsMap[tripDoc.id] = {
-            id: tripDoc.id,
-            ...tripDoc.data(),
-          };
-        });
+        const tripsSnapshot =
+          await getDocs(
+            collection(db, "trips")
+          );
 
-        // =====================================================
-        // LOAD ALL REQUESTS
-        // =====================================================
+        const tripsMap: Record<
+          string,
+          Ride
+        > = {};
 
-        const requestsSnapshot = await getDocs(
-          collection(db, "rideRequests")
-        );
-
-        // =====================================================
-        // CREATE APPROVED MEMBERS MAP
-        //
-        // tripId -> approved rider
-        // =====================================================
-
-        const approvedMembersMap: Record<string, any> = {};
-
-        requestsSnapshot.forEach((requestDoc) => {
-          const request = requestDoc.data();
-
-          if (
-            request.status === "approved" &&
-            request.tripId
-          ) {
-            approvedMembersMap[request.tripId] = {
-              name: request.requester || "",
-              image: request.requesterImage || "",
+        tripsSnapshot.forEach(
+          (tripDoc) => {
+            tripsMap[tripDoc.id] = {
+              id: tripDoc.id,
+              ...tripDoc.data(),
             };
           }
-        });
+        );
 
-        const upcoming: any[] = [];
-        const history: any[] = [];
+        /* =====================================================
+           LOAD ALL REQUESTS
+        ===================================================== */
+
+        const requestsSnapshot =
+          await getDocs(
+            collection(
+              db,
+              "rideRequests"
+            )
+          );
+
+        /* =====================================================
+           CREATE APPROVED MEMBERS MAP
+           tripId -> approved rider
+        ===================================================== */
+
+        const approvedMembersMap: Record<
+          string,
+          {
+            name: string;
+            image: string;
+          }
+        > = {};
+
+        requestsSnapshot.forEach(
+          (requestDoc) => {
+            const request =
+              requestDoc.data();
+
+            if (
+              request.status ===
+                "approved" &&
+              request.tripId
+            ) {
+              approvedMembersMap[
+                request.tripId
+              ] = {
+                name:
+                  request.requester ||
+                  "",
+                image:
+                  request.requesterImage ||
+                  "",
+              };
+            }
+          }
+        );
+
+        const upcoming: Ride[] = [];
+        const history: Ride[] = [];
 
         const now = new Date();
 
-        // =====================================================
-        // HELPER
-        // =====================================================
+        /* =====================================================
+           HELPER
+        ===================================================== */
 
-        const isTripCompletedOrPast = (trip: any) => {
-          // Explicitly completed
-          if (trip.status === "completed") {
+        const isTripCompletedOrPast = (
+          trip: any
+        ) => {
+          if (
+            trip.status ===
+            "completed"
+          ) {
             return true;
           }
 
-          // Past trip date
           if (trip.tripDate) {
-            const tripDate = new Date(trip.tripDate);
+            const tripDate =
+              new Date(
+                trip.tripDate
+              );
 
             if (
-              !isNaN(tripDate.getTime()) &&
+              !isNaN(
+                tripDate.getTime()
+              ) &&
               tripDate < now
             ) {
               return true;
@@ -118,281 +315,310 @@ export default function MyRidesPage() {
           return false;
         };
 
-        // =====================================================
-        // TRIPS POSTED BY CURRENT USER
-        // =====================================================
+        /* =====================================================
+           TRIPS POSTED BY ACTIVE USER
+        ===================================================== */
 
-        tripsSnapshot.forEach((tripDoc) => {
-          const trip = tripDoc.data();
+        tripsSnapshot.forEach(
+          (tripDoc) => {
+            const trip =
+              tripDoc.data();
 
-          if (trip.userName !== currentUser.name) {
-            return;
-          }
+            if (
+              trip.userName !==
+              activeUserName
+            ) {
+              return;
+            }
 
-          // ---------------------------------------------------
-          // FIND APPROVED RIDER FOR THIS HOST'S TRIP
-          // ---------------------------------------------------
+            const approvedMember =
+              approvedMembersMap[
+                tripDoc.id
+              ] || null;
 
-          const approvedMember =
-            approvedMembersMap[tripDoc.id] || null;
+            const tripData: Ride = {
+              id: tripDoc.id,
+              ...trip,
 
-          const tripData = {
-            id: tripDoc.id,
-            ...trip,
+              role: "Host",
 
-            role: "Host",
+              /*
+               * Admin Investigation Mode
+               * is strictly read-only.
+               */
+              canEdit:
+                !isAdminView,
 
-            // Host can edit only upcoming rides
-            canEdit: true,
-
-            // Approved rider
-            acceptedMember:
-              approvedMember?.name || "",
-
-            acceptedMemberImage:
-              approvedMember?.image || "",
-          };
-
-          // ---------------------------------------------------
-          // COMPLETED / PAST
-          // ---------------------------------------------------
-
-          if (isTripCompletedOrPast(trip)) {
-            history.push(tripData);
-            return;
-          }
-
-          // ---------------------------------------------------
-          // UPCOMING
-          // ---------------------------------------------------
-
-          upcoming.push(tripData);
-        });
-
-        // =====================================================
-        // TRIPS JOINED BY CURRENT USER
-        // =====================================================
-
-        requestsSnapshot.forEach((requestDoc) => {
-          const request = requestDoc.data();
-
-          // Only approved requests belonging to current user
-          if (
-            request.requester !== currentUser.name ||
-            request.status !== "approved"
-          ) {
-            return;
-          }
-
-          // ===================================================
-          // FIND REAL TRIP
-          // ===================================================
-
-          const actualTrip =
-            tripsMap[request.tripId];
-
-          // ===================================================
-          // ACTUAL TRIP EXISTS
-          // ===================================================
-
-          if (actualTrip) {
-            const joinedTrip = {
-              ...actualTrip,
-
-              id: actualTrip.id,
-
-              role: "Rider",
-
-              // Rider cannot edit
-              canEdit: false,
-
-              // Host information
-              tripOwner:
-                actualTrip.userName ||
-                request.tripOwner ||
+              acceptedMember:
+                approvedMember?.name ||
                 "",
 
-              tripOwnerImage:
-                actualTrip.userImage ||
-                request.tripOwnerImage ||
+              acceptedMemberImage:
+                approvedMember?.image ||
                 "",
+            };
+
+            /* COMPLETED / PAST */
+
+            if (
+              isTripCompletedOrPast(
+                trip
+              )
+            ) {
+              history.push(
+                tripData
+              );
+
+              return;
+            }
+
+            /* UPCOMING */
+
+            upcoming.push(
+              tripData
+            );
+          }
+        );
+
+        /* =====================================================
+           TRIPS JOINED BY ACTIVE USER
+        ===================================================== */
+
+        requestsSnapshot.forEach(
+          (requestDoc) => {
+            const request =
+              requestDoc.data();
+
+            /*
+             * Only approved requests
+             * belonging to active user.
+             */
+
+            if (
+              request.requester !==
+                activeUserName ||
+              request.status !==
+                "approved"
+            ) {
+              return;
+            }
+
+            const actualTrip =
+              tripsMap[
+                request.tripId
+              ];
+
+            /* =================================================
+               ACTUAL TRIP EXISTS
+            ================================================= */
+
+            if (actualTrip) {
+              const joinedTrip: Ride = {
+                ...actualTrip,
+
+                id: actualTrip.id,
+
+                role: "Rider",
+
+                canEdit: false,
+
+                tripOwner:
+                  actualTrip.userName ||
+                  request.tripOwner ||
+                  "",
+
+                tripOwnerImage:
+                  actualTrip.userImage ||
+                  request.tripOwnerImage ||
+                  "",
+
+                destination:
+                  actualTrip.destination ||
+                  request.destination ||
+                  "RideMate Trip",
+
+                tripDate:
+                  actualTrip.tripDate ||
+                  request.tripDate ||
+                  null,
+
+                bike:
+                  actualTrip.bike ||
+                  request.bike ||
+                  "RideMate Trip",
+
+                startLocation:
+                  actualTrip.startLocation ||
+                  request.startLocation ||
+                  "",
+
+                distance:
+                  actualTrip.distance ||
+                  request.distance ||
+                  "",
+
+                tripPrice:
+                  actualTrip.tripPrice ??
+                  request.tripPrice ??
+                  "",
+
+                rideType:
+                  actualTrip.rideType ||
+                  request.rideType ||
+                  "",
+
+                acceptedMember:
+                  actualTrip.userName ||
+                  request.tripOwner ||
+                  "",
+
+                acceptedMemberImage:
+                  actualTrip.userImage ||
+                  request.tripOwnerImage ||
+                  "",
+              };
+
+              if (
+                isTripCompletedOrPast(
+                  actualTrip
+                )
+              ) {
+                history.push(
+                  joinedTrip
+                );
+              } else {
+                upcoming.push(
+                  joinedTrip
+                );
+              }
+
+              return;
+            }
+
+            /* =================================================
+               FALLBACK
+            ================================================= */
+
+            const fallbackRide: Ride = {
+              id:
+                request.tripId,
 
               destination:
-                actualTrip.destination ||
                 request.destination ||
                 "RideMate Trip",
 
+              userName:
+                request.tripOwner ||
+                "",
+
+              role: "Rider",
+
               tripDate:
-                actualTrip.tripDate ||
                 request.tripDate ||
                 null,
 
               bike:
-                actualTrip.bike ||
                 request.bike ||
                 "RideMate Trip",
 
               startLocation:
-                actualTrip.startLocation ||
                 request.startLocation ||
                 "",
 
               distance:
-                actualTrip.distance ||
                 request.distance ||
                 "",
 
               tripPrice:
-                actualTrip.tripPrice ??
-                request.tripPrice ??
+                request.tripPrice ||
                 "",
 
               rideType:
-                actualTrip.rideType ||
                 request.rideType ||
                 "",
 
-              // The rider is the current user,
-              // but the important "other person"
-              // is the host.
+              canEdit: false,
+
+              tripOwner:
+                request.tripOwner ||
+                "",
+
+              tripOwnerImage:
+                request.tripOwnerImage ||
+                "",
+
               acceptedMember:
-                actualTrip.userName ||
                 request.tripOwner ||
                 "",
 
               acceptedMemberImage:
-                actualTrip.userImage ||
                 request.tripOwnerImage ||
                 "",
             };
 
-            // -------------------------------------------------
-            // ACTUAL TRIP STATUS
-            // -------------------------------------------------
-
             if (
-              isTripCompletedOrPast(actualTrip)
+              fallbackRide.tripDate
             ) {
-              history.push(joinedTrip);
-            } else {
-              upcoming.push(joinedTrip);
+              const fallbackDate =
+                new Date(
+                  fallbackRide.tripDate
+                );
+
+              if (
+                !isNaN(
+                  fallbackDate.getTime()
+                ) &&
+                fallbackDate < now
+              ) {
+                history.push(
+                  fallbackRide
+                );
+
+                return;
+              }
             }
 
-            return;
+            upcoming.push(
+              fallbackRide
+            );
           }
+        );
 
-          // ===================================================
-          // FALLBACK
-          // ===================================================
-
-          const fallbackRide = {
-            id: request.tripId,
-
-            destination:
-              request.destination ||
-              "RideMate Trip",
-
-            userName:
-              request.tripOwner ||
-              "",
-
-            role: "Rider",
-
-            tripDate:
-              request.tripDate ||
-              null,
-
-            bike:
-              request.bike ||
-              "RideMate Trip",
-
-            startLocation:
-              request.startLocation ||
-              "",
-
-            distance:
-              request.distance ||
-              "",
-
-            tripPrice:
-              request.tripPrice ||
-              "",
-
-            rideType:
-              request.rideType ||
-              "",
-
-            canEdit: false,
-
-            tripOwner:
-              request.tripOwner ||
-              "",
-
-            tripOwnerImage:
-              request.tripOwnerImage ||
-              "",
-
-            // Other person = host
-            acceptedMember:
-              request.tripOwner ||
-              "",
-
-            acceptedMemberImage:
-              request.tripOwnerImage ||
-              "",
-          };
-
-          // ---------------------------------------------------
-          // PAST DATE
-          // ---------------------------------------------------
-
-          if (fallbackRide.tripDate) {
-            const fallbackDate =
-              new Date(
-                fallbackRide.tripDate
-              );
-
-            if (
-              !isNaN(
-                fallbackDate.getTime()
-              ) &&
-              fallbackDate < now
-            ) {
-              history.push(
-                fallbackRide
-              );
-              return;
-            }
-          }
-
-          upcoming.push(
-            fallbackRide
-          );
-        });
-
-        // =====================================================
-        // REMOVE DUPLICATE UPCOMING RIDES
-        // =====================================================
+        /* =====================================================
+           REMOVE DUPLICATE UPCOMING RIDES
+        ===================================================== */
 
         const uniqueUpcoming =
           upcoming.filter(
-            (ride, index, self) =>
+            (
+              ride,
+              index,
+              self
+            ) =>
               index ===
               self.findIndex(
-                (r) => r.id === ride.id
+                (r) =>
+                  r.id ===
+                  ride.id
               )
           );
 
-        // =====================================================
-        // REMOVE DUPLICATE HISTORY
-        // =====================================================
+        /* =====================================================
+           REMOVE DUPLICATE HISTORY
+        ===================================================== */
 
         const uniqueHistory =
           history.filter(
-            (ride, index, self) =>
+            (
+              ride,
+              index,
+              self
+            ) =>
               index ===
               self.findIndex(
-                (r) => r.id === ride.id
+                (r) =>
+                  r.id ===
+                  ride.id
               )
           );
 
@@ -415,13 +641,28 @@ export default function MyRidesPage() {
     };
 
     loadRides();
-  }, []);
+  }, [isAdminView]);
 
-  // =========================================================
-  // EDIT RIDE
-  // =========================================================
+  /* =========================================================
+     EDIT RIDE
+  ========================================================= */
 
-  const editRide = (tripId: string) => {
+  const editRide = (
+    tripId: string
+  ) => {
+    /*
+     * Never allow editing while
+     * investigating a user.
+     */
+
+    if (isAdminView) {
+      alert(
+        "Admin View Mode is read-only.\n\nYou cannot edit this ride while investigating a user account."
+      );
+
+      return;
+    }
+
     router.push(
       `/create-trip?edit=${encodeURIComponent(
         tripId
@@ -429,23 +670,28 @@ export default function MyRidesPage() {
     );
   };
 
-  // =========================================================
-  // TOGGLE EXPANSION
-  // =========================================================
+  /* =========================================================
+     TOGGLE EXPANSION
+  ========================================================= */
 
-  const toggleRide = (rideId: string) => {
-    setExpandedRide((current) =>
-      current === rideId
-        ? null
-        : rideId
+  const toggleRide = (
+    rideId: string
+  ) => {
+    setExpandedRide(
+      (current) =>
+        current === rideId
+          ? null
+          : rideId
     );
   };
 
-  // =========================================================
-  // FORMAT DATE
-  // =========================================================
+  /* =========================================================
+     FORMAT DATE
+  ========================================================= */
 
-  const formatTripDate = (value: any) => {
+  const formatTripDate = (
+    value: any
+  ) => {
     if (!value) {
       return "Date not available";
     }
@@ -454,22 +700,34 @@ export default function MyRidesPage() {
       let date: Date;
 
       if (
-        typeof value === "object" &&
-        typeof value.toDate === "function"
+        typeof value ===
+          "object" &&
+        typeof value.toDate ===
+          "function"
       ) {
-        date = value.toDate();
+        date =
+          value.toDate();
       } else if (
-        typeof value === "object" &&
-        value.seconds !== undefined
+        typeof value ===
+          "object" &&
+        value.seconds !==
+          undefined
       ) {
         date = new Date(
-          value.seconds * 1000
+          value.seconds *
+            1000
         );
       } else {
-        date = new Date(value);
+        date = new Date(
+          value
+        );
       }
 
-      if (isNaN(date.getTime())) {
+      if (
+        isNaN(
+          date.getTime()
+        )
+      ) {
         return "Date not available";
       }
 
@@ -489,50 +747,65 @@ export default function MyRidesPage() {
     }
   };
 
-  // =========================================================
-  // GET OTHER PERSON
-  // =========================================================
+  /* =========================================================
+     GET OTHER PERSON
+  ========================================================= */
 
-  const getOtherMemberName = (trip: any) => {
-    // Rider → show host
+  const getOtherMemberName = (
+    trip: Ride
+  ) => {
     if (
-      trip.role === "Rider" &&
+      trip.role ===
+        "Rider" &&
       trip.tripOwner
     ) {
       return trip.tripOwner;
     }
 
-    // Host → show accepted rider
-    if (trip.acceptedMember) {
+    if (
+      trip.acceptedMember
+    ) {
       return trip.acceptedMember;
     }
 
-    // Fallbacks
-    if (trip.memberName) {
+    if (
+      trip.memberName
+    ) {
       return trip.memberName;
     }
 
-    if (trip.joinedUser) {
+    if (
+      trip.joinedUser
+    ) {
       return trip.joinedUser;
     }
 
-    if (trip.riderName) {
+    if (
+      trip.riderName
+    ) {
       return trip.riderName;
     }
 
-    if (trip.acceptedRider) {
+    if (
+      trip.acceptedRider
+    ) {
       return trip.acceptedRider;
     }
 
     return null;
   };
 
-  // =========================================================
-  // GET OTHER PERSON IMAGE
-  // =========================================================
+  /* =========================================================
+     GET OTHER PERSON IMAGE
+  ========================================================= */
 
-  const getOtherMemberImage = (trip: any) => {
-    if (trip.role === "Rider") {
+  const getOtherMemberImage = (
+    trip: Ride
+  ) => {
+    if (
+      trip.role ===
+      "Rider"
+    ) {
       return (
         trip.tripOwnerImage ||
         trip.userImage ||
@@ -546,29 +819,37 @@ export default function MyRidesPage() {
     );
   };
 
-  // =========================================================
-  // TRIP CARD
-  // =========================================================
+  /* =========================================================
+     TRIP CARD
+  ========================================================= */
 
   const TripCard = ({
     trip,
     history = false,
   }: {
-    trip: any;
+    trip: Ride;
     history?: boolean;
   }) => {
-
     const rideKey =
-      `${history ? "history" : "upcoming"}-${trip.id}`;
+      `${
+        history
+          ? "history"
+          : "upcoming"
+      }-${trip.id}`;
 
     const isExpanded =
-      expandedRide === rideKey;
+      expandedRide ===
+      rideKey;
 
     const otherMember =
-      getOtherMemberName(trip);
+      getOtherMemberName(
+        trip
+      );
 
     const otherMemberImage =
-      getOtherMemberImage(trip);
+      getOtherMemberImage(
+        trip
+      );
 
     return (
       <div
@@ -586,14 +867,15 @@ export default function MyRidesPage() {
           }
         `}
       >
-
         {/* =================================================
             COLLAPSED CARD
         ================================================= */}
 
         <div
           onClick={() =>
-            toggleRide(rideKey)
+            toggleRide(
+              rideKey
+            )
           }
           className="
             p-4
@@ -601,7 +883,6 @@ export default function MyRidesPage() {
             cursor-pointer
           "
         >
-
           <div className="flex items-center gap-4">
 
             {/* TRIP ICON */}
@@ -655,8 +936,6 @@ export default function MyRidesPage() {
 
                 </div>
 
-                {/* EXPAND ARROW */}
-
                 <div
                   className={`
                     text-zinc-500
@@ -690,7 +969,8 @@ export default function MyRidesPage() {
                     font-black
                   "
                 >
-                  {trip.role === "Host"
+                  {trip.role ===
+                  "Host"
                     ? "Host 🏍️"
                     : "Rider"}
                 </span>
@@ -703,7 +983,8 @@ export default function MyRidesPage() {
                       truncate
                     "
                   >
-                    🏍️ {trip.bike}
+                    🏍️{" "}
+                    {trip.bike}
                   </span>
                 )}
 
@@ -712,7 +993,6 @@ export default function MyRidesPage() {
             </div>
 
           </div>
-
         </div>
 
         {/* =================================================
@@ -732,7 +1012,6 @@ export default function MyRidesPage() {
             }
           `}
         >
-
           <div className="overflow-hidden">
 
             <div
@@ -751,7 +1030,6 @@ export default function MyRidesPage() {
               ================================================= */}
 
               {otherMember && (
-
                 <div
                   className="
                     mb-4
@@ -774,7 +1052,8 @@ export default function MyRidesPage() {
                   >
                     {history
                       ? "Trip Completed With"
-                      : trip.role === "Host"
+                      : trip.role ===
+                        "Host"
                         ? "Accepted Rider"
                         : "Ride Hosted By"}
                   </p>
@@ -782,9 +1061,10 @@ export default function MyRidesPage() {
                   <div className="flex items-center gap-3 mt-2">
 
                     {otherMemberImage && (
-
                       <img
-                        src={otherMemberImage}
+                        src={
+                          otherMemberImage
+                        }
                         alt=""
                         className="
                           w-10
@@ -793,7 +1073,6 @@ export default function MyRidesPage() {
                           object-cover
                         "
                       />
-
                     )}
 
                     <p
@@ -806,9 +1085,7 @@ export default function MyRidesPage() {
                     </p>
 
                   </div>
-
                 </div>
-
               )}
 
               {/* =================================================
@@ -827,7 +1104,6 @@ export default function MyRidesPage() {
                 {/* START */}
 
                 {trip.startLocation && (
-
                   <div
                     className="
                       bg-black
@@ -856,17 +1132,16 @@ export default function MyRidesPage() {
                         mt-1
                       "
                     >
-                      📍 {trip.startLocation}
+                      📍{" "}
+                      {trip.startLocation}
                     </p>
 
                   </div>
-
                 )}
 
                 {/* DISTANCE */}
 
                 {trip.distance && (
-
                   <div
                     className="
                       bg-black
@@ -895,17 +1170,16 @@ export default function MyRidesPage() {
                         mt-1
                       "
                     >
-                      🛣️ {trip.distance} KM
+                      🛣️{" "}
+                      {trip.distance} KM
                     </p>
 
                   </div>
-
                 )}
 
                 {/* DEPARTURE */}
 
                 {trip.tripDate && (
-
                   <div
                     className="
                       bg-black
@@ -941,13 +1215,11 @@ export default function MyRidesPage() {
                     </p>
 
                   </div>
-
                 )}
 
                 {/* BIKE */}
 
                 {trip.bike && (
-
                   <div
                     className="
                       bg-black
@@ -976,18 +1248,19 @@ export default function MyRidesPage() {
                         mt-1
                       "
                     >
-                      🏍️ {trip.bike}
+                      🏍️{" "}
+                      {trip.bike}
                     </p>
 
                   </div>
-
                 )}
 
                 {/* CONTRIBUTION */}
 
-                {trip.tripPrice !== undefined &&
-                  trip.tripPrice !== "" && (
-
+                {trip.tripPrice !==
+                  undefined &&
+                  trip.tripPrice !==
+                    "" && (
                     <div
                       className="
                         bg-black
@@ -1016,17 +1289,18 @@ export default function MyRidesPage() {
                           mt-1
                         "
                       >
-                        ₹{trip.tripPrice}
+                        ₹
+                        {
+                          trip.tripPrice
+                        }
                       </p>
 
                     </div>
-
                   )}
 
                 {/* RIDE TYPE */}
 
                 {trip.rideType && (
-
                   <div
                     className="
                       bg-black
@@ -1062,7 +1336,6 @@ export default function MyRidesPage() {
                     </p>
 
                   </div>
-
                 )}
 
               </div>
@@ -1074,7 +1347,6 @@ export default function MyRidesPage() {
               {(trip.story ||
                 trip.rideStory ||
                 trip.description) && (
-
                 <div
                   className="
                     mt-3
@@ -1111,7 +1383,6 @@ export default function MyRidesPage() {
                   </p>
 
                 </div>
-
               )}
 
               {/* =================================================
@@ -1119,7 +1390,6 @@ export default function MyRidesPage() {
               ================================================= */}
 
               {history && (
-
                 <div
                   className="
                     mt-3
@@ -1144,57 +1414,87 @@ export default function MyRidesPage() {
                   </p>
 
                 </div>
-
               )}
 
               {/* =================================================
-                  EDIT BUTTON
-                  ONLY FOR UPCOMING HOST RIDES
-                  NEVER FOR HISTORY
+                  ADMIN READ ONLY NOTICE
               ================================================= */}
 
-              {trip.canEdit === true &&
+              {isAdminView &&
+                trip.role ===
+                  "Host" &&
                 !history && (
+                  <div
+                    className="
+                      mt-3
+                      bg-orange-500/10
+                      border
+                      border-orange-500/20
+                      rounded-xl
+                      px-4
+                      py-3
+                      text-center
+                    "
+                  >
+                    <p
+                      className="
+                        text-orange-400
+                        font-bold
+                        text-sm
+                      "
+                    >
+                      🔒 Investigation Mode —
+                      Ride editing disabled
+                    </p>
+                  </div>
+                )}
 
-                <button
-                  onClick={(event) => {
-                    event.stopPropagation();
+              {/* =================================================
+                  EDIT BUTTON
+                  ONLY NORMAL USER + UPCOMING HOST
+              ================================================= */}
 
-                    editRide(
-                      trip.id
-                    );
-                  }}
-                  className="
-                    mt-3
-                    w-full
-                    bg-orange-500
-                    hover:bg-orange-400
-                    text-black
-                    px-4
-                    py-3
-                    rounded-xl
-                    font-black
-                    transition
-                  "
-                >
-                  ✏️ Edit Ride
-                </button>
+              {trip.canEdit ===
+                true &&
+                !history &&
+                !isAdminView && (
+                  <button
+                    onClick={(
+                      event
+                    ) => {
+                      event.stopPropagation();
 
-              )}
+                      editRide(
+                        trip.id
+                      );
+                    }}
+                    className="
+                      mt-3
+                      w-full
+                      bg-orange-500
+                      hover:bg-orange-400
+                      text-black
+                      px-4
+                      py-3
+                      rounded-xl
+                      font-black
+                      transition
+                    "
+                  >
+                    ✏️ Edit Ride
+                  </button>
+                )}
 
             </div>
-
           </div>
-
         </div>
-
       </div>
     );
   };
 
-  // =========================================================
-  // LOADING
-  // =========================================================
+  /* =========================================================
+     LOADING
+  ========================================================= */
 
   if (loading) {
     return (
@@ -1207,7 +1507,6 @@ export default function MyRidesPage() {
           sm:p-6
         "
       >
-
         <div className="max-w-5xl mx-auto">
 
           <div className="text-center py-20 text-zinc-400">
@@ -1215,14 +1514,13 @@ export default function MyRidesPage() {
           </div>
 
         </div>
-
       </main>
     );
   }
 
-  // =========================================================
-  // PAGE
-  // =========================================================
+  /* =========================================================
+     PAGE
+  ========================================================= */
 
   return (
     <main
@@ -1236,6 +1534,36 @@ export default function MyRidesPage() {
     >
 
       <div className="max-w-5xl mx-auto">
+
+        {/* =================================================
+            ADMIN INVESTIGATION NOTICE
+        ================================================= */}
+
+        {isAdminView && (
+          <div
+            className="
+              mb-6
+              bg-orange-600
+              text-black
+              rounded-2xl
+              px-4
+              py-3
+              text-center
+              font-black
+              text-sm
+              sm:text-base
+            "
+          >
+            🛡️ INVESTIGATION MODE — Viewing{" "}
+            {adminView?.userName ||
+              currentUserName ||
+              "User"}'s Rides
+
+            <span className="ml-2 opacity-70">
+              (Read Only)
+            </span>
+          </div>
+        )}
 
         {/* PAGE TITLE */}
 
@@ -1251,14 +1579,21 @@ export default function MyRidesPage() {
           My Rides
         </h1>
 
-        {/* TABS */}
+        {/* =================================================
+            TABS
+        ================================================= */}
 
         <div className="flex gap-3 mb-8">
 
           <button
             onClick={() => {
-              setActiveTab("upcoming");
-              setExpandedRide(null);
+              setActiveTab(
+                "upcoming"
+              );
+
+              setExpandedRide(
+                null
+              );
             }}
             className={`
               px-5
@@ -1268,7 +1603,8 @@ export default function MyRidesPage() {
               font-black
               transition
               ${
-                activeTab === "upcoming"
+                activeTab ===
+                "upcoming"
                   ? "bg-orange-500 text-black"
                   : "bg-zinc-900 border border-zinc-800"
               }
@@ -1279,8 +1615,13 @@ export default function MyRidesPage() {
 
           <button
             onClick={() => {
-              setActiveTab("history");
-              setExpandedRide(null);
+              setActiveTab(
+                "history"
+              );
+
+              setExpandedRide(
+                null
+              );
             }}
             className={`
               px-5
@@ -1290,7 +1631,8 @@ export default function MyRidesPage() {
               font-black
               transition
               ${
-                activeTab === "history"
+                activeTab ===
+                "history"
                   ? "bg-orange-500 text-black"
                   : "bg-zinc-900 border border-zinc-800"
               }
@@ -1305,12 +1647,12 @@ export default function MyRidesPage() {
             UPCOMING RIDES
         ================================================= */}
 
-        {activeTab === "upcoming" && (
-
+        {activeTab ===
+          "upcoming" && (
           <div className="space-y-4">
 
-            {upcomingRides.length === 0 ? (
-
+            {upcomingRides.length ===
+            0 ? (
               <div
                 className="
                   bg-zinc-900
@@ -1327,39 +1669,37 @@ export default function MyRidesPage() {
                 </h2>
 
                 <p className="text-zinc-400">
-                  Your upcoming rides will appear here.
+                  {isAdminView
+                    ? "This user has no upcoming rides."
+                    : "Your upcoming rides will appear here."}
                 </p>
 
               </div>
-
             ) : (
-
-              upcomingRides.map((trip) => (
-
-                <TripCard
-                  key={trip.id}
-                  trip={trip}
-                  history={false}
-                />
-
-              ))
-
+              upcomingRides.map(
+                (trip) => (
+                  <TripCard
+                    key={trip.id}
+                    trip={trip}
+                    history={false}
+                  />
+                )
+              )
             )}
 
           </div>
-
         )}
 
         {/* =================================================
             HISTORY
         ================================================= */}
 
-        {activeTab === "history" && (
-
+        {activeTab ===
+          "history" && (
           <div className="space-y-4">
 
-            {rideHistory.length === 0 ? (
-
+            {rideHistory.length ===
+            0 ? (
               <div
                 className="
                   bg-zinc-900
@@ -1376,31 +1716,28 @@ export default function MyRidesPage() {
                 </h2>
 
                 <p className="text-zinc-400">
-                  Your completed rides will appear here.
+                  {isAdminView
+                    ? "This user has no completed rides."
+                    : "Your completed rides will appear here."}
                 </p>
 
               </div>
-
             ) : (
-
-              rideHistory.map((trip) => (
-
-                <TripCard
-                  key={trip.id}
-                  trip={trip}
-                  history={true}
-                />
-
-              ))
-
+              rideHistory.map(
+                (trip) => (
+                  <TripCard
+                    key={trip.id}
+                    trip={trip}
+                    history={true}
+                  />
+                )
+              )
             )}
 
           </div>
-
         )}
 
       </div>
-
     </main>
   );
 }
