@@ -45,6 +45,23 @@ import {
 } from "lucide-react";
 
 
+/* =========================================================
+   ADMIN INVESTIGATION MODE
+========================================================= */
+
+type AdminView = {
+  active?: boolean;
+  userId?: string;
+  userName?: string;
+  userEmail?: string;
+  userImage?: string;
+};
+
+
+/* =========================================================
+   MAIN CONTENT
+========================================================= */
+
 function SavedTripsContent() {
 
   const router = useRouter();
@@ -71,6 +88,129 @@ function SavedTripsContent() {
 
 
   /* =========================================================
+     ADMIN VIEW STATE
+  ========================================================= */
+
+  const [adminView, setAdminView] =
+    useState<AdminView | null>(null);
+
+
+  const isAdminView =
+    adminView?.active === true;
+
+
+  /* =========================================================
+     LOAD ACTIVE VIEW
+  ========================================================= */
+
+  useEffect(() => {
+
+    const loadViewUser = () => {
+
+      try {
+
+        const savedAdminView =
+          localStorage.getItem(
+            "ridemateAdminView"
+          );
+
+
+        if (savedAdminView) {
+
+          const parsed =
+            JSON.parse(
+              savedAdminView
+            );
+
+
+          if (
+            parsed?.active
+          ) {
+
+            setAdminView(
+              parsed
+            );
+
+            return;
+
+          }
+
+        }
+
+
+        setAdminView(null);
+
+      } catch (error) {
+
+        console.error(
+          "Failed to load admin view:",
+          error
+        );
+
+        setAdminView(null);
+
+      }
+
+    };
+
+
+    loadViewUser();
+
+
+    window.addEventListener(
+      "storage",
+      loadViewUser
+    );
+
+
+    window.addEventListener(
+      "ridemateAdminViewChanged",
+      loadViewUser
+    );
+
+
+    return () => {
+
+      window.removeEventListener(
+        "storage",
+        loadViewUser
+      );
+
+
+      window.removeEventListener(
+        "ridemateAdminViewChanged",
+        loadViewUser
+      );
+
+    };
+
+  }, []);
+
+
+  /* =========================================================
+     ADMIN ACTION BLOCKER
+  ========================================================= */
+
+  const blockedAdminAction = (
+    action: string
+  ) => {
+
+    if (!isAdminView) {
+      return false;
+    }
+
+
+    alert(
+      `Admin View Mode is read-only.\n\nYou cannot ${action} while investigating a user account.`
+    );
+
+
+    return true;
+
+  };
+
+
+  /* =========================================================
      LOAD SAVED TRIPS
   ========================================================= */
 
@@ -82,15 +222,68 @@ function SavedTripsContent() {
 
         setLoading(true);
 
-        const user =
-          JSON.parse(
-            localStorage.getItem(
-              "ridemateUser"
-            ) || "{}"
+
+        /* =====================================================
+           DETERMINE ACTIVE USER
+        ===================================================== */
+
+        let userName = "";
+
+
+        const savedAdminView =
+          localStorage.getItem(
+            "ridemateAdminView"
           );
 
 
-        if (!user.name) {
+        if (savedAdminView) {
+
+          const parsedAdminView =
+            JSON.parse(
+              savedAdminView
+            );
+
+
+          if (
+            parsedAdminView?.active
+          ) {
+
+            userName =
+              parsedAdminView.userName ||
+              "";
+
+          }
+
+        }
+
+
+        /* =====================================================
+           NORMAL USER FALLBACK
+        ===================================================== */
+
+        if (!userName) {
+
+          const user =
+            JSON.parse(
+              localStorage.getItem(
+                "ridemateUser"
+              ) || "{}"
+            );
+
+
+          userName =
+            user.name ||
+            user.username ||
+            "";
+
+        }
+
+
+        /* =====================================================
+           NO USER
+        ===================================================== */
+
+        if (!userName) {
 
           setTrips([]);
 
@@ -99,6 +292,12 @@ function SavedTripsContent() {
           return;
 
         }
+
+
+        console.log(
+          "Saved Trips active user:",
+          userName
+        );
 
 
         /* =====================================================
@@ -127,7 +326,7 @@ function SavedTripsContent() {
 
             if (
               data.user ===
-                user.name &&
+                userName &&
               data.tripId
             ) {
 
@@ -262,6 +461,7 @@ function SavedTripsContent() {
               ...otherTrips,
             ]);
 
+
             setExpandedTrip(
               sharedTrip.id
             );
@@ -300,7 +500,10 @@ function SavedTripsContent() {
 
     fetchSavedTrips();
 
-  }, [sharedTripId]);
+  }, [
+    sharedTripId,
+    isAdminView,
+  ]);
 
 
   /* =========================================================
@@ -328,6 +531,17 @@ function SavedTripsContent() {
   const toggleSaveTrip = async (
     tripId: string
   ) => {
+
+    if (
+      blockedAdminAction(
+        "save or unsave trips"
+      )
+    ) {
+
+      return;
+
+    }
+
 
     try {
 
@@ -400,6 +614,17 @@ function SavedTripsContent() {
     id: string,
     currentLikes: number
   ) => {
+
+    if (
+      blockedAdminAction(
+        "like trips"
+      )
+    ) {
+
+      return;
+
+    }
+
 
     try {
 
@@ -504,9 +729,23 @@ function SavedTripsContent() {
   ) => {
 
     if (
-      !commentText.trim()
-    )
+      blockedAdminAction(
+        "comment on trips"
+      )
+    ) {
+
       return;
+
+    }
+
+
+    if (
+      !commentText.trim()
+    ) {
+
+      return;
+
+    }
 
 
     try {
@@ -633,6 +872,17 @@ function SavedTripsContent() {
       trip: any
     ) => {
 
+      if (
+        blockedAdminAction(
+          "join rides"
+        )
+      ) {
+
+        return;
+
+      }
+
+
       try {
 
         const currentUser =
@@ -746,8 +996,6 @@ function SavedTripsContent() {
             startLocation:
               trip.startLocation ||
               "",
-
-            /* NEW CITY FIELD */
 
             startCity:
               trip.startCity ||
@@ -931,6 +1179,43 @@ function SavedTripsContent() {
     >
 
       {/* =====================================================
+          ADMIN INVESTIGATION BANNER
+      ===================================================== */}
+
+      {isAdminView && (
+
+        <div
+          className="
+            sticky
+            top-0
+            z-50
+            bg-orange-600
+            text-black
+            text-center
+            py-2
+            px-3
+            text-xs
+            sm:text-sm
+            font-black
+            shadow-lg
+            shadow-orange-500/20
+          "
+        >
+
+          🛡️ INVESTIGATION MODE — Viewing{" "}
+          {adminView?.userName ||
+            "User"}'s Saved Trips
+
+          <span className="ml-2 opacity-70">
+            (Read Only)
+          </span>
+
+        </div>
+
+      )}
+
+
+      {/* =====================================================
           CINEMATIC BACKGROUND
       ===================================================== */}
 
@@ -1006,7 +1291,9 @@ function SavedTripsContent() {
               mt-1
             "
           >
-            Your saved rides are waiting for you.
+            {isAdminView
+              ? `Saved rides for ${adminView?.userName || "this user"}.`
+              : "Your saved rides are waiting for you."}
           </p>
 
         </div>
@@ -1031,13 +1318,6 @@ function SavedTripsContent() {
                 expandedTrip ===
                 trip.id;
 
-
-              /*
-               * CITY COMPATIBILITY
-               *
-               * New trips should use startCity.
-               * These fallbacks also support older trips.
-               */
 
               const startCity =
                 trip.startCity ||
@@ -1662,9 +1942,7 @@ function SavedTripsContent() {
                         </div>
 
 
-                        {/* =================================================
-                            STARTING LOCATION + CITY
-                        ================================================= */}
+                        {/* STARTING LOCATION + CITY */}
 
                         <div
                           className="
@@ -2029,19 +2307,23 @@ function SavedTripsContent() {
                                 0
                             )
                           }
-                          className="
+                          className={`
                             flex
                             items-center
                             gap-1.5
                             bg-white/5
-                            hover:bg-red-500/10
                             border
                             border-white/10
                             px-3
                             py-2
                             rounded-full
                             transition
-                          "
+                            ${
+                              isAdminView
+                                ? "opacity-40 cursor-not-allowed"
+                                : "hover:bg-red-500/10"
+                            }
+                          `}
                         >
 
                           <Heart
@@ -2067,24 +2349,38 @@ function SavedTripsContent() {
                         {/* COMMENT */}
 
                         <button
-                          onClick={() =>
+                          onClick={() => {
+
+                            if (
+                              blockedAdminAction(
+                                "comment on trips"
+                              )
+                            ) {
+                              return;
+                            }
+
                             toggleComments(
                               trip.id
-                            )
-                          }
-                          className="
+                            );
+
+                          }}
+                          className={`
                             flex
                             items-center
                             gap-1.5
                             bg-white/5
-                            hover:bg-blue-500/10
                             border
                             border-white/10
                             px-3
                             py-2
                             rounded-full
                             transition
-                          "
+                            ${
+                              isAdminView
+                                ? "opacity-40 cursor-not-allowed"
+                                : "hover:bg-blue-500/10"
+                            }
+                          `}
                         >
 
                           <MessageCircle
@@ -2159,19 +2455,23 @@ function SavedTripsContent() {
                               trip.id
                             )
                           }
-                          className="
+                          className={`
                             flex
                             items-center
                             gap-1.5
                             bg-white/5
-                            hover:bg-yellow-500/10
                             border
                             border-white/10
                             px-3
                             py-2
                             rounded-full
                             transition
-                          "
+                            ${
+                              isAdminView
+                                ? "opacity-40 cursor-not-allowed"
+                                : "hover:bg-yellow-500/10"
+                            }
+                          `}
                         >
 
                           <Bookmark
@@ -2204,7 +2504,7 @@ function SavedTripsContent() {
                               trip
                             )
                           }
-                          className="
+                          className={`
                             ml-auto
                             flex
                             items-center
@@ -2219,9 +2519,13 @@ function SavedTripsContent() {
                             font-black
                             shadow-lg
                             shadow-orange-500/20
-                            hover:scale-105
                             transition
-                          "
+                            ${
+                              isAdminView
+                                ? "opacity-40 cursor-not-allowed hover:bg-orange-500"
+                                : "hover:scale-105"
+                            }
+                          `}
                         >
 
                           <Rocket
@@ -2260,42 +2564,73 @@ function SavedTripsContent() {
                           }
                         >
 
-                          <input
-                            type="text"
-                            placeholder="Write a comment and press Enter..."
-                            className="
-                              w-full
-                              p-3
-                              rounded-lg
-                              bg-black
-                              border
-                              border-zinc-700
-                              text-white
-                              text-sm
-                              outline-none
-                              focus:border-orange-500
-                            "
-                            onKeyDown={(e) => {
+                          {isAdminView ? (
 
-                              if (
-                                e.key ===
-                                "Enter"
-                              ) {
+                            <div
+                              className="
+                                bg-orange-500/10
+                                border
+                                border-orange-500/20
+                                rounded-xl
+                                px-4
+                                py-3
+                                text-center
+                              "
+                            >
 
-                                addComment(
-                                  trip.id,
+                              <p
+                                className="
+                                  text-orange-400
+                                  text-xs
+                                  font-bold
+                                "
+                              >
+                                🔒 Investigation Mode —
+                                Comments are read-only
+                              </p>
+
+                            </div>
+
+                          ) : (
+
+                            <input
+                              type="text"
+                              placeholder="Write a comment and press Enter..."
+                              className="
+                                w-full
+                                p-3
+                                rounded-lg
+                                bg-black
+                                border
+                                border-zinc-700
+                                text-white
+                                text-sm
+                                outline-none
+                                focus:border-orange-500
+                              "
+                              onKeyDown={(e) => {
+
+                                if (
+                                  e.key ===
+                                  "Enter"
+                                ) {
+
+                                  addComment(
+                                    trip.id,
+                                    e.currentTarget
+                                      .value
+                                  );
+
                                   e.currentTarget
-                                    .value
-                                );
+                                    .value =
+                                    "";
 
-                                e.currentTarget
-                                  .value =
-                                  "";
+                                }
 
-                              }
+                              }}
+                            />
 
-                            }}
-                          />
+                          )}
 
 
                           <div
@@ -2410,7 +2745,7 @@ function SavedTripsContent() {
                                   text-zinc-500
                                   py-3
                                   text-xs
-                                "
+                              "
                               >
                                 No comments yet.
                                 Be the first!
@@ -2479,36 +2814,41 @@ function SavedTripsContent() {
                     mt-2
                   "
                 >
-                  Trips you save will
-                  appear here.
+                  {isAdminView
+                    ? `This user has no saved trips.`
+                    : "Trips you save will appear here."}
                 </p>
 
-                <Link
-                  href="/explore"
-                  className="
-                    inline-flex
-                    items-center
-                    gap-2
-                    mt-5
-                    bg-orange-500
-                    hover:bg-orange-400
-                    text-black
-                    px-5
-                    py-2.5
-                    rounded-full
-                    text-sm
-                    font-black
-                    transition
-                  "
-                >
+                {!isAdminView && (
 
-                  <Rocket
-                    size={16}
-                  />
+                  <Link
+                    href="/explore"
+                    className="
+                      inline-flex
+                      items-center
+                      gap-2
+                      mt-5
+                      bg-orange-500
+                      hover:bg-orange-400
+                      text-black
+                      px-5
+                      py-2.5
+                      rounded-full
+                      text-sm
+                      font-black
+                      transition
+                    "
+                  >
 
-                  Explore Trips
+                    <Rocket
+                      size={16}
+                    />
 
-                </Link>
+                    Explore Trips
+
+                  </Link>
+
+                )}
 
               </div>
 
