@@ -11,10 +11,11 @@ import {
   doc,
   updateDoc,
   arrayUnion,
-  addDoc,
-  setDoc,
-  deleteDoc,
+  arrayRemove,
   runTransaction,
+  addDoc,
+  deleteDoc,
+  setDoc,
 } from "firebase/firestore";
 
 import { db } from "../firebase";
@@ -26,81 +27,190 @@ import {
   Send,
 } from "lucide-react";
 
+type Comment = {
+  user: string;
+  image?: string;
+  text: string;
+};
+
+type FeedPost = {
+  id: string;
+  userName?: string;
+  userImage?: string;
+  mediaUrl?: string;
+  mediaType?: string;
+  caption?: string;
+  likes?: number;
+  likedBy?: string[];
+  comments?: Comment[];
+  createdAt?: number;
+};
+
+type AdminView = {
+  active?: boolean;
+  userId?: string;
+  userName?: string;
+  userEmail?: string;
+  userImage?: string;
+};
 
 export default function FeedPage() {
-
   /* =========================================================
      STATE
   ========================================================= */
 
-  const [trips, setTrips] =
-    useState<any[]>([]);
-
-  const [savedTrips, setSavedTrips] =
-    useState<string[]>([]);
-
+  const [trips, setTrips] = useState<FeedPost[]>([]);
+  const [savedTrips, setSavedTrips] = useState<string[]>([]);
   const [heartAnimation, setHeartAnimation] =
     useState<string | null>(null);
 
   const [commentPost, setCommentPost] =
-    useState<any>(null);
+    useState<FeedPost | null>(null);
 
   const [currentUserName, setCurrentUserName] =
     useState<string>("");
 
-  /* =========================================================
-     COMMENT INPUT STATE
-  ========================================================= */
-
   const [commentText, setCommentText] =
     useState<string>("");
 
+  const [adminView, setAdminView] =
+    useState<AdminView | null>(null);
+
+  /* =========================================================
+     GET ACTIVE VIEW USER
+  ========================================================= */
+
+  useEffect(() => {
+    const loadViewUser = () => {
+      try {
+        const savedAdminView =
+          localStorage.getItem("ridemateAdminView");
+
+        if (savedAdminView) {
+          const parsedAdminView =
+            JSON.parse(savedAdminView);
+
+          if (parsedAdminView?.active) {
+            setAdminView(parsedAdminView);
+
+            setCurrentUserName(
+              parsedAdminView.userName || ""
+            );
+
+            return;
+          }
+        }
+
+        const savedUser =
+          localStorage.getItem("ridemateUser");
+
+        if (savedUser) {
+          const user = JSON.parse(savedUser);
+
+          setAdminView(null);
+
+          setCurrentUserName(
+            user.name ||
+              user.username ||
+              ""
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Failed to load active user:",
+          error
+        );
+      }
+    };
+
+    loadViewUser();
+
+    const handleAdminViewChange = () => {
+      loadViewUser();
+    };
+
+    window.addEventListener(
+      "ridemateAdminViewChanged",
+      handleAdminViewChange
+    );
+
+    window.addEventListener(
+      "storage",
+      handleAdminViewChange
+    );
+
+    return () => {
+      window.removeEventListener(
+        "ridemateAdminViewChanged",
+        handleAdminViewChange
+      );
+
+      window.removeEventListener(
+        "storage",
+        handleAdminViewChange
+      );
+    };
+  }, []);
+
+  const isAdminView =
+    adminView?.active === true;
 
   /* =========================================================
      LOAD FOLLOWER-ONLY POSTS
   ========================================================= */
 
   useEffect(() => {
-
     const fetchTrips = async () => {
-
       try {
+        let userName = "";
 
-        /* =====================================================
-           GET CURRENT USER
-        ===================================================== */
+        /* ADMIN VIEW */
 
-        const currentUser =
-          JSON.parse(
-            localStorage.getItem(
-              "ridemateUser"
-            ) || "{}"
+        const savedAdminView =
+          localStorage.getItem(
+            "ridemateAdminView"
           );
 
+        if (savedAdminView) {
+          const parsedAdminView =
+            JSON.parse(savedAdminView);
 
-        const userName =
-          currentUser.name ||
-          currentUser.username ||
-          "";
-
-
-        setCurrentUserName(
-          userName
-        );
-
-
-        if (!userName) {
-
-          console.log(
-            "No logged-in user found."
-          );
-
-          setTrips([]);
-
-          return;
-
+          if (parsedAdminView?.active) {
+            userName =
+              parsedAdminView.userName || "";
+          }
         }
 
+        /* NORMAL USER */
+
+        if (!userName) {
+          const savedUser =
+            localStorage.getItem(
+              "ridemateUser"
+            );
+
+          if (savedUser) {
+            const currentUser =
+              JSON.parse(savedUser);
+
+            userName =
+              currentUser.name ||
+              currentUser.username ||
+              "";
+          }
+        }
+
+        setCurrentUserName(userName);
+
+        if (!userName) {
+          setTrips([]);
+          return;
+        }
+
+        console.log(
+          "Home active user:",
+          userName
+        );
 
         /* =====================================================
            GET PEOPLE CURRENT USER FOLLOWS
@@ -108,66 +218,33 @@ export default function FeedPage() {
 
         const followsSnapshot =
           await getDocs(
-            collection(
-              db,
-              "follows"
-            )
+            collection(db, "follows")
           );
-
 
         const followingUsers =
           new Set<string>();
 
-
         followsSnapshot.forEach(
           (followDoc) => {
-
             const follow =
               followDoc.data();
-
 
             if (
               follow.follower ===
               userName
             ) {
-
-              if (
-                follow.following
-              ) {
-
+              if (follow.following) {
                 followingUsers.add(
                   follow.following
                 );
-
               }
-
             }
-
           }
         );
 
+        /* Always include own posts */
 
-        /*
-         * Always include current user's own posts.
-         */
-
-        followingUsers.add(
-          userName
-        );
-
-
-        console.log(
-          "Current user:",
-          userName
-        );
-
-        console.log(
-          "Following:",
-          Array.from(
-            followingUsers
-          )
-        );
-
+        followingUsers.add(userName);
 
         /* =====================================================
            LOAD ALL POSTS
@@ -175,26 +252,17 @@ export default function FeedPage() {
 
         const postsQuery =
           query(
-            collection(
-              db,
-              "feedPosts"
-            ),
+            collection(db, "feedPosts"),
             orderBy(
               "createdAt",
               "desc"
             )
           );
 
-
         const querySnapshot =
-          await getDocs(
-            postsQuery
-          );
+          await getDocs(postsQuery);
 
-
-        const loadedTrips: any[] =
-          [];
-
+        const loadedTrips: FeedPost[] = [];
 
         /* =====================================================
            FILTER POSTS
@@ -202,10 +270,8 @@ export default function FeedPage() {
 
         querySnapshot.forEach(
           (postDoc) => {
-
             const post =
               postDoc.data();
-
 
             if (
               post.userName &&
@@ -213,21 +279,41 @@ export default function FeedPage() {
                 post.userName
               )
             ) {
-
               loadedTrips.push({
-
-                id:
-                  postDoc.id,
-
-                ...post,
-
+                id: postDoc.id,
+                userName:
+                  post.userName || "",
+                userImage:
+                  post.userImage || "",
+                mediaUrl:
+                  post.mediaUrl || "",
+                mediaType:
+                  post.mediaType || "",
+                caption:
+                  post.caption || "",
+                likes:
+                  typeof post.likes ===
+                  "number"
+                    ? post.likes
+                    : 0,
+                likedBy:
+                  Array.isArray(
+                    post.likedBy
+                  )
+                    ? post.likedBy
+                    : [],
+                comments:
+                  Array.isArray(
+                    post.comments
+                  )
+                    ? post.comments
+                    : [],
+                createdAt:
+                  post.createdAt || 0,
               });
-
             }
-
           }
         );
-
 
         /* =====================================================
            REMOVE DUPLICATES
@@ -248,57 +334,74 @@ export default function FeedPage() {
               )
           );
 
-
-        setTrips(
-          uniqueTrips
-        );
-
+        setTrips(uniqueTrips);
 
         console.log(
           "Follower-only posts loaded:",
           uniqueTrips.length
         );
-
-
       } catch (error) {
-
         console.error(
           "Failed to load Home feed:",
           error
         );
-
       }
-
     };
 
-
     fetchTrips();
-
-  }, []);
-
+  }, [isAdminView]);
 
   /* =========================================================
      LOAD SAVED POSTS
   ========================================================= */
 
   useEffect(() => {
-
     const loadSavedTrips =
       async () => {
-
         try {
+          let userName = "";
 
-          const user =
-            JSON.parse(
-              localStorage.getItem(
-                "ridemateUser"
-              ) || "{}"
+          /* ADMIN VIEW */
+
+          const savedAdminView =
+            localStorage.getItem(
+              "ridemateAdminView"
             );
 
+          if (savedAdminView) {
+            const parsedAdminView =
+              JSON.parse(savedAdminView);
 
-          if (!user.name)
+            if (parsedAdminView?.active) {
+              userName =
+                parsedAdminView.userName ||
+                "";
+            }
+          }
+
+          /* NORMAL USER */
+
+          if (!userName) {
+            const savedUser =
+              localStorage.getItem(
+                "ridemateUser"
+              );
+
+            if (savedUser) {
+              const user =
+                JSON.parse(savedUser);
+
+              userName =
+                user.name ||
+                user.username ||
+                "";
+            }
+          }
+
+          if (!userName) {
+            setSavedTrips([]);
             return;
-
+          }
 
           const snapshot =
             await getDocs(
@@ -308,54 +411,56 @@ export default function FeedPage() {
               )
             );
 
-
-          const saved: string[] =
-            [];
-
+          const saved: string[] = [];
 
           snapshot.forEach(
             (savedDoc) => {
-
               const data =
                 savedDoc.data();
 
-
               if (
                 data.user ===
-                user.name
+                userName
               ) {
-
-                saved.push(
-                  data.tripId
-                );
-
+                if (data.tripId) {
+                  saved.push(
+                    data.tripId
+                  );
+                }
               }
-
             }
           );
 
-
-          setSavedTrips(
-            saved
-          );
-
-
+          setSavedTrips(saved);
         } catch (error) {
-
           console.error(
             "Failed to load saved posts:",
             error
           );
-
         }
-
       };
 
-
     loadSavedTrips();
+  }, [isAdminView]);
 
-  }, []);
+  /* =========================================================
+     ADMIN VIEW
+     READ ONLY
+  ========================================================= */
 
+  const blockedAdminAction = (
+    action: string
+  ) => {
+    if (!isAdminView) {
+      return false;
+    }
+
+    alert(
+      `Admin View Mode is read-only.\n\nYou cannot ${action} while investigating a user account.`
+    );
+
+    return true;
+  };
 
   /* =========================================================
      SAVE / UNSAVE
@@ -365,9 +470,15 @@ export default function FeedPage() {
     async (
       tripId: string
     ) => {
+      if (
+        blockedAdminAction(
+          "save or unsave posts"
+        )
+      ) {
+        return;
+      }
 
       try {
-
         const user =
           JSON.parse(
             localStorage.getItem(
@@ -375,28 +486,21 @@ export default function FeedPage() {
             ) || "{}"
           );
 
-
         if (!user.name) {
-
           alert(
             "Please login first."
           );
-
           return;
-
         }
-
 
         const saveId =
           `${user.name}_${tripId}`;
-
 
         if (
           savedTrips.includes(
             tripId
           )
         ) {
-
           await deleteDoc(
             doc(
               db,
@@ -405,7 +509,6 @@ export default function FeedPage() {
             )
           );
 
-
           setSavedTrips(
             (prev) =>
               prev.filter(
@@ -413,10 +516,7 @@ export default function FeedPage() {
                   id !== tripId
               )
           );
-
-
         } else {
-
           await setDoc(
             doc(
               db,
@@ -424,13 +524,10 @@ export default function FeedPage() {
               saveId
             ),
             {
-              user:
-                user.name,
-
+              user: user.name,
               tripId,
             }
           );
-
 
           setSavedTrips(
             (prev) => [
@@ -438,60 +535,60 @@ export default function FeedPage() {
               tripId,
             ]
           );
-
         }
-
       } catch (error) {
-
         console.error(
           "Save error:",
           error
         );
-
       }
-
     };
 
-
   /* =========================================================
-     LIKE POST - ONE LIKE PER USER
+     LIKE POST
   ========================================================= */
 
   const likeTrip =
     async (
       id: string
     ): Promise<boolean> => {
+      if (
+        blockedAdminAction(
+          "like posts"
+        )
+      ) {
+        return false;
+      }
 
       try {
-
-        /* =====================================================
-           GET CURRENT USER
-        ===================================================== */
-
-        const currentUser =
-          JSON.parse(
-            localStorage.getItem(
-              "ridemateUser"
-            ) || "{}"
+        const savedUser =
+          localStorage.getItem(
+            "ridemateUser"
           );
 
-
-        const userName =
-          currentUser.name ||
-          currentUser.username ||
-          "";
-
-
-        if (!userName) {
-
+        if (!savedUser) {
           alert(
             "Please login first."
           );
 
           return false;
-
         }
 
+        const user =
+          JSON.parse(savedUser);
+
+        const userName =
+          user.name ||
+          user.username ||
+          "";
+
+        if (!userName) {
+          alert(
+            "Please login first."
+          );
+
+          return false;
+        }
 
         const tripRef =
           doc(
@@ -500,283 +597,180 @@ export default function FeedPage() {
             id
           );
 
-
-        let wasLiked =
-          false;
-
-        let newLikeCount =
-          0;
-
-
-        /* =====================================================
-           FIRESTORE TRANSACTION
-
-           Prevents same user from
-           increasing like count more than once.
-        ===================================================== */
+        let didLike = false;
 
         await runTransaction(
           db,
           async (transaction) => {
-
-            const tripSnapshot =
+            const tripDoc =
               await transaction.get(
                 tripRef
               );
 
-
-            if (
-              !tripSnapshot.exists()
-            ) {
-
+            if (!tripDoc.exists()) {
               throw new Error(
-                "Post does not exist."
+                "Post no longer exists."
               );
-
             }
 
-
-            const tripData =
-              tripSnapshot.data();
-
+            const data =
+              tripDoc.data();
 
             const likedBy =
               Array.isArray(
-                tripData.likedBy
+                data.likedBy
               )
-                ? tripData.likedBy
+                ? data.likedBy
                 : [];
 
+            const currentLikes =
+              typeof data.likes ===
+              "number"
+                ? data.likes
+                : 0;
 
-            /* =================================================
-               USER ALREADY LIKED THIS POST
-            ================================================= */
-
-            if (
+            const alreadyLiked =
               likedBy.includes(
                 userName
-              )
-            ) {
+              );
 
-              wasLiked =
-                false;
+            if (alreadyLiked) {
+              didLike = false;
 
-              newLikeCount =
-                tripData.likes || 0;
+              transaction.update(
+                tripRef,
+                {
+                  likes:
+                    Math.max(
+                      0,
+                      currentLikes -
+                        1
+                    ),
+                  likedBy:
+                    arrayRemove(
+                      userName
+                    ),
+                }
+              );
+            } else {
+              didLike = true;
 
-              return;
-
+              transaction.update(
+                tripRef,
+                {
+                  likes:
+                    currentLikes +
+                    1,
+                  likedBy:
+                    arrayUnion(
+                      userName
+                    ),
+                }
+              );
             }
-
-
-            /* =================================================
-               NEW LIKE
-            ================================================= */
-
-            wasLiked =
-              true;
-
-
-            newLikeCount =
-              (tripData.likes || 0) +
-              1;
-
-
-            transaction.update(
-              tripRef,
-              {
-
-                likes:
-                  newLikeCount,
-
-                likedBy:
-                  [
-                    ...likedBy,
-                    userName,
-                  ],
-
-              }
-            );
-
           }
         );
 
-
-        /* =====================================================
-           IF ALREADY LIKED - DO NOTHING
-        ===================================================== */
-
-        if (!wasLiked) {
-
-          setTrips(
-            (prevTrips) =>
-              prevTrips.map(
-                (trip) =>
-                  trip.id === id
-                    ? {
-                        ...trip,
-
-                        likes:
-                          newLikeCount,
-
-                        likedBy:
-                          Array.isArray(
-                            trip.likedBy
-                          )
-                            ? trip.likedBy.includes(
-                                userName
-                              )
-                              ? trip.likedBy
-                              : [
-                                  ...trip.likedBy,
-                                  userName,
-                                ]
-                            : [
-                                userName,
-                              ],
-                      }
-                    : trip
-              )
-          );
-
-
-          return false;
-
-        }
-
-
-        /* =====================================================
-           UPDATE HOME FEED UI
-        ===================================================== */
+        /* Update local UI */
 
         setTrips(
           (prevTrips) =>
             prevTrips.map(
-              (trip) =>
-                trip.id === id
-                  ? {
+              (trip) => {
+                if (
+                  trip.id !== id
+                ) {
+                  return trip;
+                }
 
-                      ...trip,
+                const currentLikedBy =
+                  Array.isArray(
+                    trip.likedBy
+                  )
+                    ? trip.likedBy
+                    : [];
 
-                      likes:
-                        newLikeCount,
+                const alreadyLiked =
+                  currentLikedBy.includes(
+                    userName
+                  );
 
-                      likedBy: [
-                        ...(Array.isArray(
-                          trip.likedBy
-                        )
-                          ? trip.likedBy
-                          : []),
+                if (
+                  alreadyLiked
+                ) {
+                  return {
+                    ...trip,
+                    likes:
+                      Math.max(
+                        0,
+                        (trip.likes ||
+                          0) - 1
+                      ),
+                    likedBy:
+                      currentLikedBy.filter(
+                        (name) =>
+                          name !==
+                          userName
+                      ),
+                  };
+                }
 
-                        userName,
-
-                      ],
-
-                    }
-                  : trip
+                return {
+                  ...trip,
+                  likes:
+                    (trip.likes ||
+                      0) + 1,
+                  likedBy: [
+                    ...currentLikedBy,
+                    userName,
+                  ],
+                };
+              }
             )
         );
 
-
-        /* =====================================================
-           UPDATE COMMENTS POPUP
-        ===================================================== */
-
-        setCommentPost(
-          (current: any) => {
-
-            if (
-              current &&
-              current.id === id
-            ) {
-
-              return {
-
-                ...current,
-
-                likes:
-                  newLikeCount,
-
-                likedBy: [
-                  ...(Array.isArray(
-                    current.likedBy
-                  )
-                    ? current.likedBy
-                    : []),
-
-                  userName,
-
-                ],
-
-              };
-
-            }
-
-            return current;
-
-          }
-        );
-
-
-        /* =====================================================
-           NOTIFICATION
-        ===================================================== */
+        /* Notify post owner when liking */
 
         const trip =
           trips.find(
-            (t) =>
-              t.id === id
+            (item) =>
+              item.id === id
           );
 
-
         if (
+          didLike &&
           trip &&
           trip.userName &&
           trip.userName !==
             userName
         ) {
-
           await addDoc(
             collection(
               db,
               "notifications"
             ),
             {
-
               user:
                 trip.userName,
-
               text:
                 `${userName} liked your post ❤️`,
-
               createdAt:
                 Date.now(),
-
-              read:
-                false,
-
+              read: false,
             }
           );
-
         }
 
-
-        return true;
-
-
+        return didLike;
       } catch (error) {
-
         console.error(
           "Like error:",
           error
         );
 
         return false;
-
       }
-
     };
-
 
   /* =========================================================
      ADD COMMENT
@@ -787,15 +781,21 @@ export default function FeedPage() {
       tripId: string,
       commentTextValue: string
     ) => {
+      if (
+        blockedAdminAction(
+          "comment on posts"
+        )
+      ) {
+        return false;
+      }
 
       if (
         !commentTextValue.trim()
-      )
+      ) {
         return false;
-
+      }
 
       try {
-
         const user =
           JSON.parse(
             localStorage.getItem(
@@ -803,31 +803,21 @@ export default function FeedPage() {
             ) || "{}"
           );
 
-
         if (!user.name) {
-
           alert(
             "Please login first."
           );
 
           return false;
-
         }
 
-
-        const newComment = {
-
-          user:
-            user.name,
-
+        const newComment: Comment = {
+          user: user.name,
           image:
             user.image || "",
-
           text:
             commentTextValue.trim(),
-
         };
-
 
         const tripRef =
           doc(
@@ -835,7 +825,6 @@ export default function FeedPage() {
             "feedPosts",
             tripId
           );
-
 
         await updateDoc(
           tripRef,
@@ -847,7 +836,6 @@ export default function FeedPage() {
           }
         );
 
-
         const trip =
           trips.find(
             (t) =>
@@ -855,10 +843,7 @@ export default function FeedPage() {
               tripId
           );
 
-
-        /* =====================================================
-           NOTIFY POST OWNER
-        ===================================================== */
+        /* Notify post owner */
 
         if (
           trip &&
@@ -866,35 +851,24 @@ export default function FeedPage() {
           trip.userName !==
             user.name
         ) {
-
           await addDoc(
             collection(
               db,
               "notifications"
             ),
             {
-
               user:
                 trip.userName,
-
               text:
                 `${user.name} commented on your post 💬`,
-
               createdAt:
                 Date.now(),
-
-              read:
-                false,
-
+              read: false,
             }
           );
-
         }
 
-
-        /* =====================================================
-           UPDATE HOME FEED
-        ===================================================== */
+        /* Update feed */
 
         setTrips(
           (prevTrips) =>
@@ -903,74 +877,50 @@ export default function FeedPage() {
                 trip.id ===
                 tripId
                   ? {
-
                       ...trip,
-
                       comments: [
                         ...(trip.comments ||
                           []),
-
                         newComment,
-
                       ],
-
                     }
                   : trip
             )
         );
 
-
-        /* =====================================================
-           UPDATE COMMENTS POPUP
-        ===================================================== */
+        /* Update popup */
 
         setCommentPost(
-          (current: any) => {
-
+          (current) => {
             if (
               current &&
               current.id ===
                 tripId
             ) {
-
               return {
-
                 ...current,
-
                 comments: [
                   ...(current.comments ||
                     []),
-
                   newComment,
-
                 ],
-
               };
-
             }
 
             return current;
-
           }
         );
 
-
         return true;
-
-
       } catch (error) {
-
         console.error(
           "Comment error:",
           error
         );
 
         return false;
-
       }
-
     };
-
 
   /* =========================================================
      SEND COMMENT
@@ -978,20 +928,23 @@ export default function FeedPage() {
 
   const sendComment =
     async () => {
-
       if (
         !commentPost ||
         !commentText.trim()
       ) {
-
         return;
-
       }
 
+      if (isAdminView) {
+        blockedAdminAction(
+          "comment on posts"
+        );
+
+        return;
+      }
 
       const textToSend =
         commentText.trim();
-
 
       const success =
         await addComment(
@@ -999,22 +952,16 @@ export default function FeedPage() {
           textToSend
         );
 
-
       if (success) {
-
         setCommentText("");
-
       }
-
     };
-
 
   /* =========================================================
      RENDER
   ========================================================= */
 
   return (
-
     <main
       className="
         fixed
@@ -1025,15 +972,45 @@ export default function FeedPage() {
         overflow-hidden
       "
     >
+      {/* =====================================================
+          ADMIN READ-ONLY NOTICE
+      ===================================================== */}
+
+      {isAdminView && (
+        <div
+          className="
+            absolute
+            top-0
+            left-0
+            right-0
+            z-[100]
+            bg-orange-600
+            text-black
+            text-center
+            py-2
+            px-4
+            text-xs
+            sm:text-sm
+            font-black
+          "
+        >
+          🛡️ INVESTIGATION MODE — Viewing{" "}
+          {adminView?.userName ||
+            "User"}'s Home Feed
+
+          <span className="ml-2 opacity-70">
+            (Read Only)
+          </span>
+        </div>
+      )}
 
       {/* =====================================================
           HEADER
       ===================================================== */}
 
       <div
-        className="
+        className={`
           absolute
-          top-4
           left-0
           right-0
           z-50
@@ -1041,9 +1018,13 @@ export default function FeedPage() {
           justify-between
           items-center
           px-5
-        "
+          ${
+            isAdminView
+              ? "top-12"
+              : "top-4"
+          }
+        `}
       >
-
         <h1
           className="
             text-2xl
@@ -1054,25 +1035,38 @@ export default function FeedPage() {
           RideMate
         </h1>
 
-
-        <Link
-          href="/create-post"
-          className="
-            bg-orange-500
-            text-black
-            px-4
-            py-2
-            rounded-full
-            font-bold
-            hover:scale-105
-            transition
-          "
-        >
-          + Create Post
-        </Link>
-
+        {isAdminView ? (
+          <div
+            className="
+              bg-zinc-800
+              text-zinc-400
+              px-4
+              py-2
+              rounded-full
+              font-bold
+              text-sm
+            "
+          >
+            🔒 Read Only
+          </div>
+        ) : (
+          <Link
+            href="/create-post"
+            className="
+              bg-orange-500
+              text-black
+              px-4
+              py-2
+              rounded-full
+              font-bold
+              hover:scale-105
+              transition
+            "
+          >
+            + Create Post
+          </Link>
+        )}
       </div>
-
 
       {/* =====================================================
           FEED
@@ -1092,12 +1086,9 @@ export default function FeedPage() {
           [&::-webkit-scrollbar]:hidden
         "
       >
-
         <div>
-
           {trips.map(
             (trip) => (
-
               <div
                 key={trip.id}
                 className="
@@ -1108,7 +1099,6 @@ export default function FeedPage() {
                   overflow-hidden
                 "
               >
-
                 {/* =================================================
                     MEDIA
                 ================================================= */}
@@ -1119,39 +1109,38 @@ export default function FeedPage() {
                     h-full
                   "
                   onDoubleClick={async () => {
+                    if (isAdminView) {
+                      blockedAdminAction(
+                        "like posts"
+                      );
+
+                      return;
+                    }
 
                     const liked =
                       await likeTrip(
                         trip.id
                       );
 
-
                     if (liked) {
-
                       setHeartAnimation(
                         trip.id
                       );
 
-
                       setTimeout(() => {
-
                         setHeartAnimation(
                           null
                         );
-
                       }, 800);
-
                     }
-
                   }}
                 >
+                  {/* MEDIA */}
 
                   {trip.mediaUrl ? (
-
                     trip.mediaType?.startsWith(
                       "image"
                     ) ? (
-
                       <img
                         src={
                           trip.mediaUrl
@@ -1163,11 +1152,9 @@ export default function FeedPage() {
                           object-cover
                         "
                       />
-
                     ) : trip.mediaType?.startsWith(
                         "video"
                       ) ? (
-
                       <video
                         src={
                           trip.mediaUrl
@@ -1182,9 +1169,7 @@ export default function FeedPage() {
                         loop
                         playsInline
                       />
-
                     ) : (
-
                       <div
                         className="
                           w-full
@@ -1195,22 +1180,13 @@ export default function FeedPage() {
                           bg-zinc-900
                         "
                       >
-
-                        <p
-                          className="
-                            text-zinc-400
-                          "
-                        >
+                        <p className="text-zinc-400">
                           📷 Media preview
                           coming soon
                         </p>
-
                       </div>
-
                     )
-
                   ) : (
-
                     <div
                       className="
                         w-full
@@ -1221,19 +1197,11 @@ export default function FeedPage() {
                         bg-zinc-900
                       "
                     >
-
-                      <p
-                        className="
-                          text-zinc-400
-                        "
-                      >
+                      <p className="text-zinc-400">
                         📷 No media available
                       </p>
-
                     </div>
-
                   )}
-
 
                   {/* =================================================
                       RIDER INFO
@@ -1241,7 +1209,7 @@ export default function FeedPage() {
 
                   <Link
                     href={`/rider/${encodeURIComponent(
-                      trip.userName
+                      trip.userName || ""
                     )}`}
                     onClick={(e) =>
                       e.stopPropagation()
@@ -1263,9 +1231,7 @@ export default function FeedPage() {
                       z-50
                     "
                   >
-
                     {trip.userImage ? (
-
                       <img
                         src={
                           trip.userImage
@@ -1280,9 +1246,7 @@ export default function FeedPage() {
                           object-cover
                         "
                       />
-
                     ) : (
-
                       <div
                         className="
                           w-10
@@ -1298,21 +1262,12 @@ export default function FeedPage() {
                       >
                         👤
                       </div>
-
                     )}
 
-
-                    <span
-                      className="
-                        font-bold
-                        text-white
-                      "
-                    >
+                    <span className="font-bold text-white">
                       {trip.userName}
                     </span>
-
                   </Link>
-
 
                   {/* =================================================
                       POST CAPTION
@@ -1327,7 +1282,6 @@ export default function FeedPage() {
                       z-20
                     "
                   >
-
                     <p
                       className="
                         text-white
@@ -1335,43 +1289,37 @@ export default function FeedPage() {
                         leading-6
                       "
                     >
-                      {trip.caption?.length >
-                      120
-
-                        ? trip.caption.substring(
-                            0,
-                            120
-                          ) + "..."
-
-                        : trip.caption ||
-                          "No caption yet."}
-
+                      {trip.caption
+                        ? trip.caption.length >
+                          120
+                          ? trip.caption.substring(
+                              0,
+                              120
+                            ) + "..."
+                          : trip.caption
+                        : "No caption yet."}
                     </p>
 
-
-                    {trip.caption?.length >
-                      120 && (
-
-                      <button
-                        className="
-                          text-orange-400
-                          text-sm
-                          mt-1
-                          font-semibold
-                        "
-                        onClick={() =>
-                          alert(
-                            trip.caption
-                          )
-                        }
-                      >
-                        Read more
-                      </button>
-
-                    )}
-
+                    {trip.caption &&
+                      trip.caption.length >
+                        120 && (
+                        <button
+                          className="
+                            text-orange-400
+                            text-sm
+                            mt-1
+                            font-semibold
+                          "
+                          onClick={() =>
+                            alert(
+                              trip.caption
+                            )
+                          }
+                        >
+                          Read more
+                        </button>
+                      )}
                   </div>
-
 
                   {/* =================================================
                       RIGHT SIDE ACTIONS
@@ -1389,20 +1337,23 @@ export default function FeedPage() {
                       z-30
                     "
                   >
-
-                    {/* =================================================
-                        LIKE
-                    ================================================= */}
+                    {/* LIKE */}
 
                     <button
                       onClick={async (e) => {
-
                         e.stopPropagation();
+
+                        if (isAdminView) {
+                          blockedAdminAction(
+                            "like posts"
+                          );
+
+                          return;
+                        }
 
                         await likeTrip(
                           trip.id
                         );
-
                       }}
                       className="
                         flex
@@ -1410,7 +1361,6 @@ export default function FeedPage() {
                         items-center
                       "
                     >
-
                       <Heart
                         className={`
                           w-8
@@ -1430,26 +1380,15 @@ export default function FeedPage() {
                         `}
                       />
 
-                      <span
-                        className="
-                          text-sm
-                          font-bold
-                          mt-1
-                        "
-                      >
+                      <span className="text-sm font-bold mt-1">
                         {trip.likes || 0}
                       </span>
-
                     </button>
 
-
-                    {/* =================================================
-                        COMMENT
-                    ================================================= */}
+                    {/* COMMENT */}
 
                     <button
                       onClick={(e) => {
-
                         e.stopPropagation();
 
                         setCommentText("");
@@ -1457,7 +1396,6 @@ export default function FeedPage() {
                         setCommentPost(
                           trip
                         );
-
                       }}
                       className="
                         flex
@@ -1465,7 +1403,6 @@ export default function FeedPage() {
                         items-center
                       "
                     >
-
                       <MessageCircle
                         className="
                           w-8
@@ -1474,36 +1411,31 @@ export default function FeedPage() {
                         "
                       />
 
-                      <span
-                        className="
-                          text-sm
-                          font-bold
-                          mt-1
-                        "
-                      >
+                      <span className="text-sm font-bold mt-1">
                         {(
                           trip.comments ||
                           []
                         ).length}
-
                       </span>
-
                     </button>
 
-
-                    {/* =================================================
-                        SAVE
-                    ================================================= */}
+                    {/* SAVE */}
 
                     <button
                       onClick={(e) => {
-
                         e.stopPropagation();
+
+                        if (isAdminView) {
+                          blockedAdminAction(
+                            "save or unsave posts"
+                          );
+
+                          return;
+                        }
 
                         toggleSaveTrip(
                           trip.id
                         );
-
                       }}
                       className="
                         flex
@@ -1511,31 +1443,25 @@ export default function FeedPage() {
                         items-center
                       "
                     >
-
                       <Bookmark
-                        className={`w-8 h-8 ${
-                          savedTrips.includes(
-                            trip.id
-                          )
-                            ? "fill-white text-white"
-                            : "text-white"
-                        }`}
+                        className={`
+                          w-8
+                          h-8
+                          ${
+                            savedTrips.includes(
+                              trip.id
+                            )
+                              ? "fill-white text-white"
+                              : "text-white"
+                          }
+                        `}
                       />
 
-                      <span
-                        className="
-                          text-sm
-                          font-bold
-                          mt-1
-                        "
-                      >
+                      <span className="text-sm font-bold mt-1">
                         Save
                       </span>
-
                     </button>
-
                   </div>
-
 
                   {/* =================================================
                       DOUBLE TAP HEART
@@ -1543,7 +1469,6 @@ export default function FeedPage() {
 
                   {heartAnimation ===
                     trip.id && (
-
                     <div
                       className="
                         absolute
@@ -1555,33 +1480,21 @@ export default function FeedPage() {
                         animate-bounce
                       "
                     >
-
-                      <span
-                        className="
-                          text-8xl
-                        "
-                      >
+                      <span className="text-8xl">
                         ❤️
                       </span>
-
                     </div>
-
                   )}
-
                 </div>
-
               </div>
-
             )
           )}
-
 
           {/* =====================================================
               EMPTY FEED
           ===================================================== */}
 
           {trips.length === 0 && (
-
             <div
               className="
                 h-[calc(100dvh-64px)]
@@ -1592,18 +1505,10 @@ export default function FeedPage() {
                 px-8
               "
             >
-
               <div>
-
-                <div
-                  className="
-                    text-6xl
-                    mb-5
-                  "
-                >
+                <div className="text-6xl mb-5">
                   🏍️
                 </div>
-
 
                 <h2
                   className="
@@ -1612,9 +1517,10 @@ export default function FeedPage() {
                     font-black
                   "
                 >
-                  Your RideMate feed is quiet
+                  {isAdminView
+                    ? "No posts found for this user"
+                    : "Your RideMate feed is quiet"}
                 </h2>
-
 
                 <p
                   className="
@@ -1623,47 +1529,41 @@ export default function FeedPage() {
                     max-w-md
                   "
                 >
-                  Follow riders to see their
-                  posts here, or create your
-                  own post.
+                  {isAdminView
+                    ? "This user has no posts from riders they follow."
+                    : "Follow riders to see their posts here, or create your own post."}
                 </p>
 
-
-                <Link
-                  href="/search"
-                  className="
-                    inline-block
-                    mt-5
-                    bg-orange-500
-                    text-black
-                    px-5
-                    py-2.5
-                    rounded-full
-                    font-black
-                    hover:bg-orange-400
-                    transition
-                  "
-                >
-                  Find Riders
-                </Link>
-
+                {!isAdminView && (
+                  <Link
+                    href="/search"
+                    className="
+                      inline-block
+                      mt-5
+                      bg-orange-500
+                      text-black
+                      px-5
+                      py-2.5
+                      rounded-full
+                      font-black
+                      hover:bg-orange-400
+                      transition
+                    "
+                  >
+                    Find Riders
+                  </Link>
+                )}
               </div>
-
             </div>
-
           )}
-
         </div>
-
       </div>
-
 
       {/* =======================================================
           COMMENTS POPUP
       ======================================================= */}
 
       {commentPost && (
-
         <div
           className="
             fixed
@@ -1675,14 +1575,10 @@ export default function FeedPage() {
             items-end
           "
           onClick={() => {
-
             setCommentPost(null);
-
             setCommentText("");
-
           }}
         >
-
           <div
             onClick={(e) =>
               e.stopPropagation()
@@ -1698,10 +1594,7 @@ export default function FeedPage() {
               flex-col
             "
           >
-
-            {/* =================================================
-                COMMENT HEADER
-            ================================================= */}
+            {/* COMMENT HEADER */}
 
             <div
               className="
@@ -1713,26 +1606,14 @@ export default function FeedPage() {
                 border-zinc-800
               "
             >
-
-              <h2
-                className="
-                  text-xl
-                  font-bold
-                "
-              >
+              <h2 className="text-xl font-bold">
                 Comments
               </h2>
 
-
               <button
                 onClick={() => {
-
-                  setCommentPost(
-                    null
-                  );
-
+                  setCommentPost(null);
                   setCommentText("");
-
                 }}
                 className="
                   text-2xl
@@ -1742,13 +1623,9 @@ export default function FeedPage() {
               >
                 ✕
               </button>
-
             </div>
 
-
-            {/* =================================================
-                COMMENTS LIST
-            ================================================= */}
+            {/* COMMENTS LIST */}
 
             <div
               className="
@@ -1758,12 +1635,10 @@ export default function FeedPage() {
                 space-y-4
               "
             >
-
               {(
                 commentPost.comments ||
                 []
               ).length === 0 ? (
-
                 <p
                   className="
                     text-zinc-500
@@ -1773,18 +1648,15 @@ export default function FeedPage() {
                 >
                   No comments yet.
                 </p>
-
               ) : (
-
                 (
                   commentPost.comments ||
                   []
                 ).map(
                   (
-                    comment: any,
-                    index: number
+                    comment,
+                    index
                   ) => (
-
                     <div
                       key={index}
                       className="
@@ -1792,9 +1664,7 @@ export default function FeedPage() {
                         gap-3
                       "
                     >
-
                       {comment.image ? (
-
                         <img
                           src={
                             comment.image
@@ -1807,9 +1677,7 @@ export default function FeedPage() {
                             object-cover
                           "
                         />
-
                       ) : (
-
                         <div
                           className="
                             w-10
@@ -1824,163 +1692,137 @@ export default function FeedPage() {
                         >
                           👤
                         </div>
-
                       )}
 
-
                       <div>
-
-                        <p
-                          className="
-                            font-bold
-                          "
-                        >
+                        <p className="font-bold">
                           {comment.user}
                         </p>
 
-
-                        <p
-                          className="
-                            text-zinc-300
-                          "
-                        >
+                        <p className="text-zinc-300">
                           {comment.text}
                         </p>
-
                       </div>
-
                     </div>
-
                   )
                 )
-
               )}
-
             </div>
 
+            {/* COMMENT INPUT */}
 
-            {/* =================================================
-                COMMENT INPUT + SEND BUTTON
-            ================================================= */}
-
-            <div
-              className="
-                border-t
-                border-zinc-800
-                p-4
-              "
-            >
-
+            {isAdminView ? (
               <div
                 className="
-                  flex
-                  items-center
-                  gap-2
-                  bg-black
-                  border
-                  border-zinc-700
-                  rounded-full
-                  p-1.5
-                  focus-within:border-orange-500
-                  transition
+                  border-t
+                  border-zinc-800
+                  p-4
+                  text-center
+                  text-sm
+                  text-zinc-500
                 "
               >
-
-                {/* =================================================
-                    COMMENT INPUT
-                ================================================= */}
-
-                <input
-                  type="text"
-                  value={
-                    commentText
-                  }
-                  onChange={(e) =>
-                    setCommentText(
-                      e.target.value
-                    )
-                  }
-                  placeholder="Add a comment..."
+                🔒 Admin Investigation Mode —
+                comments are read-only.
+              </div>
+            ) : (
+              <div
+                className="
+                  border-t
+                  border-zinc-800
+                  p-4
+                "
+              >
+                <div
                   className="
-                    flex-1
-                    bg-transparent
-                    px-4
-                    py-2.5
-                    text-white
-                    outline-none
-                    placeholder:text-zinc-500
-                  "
-                  onKeyDown={async (e) => {
-
-                    if (
-                      e.key ===
-                      "Enter"
-                    ) {
-
-                      e.preventDefault();
-
-                      await sendComment();
-
-                    }
-
-                  }}
-                />
-
-
-                {/* =================================================
-                    SEND BUTTON
-                ================================================= */}
-
-                <button
-                  type="button"
-                  onClick={sendComment}
-                  disabled={
-                    !commentText.trim()
-                  }
-                  className="
-                    w-10
-                    h-10
-                    rounded-full
                     flex
                     items-center
-                    justify-center
-                    bg-orange-500
-                    text-black
-                    flex-shrink-0
-                    transition-all
-                    duration-200
-                    hover:bg-orange-400
-                    hover:scale-105
-                    active:scale-95
-                    disabled:opacity-30
-                    disabled:cursor-not-allowed
-                    disabled:hover:scale-100
+                    gap-2
+                    bg-black
+                    border
+                    border-zinc-700
+                    rounded-full
+                    p-1.5
+                    focus-within:border-orange-500
+                    transition
                   "
-                  aria-label="Send comment"
                 >
-
-                  <Send
+                  <input
+                    type="text"
+                    value={
+                      commentText
+                    }
+                    onChange={(e) =>
+                      setCommentText(
+                        e.target.value
+                      )
+                    }
+                    placeholder="Add a comment..."
                     className="
-                      w-5
-                      h-5
-                      -rotate-12
+                      flex-1
+                      bg-transparent
+                      px-4
+                      py-2.5
+                      text-white
+                      outline-none
+                      placeholder:text-zinc-500
                     "
+                    onKeyDown={async (
+                      e
+                    ) => {
+                      if (
+                        e.key ===
+                        "Enter"
+                      ) {
+                        e.preventDefault();
+
+                        await sendComment();
+                      }
+                    }}
                   />
 
-                </button>
-
+                  <button
+                    type="button"
+                    onClick={
+                      sendComment
+                    }
+                    disabled={
+                      !commentText.trim()
+                    }
+                    className="
+                      w-10
+                      h-10
+                      rounded-full
+                      flex
+                      items-center
+                      justify-center
+                      bg-orange-500
+                      text-black
+                      flex-shrink-0
+                      transition-all
+                      duration-200
+                      hover:bg-orange-400
+                      hover:scale-105
+                      active:scale-95
+                      disabled:opacity-30
+                      disabled:cursor-not-allowed
+                    "
+                    aria-label="Send comment"
+                  >
+                    <Send
+                      className="
+                        w-5
+                        h-5
+                        -rotate-12
+                      "
+                    />
+                  </button>
+                </div>
               </div>
-
-            </div>
-
+            )}
           </div>
-
         </div>
-
       )}
-
     </main>
-
   );
-
 }
