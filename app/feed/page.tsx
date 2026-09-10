@@ -1,6 +1,11 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import {
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
@@ -37,49 +42,151 @@ import {
   X,
 } from "lucide-react";
 
+/* =========================================================
+   ADMIN VIEW TYPE
+========================================================= */
+
+type AdminView = {
+  active?: boolean;
+  userId?: string;
+  userName?: string;
+  userEmail?: string;
+  userImage?: string;
+  startedAt?: number;
+};
+
+/* =========================================================
+   FEED CONTENT
+========================================================= */
+
 function FeedContent() {
   const searchParams = useSearchParams();
-const formatPostedDate = (value: any) => {
-  if (!value) return "";
 
-  try {
-    let date: Date;
+  /* =========================================================
+     ADMIN INVESTIGATION MODE
+  ========================================================= */
 
-    if (
-      typeof value === "object" &&
-      typeof value.toDate === "function"
-    ) {
-      date = value.toDate();
-    } else if (
-      typeof value === "object" &&
-      value.seconds !== undefined
-    ) {
-      date = new Date(value.seconds * 1000);
-    } else {
-      date = new Date(value);
+  const [adminView, setAdminView] =
+    useState<AdminView | null>(null);
+
+  const [isAdminView, setIsAdminView] =
+    useState(false);
+
+  useEffect(() => {
+    try {
+      const savedAdminView =
+        localStorage.getItem(
+          "ridemateAdminView"
+        );
+
+      if (!savedAdminView) {
+        setAdminView(null);
+        setIsAdminView(false);
+        return;
+      }
+
+      const parsedAdminView =
+        JSON.parse(savedAdminView);
+
+      if (
+        parsedAdminView &&
+        parsedAdminView.active &&
+        parsedAdminView.userName
+      ) {
+        setAdminView(parsedAdminView);
+        setIsAdminView(true);
+      } else {
+        setAdminView(null);
+        setIsAdminView(false);
+      }
+    } catch (error) {
+      console.error(
+        "Failed to load admin view:",
+        error
+      );
+
+      setAdminView(null);
+      setIsAdminView(false);
+    }
+  }, []);
+
+  /* =========================================================
+     BLOCK ADMIN MUTATIONS
+  ========================================================= */
+
+  const blockedAdminAction = (
+    action: string
+  ) => {
+    if (!isAdminView) {
+      return false;
     }
 
-    if (isNaN(date.getTime())) return "";
+    alert(
+      `Admin View Mode is read-only.\n\nYou cannot ${action} while investigating a user account.`
+    );
 
-    return date.toLocaleString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-  } catch {
-    return "";
-  }
-};
+    return true;
+  };
+
+  /* =========================================================
+     POSTED DATE
+  ========================================================= */
+
+  const formatPostedDate = (
+    value: any
+  ) => {
+    if (!value) return "";
+
+    try {
+      let date: Date;
+
+      if (
+        typeof value === "object" &&
+        typeof value.toDate ===
+          "function"
+      ) {
+        date = value.toDate();
+      } else if (
+        typeof value === "object" &&
+        value.seconds !== undefined
+      ) {
+        date = new Date(
+          value.seconds * 1000
+        );
+      } else {
+        date = new Date(value);
+      }
+
+      if (isNaN(date.getTime())) {
+        return "";
+      }
+
+      return date.toLocaleString(
+        "en-IN",
+        {
+          day: "2-digit",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        }
+      );
+    } catch {
+      return "";
+    }
+  };
+
   /* =========================================================
      URL PARAMETERS
   ========================================================= */
 
-  const sharedTripId = searchParams.get("trip");
+  const sharedTripId =
+    searchParams.get("trip");
 
   const requestedStartLocation = (
-    searchParams.get("startLocation") ||
+    searchParams.get(
+      "startLocation"
+    ) ||
     searchParams.get("start") ||
     searchParams.get("from") ||
     ""
@@ -92,53 +199,76 @@ const formatPostedDate = (value: any) => {
   ).trim();
 
   const requestedDestination = (
-    searchParams.get("destination") ||
+    searchParams.get(
+      "destination"
+    ) ||
     searchParams.get("to") ||
     ""
   ).trim();
 
-  const hasUrlSearchFilter = Boolean(
-    requestedStartLocation ||
-      requestedCity ||
-      requestedDestination
-  );
+  const hasUrlSearchFilter =
+    Boolean(
+      requestedStartLocation ||
+        requestedCity ||
+        requestedDestination
+    );
 
   /* =========================================================
      STATE
   ========================================================= */
 
-  const [allTrips, setAllTrips] = useState<any[]>([]);
-  const [trips, setTrips] = useState<any[]>([]);
+  const [allTrips, setAllTrips] =
+    useState<any[]>([]);
 
-  const [savedTrips, setSavedTrips] = useState<string[]>([]);
-  const [openComments, setOpenComments] = useState<string[]>([]);
-  const [expandedTrip, setExpandedTrip] = useState<string | null>(null);
+  const [trips, setTrips] =
+    useState<any[]>([]);
 
-  const [loading, setLoading] = useState(true);
+  const [savedTrips, setSavedTrips] =
+    useState<string[]>([]);
+
+  const [openComments, setOpenComments] =
+    useState<string[]>([]);
+
+  const [expandedTrip, setExpandedTrip] =
+    useState<string | null>(null);
+
+  const [loading, setLoading] =
+    useState(true);
 
   /* =========================================================
      FILTER STATE
   ========================================================= */
 
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] =
+    useState(false);
 
-  const [startFilter, setStartFilter] = useState(
-    requestedStartLocation
+  const [startFilter, setStartFilter] =
+    useState(
+      requestedStartLocation
+    );
+
+  const [
+    destinationFilter,
+    setDestinationFilter,
+  ] = useState(
+    requestedDestination
   );
 
-  const [destinationFilter, setDestinationFilter] =
-    useState(requestedDestination);
+  const [dateFilter, setDateFilter] =
+    useState("");
 
-  const [dateFilter, setDateFilter] = useState("");
-
-  const [filterFallbackNotice, setFilterFallbackNotice] =
-    useState(false);
+  const [
+    filterFallbackNotice,
+    setFilterFallbackNotice,
+  ] = useState(false);
 
   /* =========================================================
      NORMALIZE LOCATION
   ========================================================= */
 
-  const normalizeLocation = (value: any) => {
+  const normalizeLocation = (
+    value: any
+  ) => {
     return String(value || "")
       .trim()
       .toLowerCase()
@@ -156,29 +286,44 @@ const formatPostedDate = (value: any) => {
 
         const q = query(
           collection(db, "trips"),
-          orderBy("createdAt", "desc")
+          orderBy(
+            "createdAt",
+            "desc"
+          )
         );
 
-        const querySnapshot = await getDocs(q);
+        const querySnapshot =
+          await getDocs(q);
 
-        const loadedTrips: any[] = [];
+        const loadedTrips: any[] =
+          [];
 
-        querySnapshot.forEach((tripDoc) => {
-          loadedTrips.push({
-            id: tripDoc.id,
-            ...tripDoc.data(),
-          });
-        });
+        querySnapshot.forEach(
+          (tripDoc) => {
+            loadedTrips.push({
+              id: tripDoc.id,
+              ...tripDoc.data(),
+            });
+          }
+        );
 
         /* =====================================================
            REMOVE DUPLICATES
         ===================================================== */
 
-        const uniqueTrips = loadedTrips.filter(
-          (trip, index, self) =>
-            index ===
-            self.findIndex((t) => t.id === trip.id)
-        );
+        const uniqueTrips =
+          loadedTrips.filter(
+            (
+              trip,
+              index,
+              self
+            ) =>
+              index ===
+              self.findIndex(
+                (t) =>
+                  t.id === trip.id
+              )
+          );
 
         setAllTrips(uniqueTrips);
 
@@ -187,15 +332,22 @@ const formatPostedDate = (value: any) => {
         ===================================================== */
 
         const normalizedRequestedStart =
-          normalizeLocation(requestedStartLocation);
+          normalizeLocation(
+            requestedStartLocation
+          );
 
         const normalizedRequestedCity =
-          normalizeLocation(requestedCity);
+          normalizeLocation(
+            requestedCity
+          );
 
         const normalizedRequestedDestination =
-          normalizeLocation(requestedDestination);
+          normalizeLocation(
+            requestedDestination
+          );
 
-        let filteredTrips = uniqueTrips;
+        let filteredTrips =
+          uniqueTrips;
 
         if (
           normalizedRequestedStart ||
@@ -207,41 +359,48 @@ const formatPostedDate = (value: any) => {
           =================================================== */
 
           const cityDestinationTrips =
-            uniqueTrips.filter((trip) => {
-              const tripCity = normalizeLocation(
-                trip.startCity || trip.city || ""
-              );
+            uniqueTrips.filter(
+              (trip) => {
+                const tripCity =
+                  normalizeLocation(
+                    trip.startCity ||
+                      trip.city ||
+                      ""
+                  );
 
-              const tripDestination =
-                normalizeLocation(
-                  trip.destination
+                const tripDestination =
+                  normalizeLocation(
+                    trip.destination
+                  );
+
+                const destinationMatches =
+                  normalizedRequestedDestination
+                    ? tripDestination.includes(
+                        normalizedRequestedDestination
+                      )
+                    : true;
+
+                const cityMatches =
+                  normalizedRequestedCity
+                    ? tripCity.includes(
+                        normalizedRequestedCity
+                      )
+                    : true;
+
+                return (
+                  cityMatches &&
+                  destinationMatches
                 );
-
-              const destinationMatches =
-                normalizedRequestedDestination
-                  ? tripDestination.includes(
-                      normalizedRequestedDestination
-                    )
-                  : true;
-
-              const cityMatches =
-                normalizedRequestedCity
-                  ? tripCity.includes(
-                      normalizedRequestedCity
-                    )
-                  : true;
-
-              return (
-                cityMatches &&
-                destinationMatches
-              );
-            });
+              }
+            );
 
           /* ===================================================
              EXACT START LOCATION FIRST
           =================================================== */
 
-          if (normalizedRequestedStart) {
+          if (
+            normalizedRequestedStart
+          ) {
             const exactStartTrips =
               cityDestinationTrips.filter(
                 (trip) => {
@@ -257,11 +416,15 @@ const formatPostedDate = (value: any) => {
                 }
               );
 
-            if (exactStartTrips.length > 0) {
+            if (
+              exactStartTrips.length >
+              0
+            ) {
               const exactStartIds =
                 new Set(
                   exactStartTrips.map(
-                    (trip) => trip.id
+                    (trip) =>
+                      trip.id
                   )
                 );
 
@@ -278,12 +441,10 @@ const formatPostedDate = (value: any) => {
                 ...fallbackCityTrips,
               ];
 
-              setFilterFallbackNotice(false);
+              setFilterFallbackNotice(
+                false
+              );
             } else {
-              /*
-               * Exact starting location does not exist.
-               * Fall back to city + destination rides.
-               */
               filteredTrips =
                 cityDestinationTrips;
 
@@ -298,7 +459,9 @@ const formatPostedDate = (value: any) => {
             filteredTrips =
               cityDestinationTrips;
 
-            setFilterFallbackNotice(false);
+            setFilterFallbackNotice(
+              false
+            );
           }
         }
 
@@ -310,14 +473,16 @@ const formatPostedDate = (value: any) => {
           const sharedTrip =
             uniqueTrips.find(
               (trip) =>
-                trip.id === sharedTripId
+                trip.id ===
+                sharedTripId
             );
 
           if (sharedTrip) {
             const otherTrips =
               filteredTrips.filter(
                 (trip) =>
-                  trip.id !== sharedTripId
+                  trip.id !==
+                  sharedTripId
               );
 
             const finalTrips = [
@@ -326,7 +491,9 @@ const formatPostedDate = (value: any) => {
             ];
 
             setTrips(finalTrips);
-            setExpandedTrip(sharedTrip.id);
+            setExpandedTrip(
+              sharedTrip.id
+            );
           } else {
             setTrips(filteredTrips);
           }
@@ -375,10 +542,14 @@ const formatPostedDate = (value: any) => {
   useEffect(() => {
     if (loading) return;
 
-    let filtered = [...allTrips];
+    let filtered = [
+      ...allTrips,
+    ];
 
     const normalizedStart =
-      normalizeLocation(startFilter);
+      normalizeLocation(
+        startFilter
+      );
 
     const normalizedDestination =
       normalizeLocation(
@@ -391,54 +562,62 @@ const formatPostedDate = (value: any) => {
 
     if (normalizedStart) {
       const exactStartTrips =
-        filtered.filter((trip) => {
-          const tripStart =
-            normalizeLocation(
-              trip.startLocation
-            );
-
-          return (
-            tripStart === normalizedStart
-          );
-        });
-
-      if (exactStartTrips.length > 0) {
-        filtered = exactStartTrips;
-        setFilterFallbackNotice(false);
-      } else {
-        /*
-         * If exact location doesn't exist,
-         * try partial start/city matching.
-         */
-
-        const partialStartTrips =
-          filtered.filter((trip) => {
+        filtered.filter(
+          (trip) => {
             const tripStart =
               normalizeLocation(
                 trip.startLocation
               );
 
-            const tripCity =
-              normalizeLocation(
-                trip.startCity ||
-                  trip.city ||
-                  ""
-              );
-
             return (
-              tripStart.includes(
-                normalizedStart
-              ) ||
-              tripCity.includes(
-                normalizedStart
-              )
+              tripStart ===
+              normalizedStart
             );
-          });
+          }
+        );
 
-        filtered = partialStartTrips;
+      if (
+        exactStartTrips.length > 0
+      ) {
+        filtered =
+          exactStartTrips;
 
         setFilterFallbackNotice(
-          partialStartTrips.length > 0
+          false
+        );
+      } else {
+        const partialStartTrips =
+          filtered.filter(
+            (trip) => {
+              const tripStart =
+                normalizeLocation(
+                  trip.startLocation
+                );
+
+              const tripCity =
+                normalizeLocation(
+                  trip.startCity ||
+                    trip.city ||
+                    ""
+                );
+
+              return (
+                tripStart.includes(
+                  normalizedStart
+                ) ||
+                tripCity.includes(
+                  normalizedStart
+                )
+              );
+            }
+          );
+
+        filtered =
+          partialStartTrips;
+
+        setFilterFallbackNotice(
+          partialStartTrips.length >
+            0
         );
       }
     }
@@ -448,18 +627,19 @@ const formatPostedDate = (value: any) => {
     ======================================================= */
 
     if (normalizedDestination) {
-      filtered = filtered.filter(
-        (trip) => {
-          const tripDestination =
-            normalizeLocation(
-              trip.destination
-            );
+      filtered =
+        filtered.filter(
+          (trip) => {
+            const tripDestination =
+              normalizeLocation(
+                trip.destination
+              );
 
-          return tripDestination.includes(
-            normalizedDestination
-          );
-        }
-      );
+            return tripDestination.includes(
+              normalizedDestination
+            );
+          }
+        );
     }
 
     /* =======================================================
@@ -467,39 +647,46 @@ const formatPostedDate = (value: any) => {
     ======================================================= */
 
     if (dateFilter) {
-      filtered = filtered.filter(
-        (trip) => {
-          if (!trip.tripDate) {
-            return false;
+      filtered =
+        filtered.filter(
+          (trip) => {
+            if (!trip.tripDate) {
+              return false;
+            }
+
+            const tripDate =
+              new Date(
+                trip.tripDate
+              );
+
+            if (
+              isNaN(
+                tripDate.getTime()
+              )
+            ) {
+              return false;
+            }
+
+            const year =
+              tripDate.getFullYear();
+
+            const month = String(
+              tripDate.getMonth() + 1
+            ).padStart(2, "0");
+
+            const day = String(
+              tripDate.getDate()
+            ).padStart(2, "0");
+
+            const formattedDate =
+              `${year}-${month}-${day}`;
+
+            return (
+              formattedDate ===
+              dateFilter
+            );
           }
-
-          const tripDate =
-            new Date(trip.tripDate);
-
-          if (isNaN(tripDate.getTime())) {
-            return false;
-          }
-
-          const year =
-            tripDate.getFullYear();
-
-          const month = String(
-            tripDate.getMonth() + 1
-          ).padStart(2, "0");
-
-          const day = String(
-            tripDate.getDate()
-          ).padStart(2, "0");
-
-          const formattedDate =
-            `${year}-${month}-${day}`;
-
-          return (
-            formattedDate ===
-            dateFilter
-          );
-        }
-      );
+        );
     }
 
     /* =======================================================
@@ -510,14 +697,16 @@ const formatPostedDate = (value: any) => {
       const sharedTrip =
         allTrips.find(
           (trip) =>
-            trip.id === sharedTripId
+            trip.id ===
+            sharedTripId
         );
 
       if (sharedTrip) {
         const otherTrips =
           filtered.filter(
             (trip) =>
-              trip.id !== sharedTripId
+              trip.id !==
+              sharedTripId
           );
 
         setTrips([
@@ -547,7 +736,9 @@ const formatPostedDate = (value: any) => {
     setStartFilter("");
     setDestinationFilter("");
     setDateFilter("");
-    setFilterFallbackNotice(false);
+    setFilterFallbackNotice(
+      false
+    );
   };
 
   const hasActiveFilters =
@@ -585,44 +776,113 @@ const formatPostedDate = (value: any) => {
   ========================================================= */
 
   useEffect(() => {
-    const loadSavedTrips = async () => {
-      try {
-        const user = JSON.parse(
-          localStorage.getItem(
-            "ridemateUser"
-          ) || "{}"
-        );
+    const loadSavedTrips =
+      async () => {
+        try {
+          let userName = "";
 
-        if (!user.name) return;
+          /* ===================================================
+             ADMIN INVESTIGATION MODE
+          =================================================== */
 
-        const snapshot = await getDocs(
-          collection(db, "savedTrips")
-        );
+          const savedAdminView =
+            localStorage.getItem(
+              "ridemateAdminView"
+            );
 
-        const saved: string[] = [];
+          if (savedAdminView) {
+            try {
+              const parsedAdminView =
+                JSON.parse(
+                  savedAdminView
+                );
 
-        snapshot.forEach((docSnap) => {
-          const data =
-            docSnap.data();
-
-          if (
-            data.user === user.name
-          ) {
-            saved.push(data.tripId);
+              if (
+                parsedAdminView?.active
+              ) {
+                userName =
+                  parsedAdminView.userName ||
+                  "";
+              }
+            } catch {
+              // Ignore malformed admin view
+            }
           }
-        });
 
-        setSavedTrips(saved);
-      } catch (error) {
-        console.error(
-          "Failed to load saved trips:",
-          error
-        );
-      }
-    };
+          /* ===================================================
+             NORMAL USER
+          =================================================== */
+
+          if (!userName) {
+            const savedUser =
+              localStorage.getItem(
+                "ridemateUser"
+              );
+
+            if (savedUser) {
+              try {
+                const user =
+                  JSON.parse(
+                    savedUser
+                  );
+
+                userName =
+                  user.name ||
+                  user.username ||
+                  "";
+              } catch {
+                userName = "";
+              }
+            }
+          }
+
+          if (!userName) {
+            setSavedTrips([]);
+            return;
+          }
+
+          const snapshot =
+            await getDocs(
+              collection(
+                db,
+                "savedTrips"
+              )
+            );
+
+          const saved: string[] =
+            [];
+
+          snapshot.forEach(
+            (docSnap) => {
+              const data =
+                docSnap.data();
+
+              if (
+                data.user ===
+                userName
+              ) {
+                if (
+                  data.tripId
+                ) {
+                  saved.push(
+                    data.tripId
+                  );
+                }
+              }
+            }
+          );
+
+          setSavedTrips(saved);
+        } catch (error) {
+          console.error(
+            "Failed to load saved trips:",
+            error
+          );
+        }
+      };
 
     loadSavedTrips();
-  }, []);
+  }, [isAdminView]);
 
   /* =========================================================
      EXPAND / COLLAPSE
@@ -631,10 +891,11 @@ const formatPostedDate = (value: any) => {
   const toggleExpanded = (
     tripId: string
   ) => {
-    setExpandedTrip((current) =>
-      current === tripId
-        ? null
-        : tripId
+    setExpandedTrip(
+      (current) =>
+        current === tripId
+          ? null
+          : tripId
     );
   };
 
@@ -645,22 +906,36 @@ const formatPostedDate = (value: any) => {
   const toggleSaveTrip = async (
     tripId: string
   ) => {
+    if (
+      blockedAdminAction(
+        "save or unsave rides"
+      )
+    ) {
+      return;
+    }
+
     try {
-      const user = JSON.parse(
-        localStorage.getItem(
-          "ridemateUser"
-        ) || "{}"
-      );
+      const user =
+        JSON.parse(
+          localStorage.getItem(
+            "ridemateUser"
+          ) || "{}"
+        );
 
       if (!user.name) {
-        alert("Please login first.");
+        alert(
+          "Please login first."
+        );
         return;
       }
 
-      const saveId = `${user.name}_${tripId}`;
+      const saveId =
+        `${user.name}_${tripId}`;
 
       if (
-        savedTrips.includes(tripId)
+        savedTrips.includes(
+          tripId
+        )
       ) {
         await deleteDoc(
           doc(
@@ -670,10 +945,12 @@ const formatPostedDate = (value: any) => {
           )
         );
 
-        setSavedTrips((prev) =>
-          prev.filter(
-            (id) => id !== tripId
-          )
+        setSavedTrips(
+          (prev) =>
+            prev.filter(
+              (id) =>
+                id !== tripId
+            )
         );
       } else {
         await setDoc(
@@ -688,10 +965,12 @@ const formatPostedDate = (value: any) => {
           }
         );
 
-        setSavedTrips((prev) => [
-          ...prev,
-          tripId,
-        ]);
+        setSavedTrips(
+          (prev) => [
+            ...prev,
+            tripId,
+          ]
+        );
       }
     } catch (error) {
       console.error(
@@ -709,19 +988,32 @@ const formatPostedDate = (value: any) => {
     id: string,
     currentLikes: number
   ) => {
+    if (
+      blockedAdminAction(
+        "like rides"
+      )
+    ) {
+      return;
+    }
+
     try {
-      const tripRef = doc(
-        db,
-        "trips",
-        id
-      );
+      const tripRef =
+        doc(
+          db,
+          "trips",
+          id
+        );
 
       const newLikeCount =
         currentLikes + 1;
 
-      await updateDoc(tripRef, {
-        likes: newLikeCount,
-      });
+      await updateDoc(
+        tripRef,
+        {
+          likes:
+            newLikeCount,
+        }
+      );
 
       const currentUser =
         JSON.parse(
@@ -730,9 +1022,11 @@ const formatPostedDate = (value: any) => {
           ) || "{}"
         );
 
-      const trip = trips.find(
-        (t) => t.id === id
-      );
+      const trip =
+        trips.find(
+          (t) =>
+            t.id === id
+        );
 
       if (
         trip &&
@@ -747,36 +1041,42 @@ const formatPostedDate = (value: any) => {
             "notifications"
           ),
           {
-            user: trip.userName,
+            user:
+              trip.userName,
             text: `${currentUser.name} liked your trip ❤️`,
-            createdAt: Date.now(),
+            createdAt:
+              Date.now(),
             read: false,
           }
         );
       }
 
-      setTrips((prevTrips) =>
-        prevTrips.map((trip) =>
-          trip.id === id
-            ? {
-                ...trip,
-                likes:
-                  newLikeCount,
-              }
-            : trip
-        )
+      setTrips(
+        (prevTrips) =>
+          prevTrips.map(
+            (trip) =>
+              trip.id === id
+                ? {
+                    ...trip,
+                    likes:
+                      newLikeCount,
+                  }
+                : trip
+          )
       );
 
-      setAllTrips((prevTrips) =>
-        prevTrips.map((trip) =>
-          trip.id === id
-            ? {
-                ...trip,
-                likes:
-                  newLikeCount,
-              }
-            : trip
-        )
+      setAllTrips(
+        (prevTrips) =>
+          prevTrips.map(
+            (trip) =>
+              trip.id === id
+                ? {
+                    ...trip,
+                    likes:
+                      newLikeCount,
+                  }
+                : trip
+          )
       );
     } catch (error) {
       console.error(
@@ -794,46 +1094,69 @@ const formatPostedDate = (value: any) => {
     tripId: string,
     commentText: string
   ) => {
-    if (!commentText.trim()) return;
+    if (
+      blockedAdminAction(
+        "comment on rides"
+      )
+    ) {
+      return;
+    }
+
+    if (!commentText.trim()) {
+      return;
+    }
 
     try {
-      const tripRef = doc(
-        db,
-        "trips",
-        tripId
-      );
+      const tripRef =
+        doc(
+          db,
+          "trips",
+          tripId
+        );
 
-      const user = JSON.parse(
-        localStorage.getItem(
-          "ridemateUser"
-        ) || "{}"
-      );
+      const user =
+        JSON.parse(
+          localStorage.getItem(
+            "ridemateUser"
+          ) || "{}"
+        );
 
       if (!user.name) {
-        alert("Please login first.");
+        alert(
+          "Please login first."
+        );
         return;
       }
 
       const newComment = {
         user: user.name,
-        image: user.image || "",
-        text: commentText.trim(),
+        image:
+          user.image || "",
+        text:
+          commentText.trim(),
       };
 
-      await updateDoc(tripRef, {
-        comments: arrayUnion(
-          newComment
-        ),
-      });
-
-      const trip = trips.find(
-        (t) => t.id === tripId
+      await updateDoc(
+        tripRef,
+        {
+          comments:
+            arrayUnion(
+              newComment
+            ),
+        }
       );
+
+      const trip =
+        trips.find(
+          (t) =>
+            t.id === tripId
+        );
 
       if (
         trip &&
         trip.userName &&
-        trip.userName !== user.name
+        trip.userName !==
+          user.name
       ) {
         await addDoc(
           collection(
@@ -841,42 +1164,50 @@ const formatPostedDate = (value: any) => {
             "notifications"
           ),
           {
-            user: trip.userName,
+            user:
+              trip.userName,
             text: `${user.name} commented on your trip 💬`,
-            createdAt: Date.now(),
+            createdAt:
+              Date.now(),
             read: false,
           }
         );
       }
 
-      setTrips((prevTrips) =>
-        prevTrips.map((trip) =>
-          trip.id === tripId
-            ? {
-                ...trip,
-                comments: [
-                  ...(trip.comments ||
-                    []),
-                  newComment,
-                ],
-              }
-            : trip
-        )
+      setTrips(
+        (prevTrips) =>
+          prevTrips.map(
+            (trip) =>
+              trip.id ===
+              tripId
+                ? {
+                    ...trip,
+                    comments: [
+                      ...(trip.comments ||
+                        []),
+                      newComment,
+                    ],
+                  }
+                : trip
+          )
       );
 
-      setAllTrips((prevTrips) =>
-        prevTrips.map((trip) =>
-          trip.id === tripId
-            ? {
-                ...trip,
-                comments: [
-                  ...(trip.comments ||
-                    []),
-                  newComment,
-                ],
-              }
-            : trip
-        )
+      setAllTrips(
+        (prevTrips) =>
+          prevTrips.map(
+            (trip) =>
+              trip.id ===
+              tripId
+                ? {
+                    ...trip,
+                    comments: [
+                      ...(trip.comments ||
+                        []),
+                      newComment,
+                    ],
+                  }
+                : trip
+          )
       );
     } catch (error) {
       console.error(
@@ -893,6 +1224,14 @@ const formatPostedDate = (value: any) => {
   const requestToJoin = async (
     trip: any
   ) => {
+    if (
+      blockedAdminAction(
+        "join rides"
+      )
+    ) {
+      return;
+    }
+
     try {
       const currentUser =
         JSON.parse(
@@ -902,7 +1241,9 @@ const formatPostedDate = (value: any) => {
         );
 
       if (!currentUser.name) {
-        alert("Please login first.");
+        alert(
+          "Please login first."
+        );
         return;
       }
 
@@ -928,7 +1269,8 @@ const formatPostedDate = (value: any) => {
           )
         );
 
-      let alreadyRequested = false;
+      let alreadyRequested =
+        false;
 
       existingRequests.forEach(
         (requestDoc) => {
@@ -943,7 +1285,8 @@ const formatPostedDate = (value: any) => {
             request.status ===
               "pending"
           ) {
-            alreadyRequested = true;
+            alreadyRequested =
+              true;
           }
         }
       );
@@ -965,7 +1308,8 @@ const formatPostedDate = (value: any) => {
           "rideRequests"
         ),
         {
-          tripId: trip.id,
+          tripId:
+            trip.id,
 
           tripOwner:
             trip.userName,
@@ -1021,10 +1365,12 @@ const formatPostedDate = (value: any) => {
           "notifications"
         ),
         {
-          user: trip.userName,
+          user:
+            trip.userName,
 
           text:
-            trip.rideType === "group"
+            trip.rideType ===
+            "group"
               ? `${currentUser.name} wants to join your group ride 🏍️`
               : `${currentUser.name} wants to join as your pillion 🪖`,
 
@@ -1057,15 +1403,17 @@ const formatPostedDate = (value: any) => {
   const toggleComments = (
     tripId: string
   ) => {
-    setOpenComments((prev) =>
-      prev.includes(tripId)
-        ? prev.filter(
-            (id) => id !== tripId
-          )
-        : [
-            ...prev,
-            tripId,
-          ]
+    setOpenComments(
+      (prev) =>
+        prev.includes(tripId)
+          ? prev.filter(
+              (id) =>
+                id !== tripId
+            )
+          : [
+              ...prev,
+              tripId,
+            ]
     );
   };
 
@@ -1117,6 +1465,37 @@ const formatPostedDate = (value: any) => {
       "
     >
       {/* =====================================================
+          ADMIN INVESTIGATION NOTICE
+      ===================================================== */}
+
+      {isAdminView && (
+        <div
+          className="
+            sticky
+            top-0
+            z-[100]
+            w-full
+            bg-orange-600
+            text-black
+            text-center
+            py-2
+            px-4
+            text-xs
+            sm:text-sm
+            font-black
+            shadow-lg
+          "
+        >
+          🛡️ INVESTIGATION MODE — Viewing{" "}
+          {adminView?.userName ||
+            "User"}'s Explore Trips
+          <span className="ml-2 opacity-70">
+            (Read Only)
+          </span>
+        </div>
+      )}
+
+      {/* =====================================================
           BACKGROUND
       ===================================================== */}
 
@@ -1162,8 +1541,6 @@ const formatPostedDate = (value: any) => {
               overflow-hidden
             "
           >
-            {/* FILTER TITLE */}
-
             <button
               type="button"
               onClick={() =>
@@ -1246,8 +1623,6 @@ const formatPostedDate = (value: any) => {
               )}
             </button>
 
-            {/* FILTER BODY */}
-
             {showFilters && (
               <div
                 className="
@@ -1265,7 +1640,7 @@ const formatPostedDate = (value: any) => {
                     gap-3
                   "
                 >
-                  {/* START LOCATION */}
+                  {/* START */}
 
                   <div>
                     <label
@@ -1282,11 +1657,7 @@ const formatPostedDate = (value: any) => {
                       Starting Location
                     </label>
 
-                    <div
-                      className="
-                        relative
-                      "
-                    >
+                    <div className="relative">
                       <MapPin
                         size={16}
                         className="
@@ -1344,11 +1715,7 @@ const formatPostedDate = (value: any) => {
                       Destination
                     </label>
 
-                    <div
-                      className="
-                        relative
-                      "
-                    >
+                    <div className="relative">
                       <Route
                         size={16}
                         className="
@@ -1408,11 +1775,7 @@ const formatPostedDate = (value: any) => {
                       Departure Date
                     </label>
 
-                    <div
-                      className="
-                        relative
-                      "
-                    >
+                    <div className="relative">
                       <CalendarDays
                         size={16}
                         className="
@@ -1474,12 +1837,7 @@ const formatPostedDate = (value: any) => {
                       gap-2
                     "
                   >
-                    <span
-                      className="
-                        text-xs
-                        text-zinc-400
-                      "
-                    >
+                    <span className="text-xs text-zinc-400">
                       {resultText}
                     </span>
 
@@ -1589,8 +1947,6 @@ const formatPostedDate = (value: any) => {
                   )}
                 </div>
 
-                {/* FALLBACK NOTICE */}
-
                 {filterFallbackNotice && (
                   <div
                     className="
@@ -1685,7 +2041,8 @@ const formatPostedDate = (value: any) => {
         >
           {trips.map((trip) => {
             const isExpanded =
-              expandedTrip === trip.id;
+              expandedTrip ===
+              trip.id;
 
             const startCity =
               trip.startCity ||
@@ -1721,9 +2078,7 @@ const formatPostedDate = (value: any) => {
                   }
                 `}
               >
-                {/* =================================================
-                    CINEMATIC LIGHT
-                ================================================= */}
+                {/* CINEMATIC LIGHT */}
 
                 <div
                   className="
@@ -1760,9 +2115,7 @@ const formatPostedDate = (value: any) => {
                     items-stretch
                   "
                 >
-                  {/* =================================================
-                      LEFT — PROFILE IMAGE
-                  ================================================= */}
+                  {/* LEFT PROFILE */}
 
                   <div
                     className="
@@ -1827,9 +2180,7 @@ const formatPostedDate = (value: any) => {
                     />
                   </div>
 
-                  {/* =================================================
-                      CENTER — RIDER + BIKE + DATE
-                  ================================================= */}
+                  {/* CENTER */}
 
                   <div
                     className="
@@ -1946,9 +2297,7 @@ const formatPostedDate = (value: any) => {
                     </div>
                   </div>
 
-                  {/* =================================================
-                      RIGHT — DESTINATION + ARROW
-                  ================================================= */}
+                  {/* RIGHT */}
 
                   <div
                     className="
@@ -2068,9 +2417,7 @@ const formatPostedDate = (value: any) => {
                       py-5
                     "
                   >
-                    {/* =================================================
-                        RIDER + RIDE TYPE
-                    ================================================= */}
+                    {/* RIDER */}
 
                     <div
                       className="
@@ -2200,9 +2547,7 @@ const formatPostedDate = (value: any) => {
                       )}
                     </div>
 
-                    {/* =================================================
-                        DETAILS GRID
-                    ================================================= */}
+                    {/* DETAILS */}
 
                     <div
                       className="
@@ -2213,7 +2558,7 @@ const formatPostedDate = (value: any) => {
                         gap-3
                       "
                     >
-                      {/* STARTING LOCATION */}
+                      {/* START */}
 
                       <div
                         className="
@@ -2419,9 +2764,7 @@ const formatPostedDate = (value: any) => {
                       </div>
                     </div>
 
-                    {/* =================================================
-                        BIKE
-                    ================================================= */}
+                    {/* BIKE */}
 
                     <div
                       className="
@@ -2466,9 +2809,7 @@ const formatPostedDate = (value: any) => {
                       </p>
                     </div>
 
-                    {/* =================================================
-                        RIDE STORY
-                    ================================================= */}
+                    {/* RIDE STORY */}
 
                     {trip.caption && (
                       <div
@@ -2507,9 +2848,7 @@ const formatPostedDate = (value: any) => {
                       </div>
                     )}
 
-                    {/* =================================================
-                        ITINERARY
-                    ================================================= */}
+                    {/* ITINERARY */}
 
                     {trip.itinerary && (
                       <div
@@ -2573,7 +2912,7 @@ const formatPostedDate = (value: any) => {
                             trip.likes || 0
                           );
                         }}
-                        className="
+                        className={`
                           flex
                           items-center
                           gap-2
@@ -2583,9 +2922,13 @@ const formatPostedDate = (value: any) => {
                           px-4
                           py-3
                           rounded-full
-                          hover:border-red-500/50
                           transition
-                        "
+                          ${
+                            isAdminView
+                              ? "opacity-50 cursor-not-allowed"
+                              : "hover:border-red-500/50"
+                          }
+                        `}
                       >
                         <Heart
                           size={18}
@@ -2598,8 +2941,15 @@ const formatPostedDate = (value: any) => {
                             font-bold
                           "
                         >
-                          {trip.likes || 0}
+                          {trip.likes ||
+                            0}
                         </span>
+
+                        {isAdminView && (
+                          <span className="text-[10px] text-zinc-500">
+                            🔒
+                          </span>
+                        )}
                       </button>
 
                       {/* COMMENTS */}
@@ -2655,7 +3005,7 @@ const formatPostedDate = (value: any) => {
                             trip.id
                           );
                         }}
-                        className="
+                        className={`
                           flex
                           items-center
                           gap-2
@@ -2665,9 +3015,13 @@ const formatPostedDate = (value: any) => {
                           px-4
                           py-3
                           rounded-full
-                          hover:border-yellow-500/50
                           transition
-                        "
+                          ${
+                            isAdminView
+                              ? "opacity-50 cursor-not-allowed"
+                              : "hover:border-yellow-500/50"
+                          }
+                        `}
                       >
                         <Bookmark
                           size={18}
@@ -2694,6 +3048,12 @@ const formatPostedDate = (value: any) => {
                             ? "Saved"
                             : "Save"}
                         </span>
+
+                        {isAdminView && (
+                          <span className="text-[10px] text-zinc-500">
+                            🔒
+                          </span>
+                        )}
                       </button>
 
                       {/* JOIN */}
@@ -2707,23 +3067,22 @@ const formatPostedDate = (value: any) => {
                             trip
                           );
                         }}
-                        className="
+                        className={`
                           ml-auto
                           flex
                           items-center
                           gap-2
-                          bg-orange-500
-                          hover:bg-orange-400
-                          text-black
                           px-5
                           py-3
                           rounded-full
                           font-black
-                          shadow-lg
-                          shadow-orange-500/20
-                          hover:scale-105
                           transition
-                        "
+                          ${
+                            isAdminView
+                              ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                              : "bg-orange-500 hover:bg-orange-400 text-black shadow-lg shadow-orange-500/20 hover:scale-105"
+                          }
+                        `}
                       >
                         <Rocket size={18} />
 
@@ -2731,6 +3090,12 @@ const formatPostedDate = (value: any) => {
                         "group"
                           ? "Join Ride"
                           : "Ride Along"}
+
+                        {isAdminView && (
+                          <span className="text-[10px]">
+                            🔒
+                          </span>
+                        )}
                       </button>
                     </div>
 
@@ -2754,42 +3119,67 @@ const formatPostedDate = (value: any) => {
                           e.stopPropagation()
                         }
                       >
-                        <input
-                          type="text"
-                          placeholder="Write a comment and press Enter..."
-                          className="
-                            w-full
-                            p-4
-                            rounded-xl
-                            bg-black
-                            border
-                            border-zinc-700
-                            text-white
-                            outline-none
-                            focus:border-orange-500
-                          "
-                          onKeyDown={(e) => {
-                            if (
-                              e.key === "Enter"
-                            ) {
-                              const value =
-                                e.currentTarget
-                                  .value;
+                        {/* ADMIN READ-ONLY COMMENT NOTICE */}
 
+                        {isAdminView ? (
+                          <div
+                            className="
+                              rounded-xl
+                              border
+                              border-orange-500/20
+                              bg-orange-500/5
+                              px-4
+                              py-3
+                              text-xs
+                              text-orange-300
+                            "
+                          >
+                            🛡️ Investigation Mode —
+                            comments are read-only.
+                            You can view this user's
+                            ride comments but cannot
+                            add a comment.
+                          </div>
+                        ) : (
+                          <input
+                            type="text"
+                            placeholder="Write a comment and press Enter..."
+                            className="
+                              w-full
+                              p-4
+                              rounded-xl
+                              bg-black
+                              border
+                              border-zinc-700
+                              text-white
+                              outline-none
+                              focus:border-orange-500
+                            "
+                            onKeyDown={(e) => {
                               if (
-                                value.trim()
+                                e.key ===
+                                "Enter"
                               ) {
-                                addComment(
-                                  trip.id,
-                                  value
-                                );
+                                const value =
+                                  e
+                                    .currentTarget
+                                    .value;
 
-                                e.currentTarget.value =
-                                  "";
+                                if (
+                                  value.trim()
+                                ) {
+                                  addComment(
+                                    trip.id,
+                                    value
+                                  );
+
+                                  e.currentTarget.value =
+                                    "";
+                                }
                               }
-                            }
-                          }}
-                        />
+                            }}
+                          />
+                        )}
 
                         <div
                           className="
@@ -2808,7 +3198,9 @@ const formatPostedDate = (value: any) => {
                               index: number
                             ) => (
                               <div
-                                key={index}
+                                key={
+                                  index
+                                }
                                 className="
                                   bg-black/40
                                   border
@@ -2857,7 +3249,9 @@ const formatPostedDate = (value: any) => {
                                       text-sm
                                     "
                                   >
-                                    {comment.user}
+                                    {
+                                      comment.user
+                                    }
                                   </p>
 
                                   <p
@@ -2867,7 +3261,9 @@ const formatPostedDate = (value: any) => {
                                       mt-1
                                     "
                                   >
-                                    {comment.text}
+                                    {
+                                      comment.text
+                                    }
                                   </p>
                                 </div>
                               </div>

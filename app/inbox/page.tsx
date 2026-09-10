@@ -16,7 +16,27 @@ import {
   MessageCircle,
   UserRound,
   Loader2,
+  ShieldCheck,
 } from "lucide-react";
+
+
+/* =========================================================
+   TYPES
+========================================================= */
+
+type Chat = {
+  name: string;
+  image: string;
+};
+
+type AdminView = {
+  active: boolean;
+  userId?: string;
+  userName?: string;
+  userEmail?: string;
+  userImage?: string;
+  startedAt?: number;
+};
 
 
 export default function InboxPage() {
@@ -26,10 +46,24 @@ export default function InboxPage() {
   ========================================================= */
 
   const [chats, setChats] =
-    useState<any[]>([]);
+    useState<Chat[]>([]);
 
   const [loading, setLoading] =
     useState(true);
+
+  const [adminView, setAdminView] =
+    useState<AdminView | null>(null);
+
+
+  /* =========================================================
+     ADMIN VIEW
+  ========================================================= */
+
+  const isAdminView =
+    Boolean(
+      adminView?.active &&
+      adminView?.userName
+    );
 
 
   /* =========================================================
@@ -45,15 +79,122 @@ export default function InboxPage() {
 
       try {
 
-        const currentUser =
-          JSON.parse(
+        /* =====================================================
+           CHECK ADMIN INVESTIGATION MODE
+        ===================================================== */
+
+        let activeAdminView: AdminView | null = null;
+
+        try {
+
+          const savedAdminView =
             localStorage.getItem(
-              "ridemateUser"
-            ) || "{}"
+              "ridemateAdminView"
+            );
+
+          if (savedAdminView) {
+
+            const parsedAdminView =
+              JSON.parse(
+                savedAdminView
+              );
+
+            if (
+              parsedAdminView?.active &&
+              parsedAdminView?.userName
+            ) {
+
+              activeAdminView =
+                parsedAdminView;
+
+            }
+
+          }
+
+        } catch (error) {
+
+          console.error(
+            "Failed to read admin view:",
+            error
           );
 
+        }
 
-        if (!currentUser.name) {
+
+        if (mounted) {
+
+          setAdminView(
+            activeAdminView
+          );
+
+        }
+
+
+        /* =====================================================
+           DETERMINE WHICH USER'S INBOX TO VIEW
+        ===================================================== */
+
+        let currentUserName = "";
+
+
+        if (
+          activeAdminView?.active &&
+          activeAdminView.userName
+        ) {
+
+          /*
+           * ADMIN INVESTIGATION MODE
+           *
+           * Read the selected user's conversations.
+           */
+
+          currentUserName =
+            activeAdminView.userName;
+
+        } else {
+
+          /*
+           * NORMAL USER MODE
+           */
+
+          try {
+
+            const savedUser =
+              localStorage.getItem(
+                "ridemateUser"
+              );
+
+            if (savedUser) {
+
+              const currentUser =
+                JSON.parse(
+                  savedUser
+                );
+
+              currentUserName =
+                currentUser.name ||
+                currentUser.username ||
+                "";
+
+            }
+
+          } catch (error) {
+
+            console.error(
+              "Failed to read current user:",
+              error
+            );
+
+          }
+
+        }
+
+
+        /* =====================================================
+           USER NOT LOGGED IN
+        ===================================================== */
+
+        if (!currentUserName) {
 
           if (mounted) {
 
@@ -91,20 +232,19 @@ export default function InboxPage() {
               messageDoc.data();
 
 
-            /*
-             * If current user sent the message,
-             * add the receiver.
-             */
+            /* =================================================
+               CURRENT USER SENT MESSAGE
+            ================================================= */
 
             if (
               message.sender ===
-              currentUser.name
+              currentUserName
             ) {
 
               if (
                 message.receiver &&
                 message.receiver !==
-                  currentUser.name
+                  currentUserName
               ) {
 
                 riderNames.push(
@@ -116,20 +256,19 @@ export default function InboxPage() {
             }
 
 
-            /*
-             * If current user received the message,
-             * add the sender.
-             */
+            /* =================================================
+               CURRENT USER RECEIVED MESSAGE
+            ================================================= */
 
             if (
               message.receiver ===
-              currentUser.name
+              currentUserName
             ) {
 
               if (
                 message.sender &&
                 message.sender !==
-                  currentUser.name
+                  currentUserName
               ) {
 
                 riderNames.push(
@@ -144,9 +283,9 @@ export default function InboxPage() {
         );
 
 
-        /*
-         * Remove duplicate riders.
-         */
+        /* =====================================================
+           REMOVE DUPLICATES
+        ===================================================== */
 
         const uniqueNames =
           Array.from(
@@ -170,7 +309,10 @@ export default function InboxPage() {
 
 
         const userMap: {
-          [key: string]: any;
+          [key: string]: {
+            name: string;
+            image: string;
+          };
         } = {};
 
 
@@ -213,7 +355,7 @@ export default function InboxPage() {
            BUILD CHAT LIST
         ===================================================== */
 
-        const loadedChats =
+        const loadedChats: Chat[] =
           uniqueNames.map(
             (name) => {
 
@@ -239,9 +381,9 @@ export default function InboxPage() {
           );
 
 
-        /*
-         * Sort alphabetically.
-         */
+        /* =====================================================
+           SORT ALPHABETICALLY
+        ===================================================== */
 
         loadedChats.sort(
           (a, b) =>
@@ -266,6 +408,12 @@ export default function InboxPage() {
           error
         );
 
+        if (mounted) {
+
+          setChats([]);
+
+        }
+
       } finally {
 
         if (mounted) {
@@ -279,15 +427,16 @@ export default function InboxPage() {
     };
 
 
-    /* Initial load */
+    /* =====================================================
+       INITIAL LOAD
+    ===================================================== */
 
     loadChats();
 
 
-    /*
-     * Refresh every second,
-     * just like your existing page.
-     */
+    /* =====================================================
+       REFRESH EVERY SECOND
+    ===================================================== */
 
     const interval =
       setInterval(
@@ -338,6 +487,87 @@ export default function InboxPage() {
         >
 
           {/* =================================================
+              ADMIN INVESTIGATION NOTICE
+          ================================================= */}
+
+          {isAdminView && (
+
+            <div
+              className="
+                mb-6
+                rounded-2xl
+                border
+                border-orange-500/30
+                bg-orange-500/10
+                px-4
+                py-4
+                flex
+                items-start
+                gap-3
+              "
+            >
+
+              <ShieldCheck
+                size={22}
+                className="
+                  text-orange-500
+                  flex-shrink-0
+                  mt-0.5
+                "
+              />
+
+              <div>
+
+                <p
+                  className="
+                    text-orange-400
+                    font-black
+                    text-sm
+                  "
+                >
+                  🛡️ INVESTIGATION MODE
+                </p>
+
+
+                <p
+                  className="
+                    text-zinc-300
+                    text-sm
+                    mt-1
+                  "
+                >
+                  Viewing{" "}
+                  <span
+                    className="
+                      font-bold
+                      text-white
+                    "
+                  >
+                    {adminView?.userName}
+                  </span>
+                  's Crew Chat inbox.
+                </p>
+
+
+                <p
+                  className="
+                    text-zinc-500
+                    text-xs
+                    mt-1
+                  "
+                >
+                  Read-only investigation mode. Messages cannot be
+                  sent from this view.
+                </p>
+
+              </div>
+
+            </div>
+
+          )}
+
+
+          {/* =================================================
               HEADING
           ================================================= */}
 
@@ -369,7 +599,11 @@ export default function InboxPage() {
                 text-zinc-500
               "
             >
-              Your conversations with other RideMate riders.
+              {isAdminView
+                ? `Conversations belonging to ${
+                    adminView?.userName || "this rider"
+                  }.`
+                : "Your conversations with other RideMate riders."}
             </p>
 
           </div>
@@ -408,7 +642,9 @@ export default function InboxPage() {
                   text-sm
                 "
               >
-                Loading your conversations...
+                {isAdminView
+                  ? "Loading user's conversations..."
+                  : "Loading your conversations..."}
               </p>
 
             </div>
@@ -651,7 +887,9 @@ export default function InboxPage() {
                     text-white
                   "
                 >
-                  No conversations yet
+                  {isAdminView
+                    ? "No conversations found"
+                    : "No conversations yet"}
                 </h3>
 
 
@@ -662,7 +900,11 @@ export default function InboxPage() {
                     text-zinc-500
                   "
                 >
-                  Start a conversation with another RideMate rider.
+                  {isAdminView
+                    ? `No conversations were found for ${
+                        adminView?.userName || "this rider"
+                      }.`
+                    : "Start a conversation with another RideMate rider."}
                 </p>
 
               </div>
