@@ -16,16 +16,31 @@ import {
 
 import { db } from "../firebase";
 
+type AdminView = {
+  active?: boolean;
+  userId?: string;
+  userName?: string;
+  userEmail?: string;
+  userImage?: string;
+};
+
 export default function RequestsPage() {
-  const [receivedRequests, setReceivedRequests] = useState<any[]>([]);
-  const [sentRequests, setSentRequests] = useState<any[]>([]);
+  const [receivedRequests, setReceivedRequests] =
+    useState<any[]>([]);
 
-  const [expandedTrip, setExpandedTrip] = useState<any | null>(null);
-  const [loadingTrip, setLoadingTrip] = useState(false);
+  const [sentRequests, setSentRequests] =
+    useState<any[]>([]);
 
-  const [activeTab, setActiveTab] = useState<"received" | "sent">(
-    "received"
-  );
+  const [expandedTrip, setExpandedTrip] =
+    useState<any | null>(null);
+
+  const [loadingTrip, setLoadingTrip] =
+    useState(false);
+
+  const [activeTab, setActiveTab] =
+    useState<"received" | "sent">(
+      "received"
+    );
 
   const [expandedRequestId, setExpandedRequestId] =
     useState<string | null>(null);
@@ -33,11 +48,107 @@ export default function RequestsPage() {
   const [updatingRequestId, setUpdatingRequestId] =
     useState<string | null>(null);
 
-  // =========================================================
-  // DATE FORMATTER
-  // =========================================================
+  const [adminView, setAdminView] =
+    useState<AdminView | null>(null);
 
-  const formatRequestDateTime = (request: any) => {
+  const [currentUserName, setCurrentUserName] =
+    useState("");
+
+  /* =========================================================
+     LOAD ACTIVE USER / ADMIN VIEW
+  ========================================================= */
+
+  useEffect(() => {
+    const loadViewUser = () => {
+      try {
+        const savedAdminView =
+          localStorage.getItem(
+            "ridemateAdminView"
+          );
+
+        if (savedAdminView) {
+          const parsedAdminView =
+            JSON.parse(savedAdminView);
+
+          if (parsedAdminView?.active) {
+            setAdminView(
+              parsedAdminView
+            );
+
+            setCurrentUserName(
+              parsedAdminView.userName ||
+                ""
+            );
+
+            return;
+          }
+        }
+
+        const savedUser =
+          localStorage.getItem(
+            "ridemateUser"
+          );
+
+        if (savedUser) {
+          const user =
+            JSON.parse(savedUser);
+
+          setAdminView(null);
+
+          setCurrentUserName(
+            user.name ||
+              user.username ||
+              ""
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Failed to load active user:",
+          error
+        );
+      }
+    };
+
+    loadViewUser();
+
+    const handleAdminViewChange =
+      () => {
+        loadViewUser();
+      };
+
+    window.addEventListener(
+      "ridemateAdminViewChanged",
+      handleAdminViewChange
+    );
+
+    window.addEventListener(
+      "storage",
+      handleAdminViewChange
+    );
+
+    return () => {
+      window.removeEventListener(
+        "ridemateAdminViewChanged",
+        handleAdminViewChange
+      );
+
+      window.removeEventListener(
+        "storage",
+        handleAdminViewChange
+      );
+    };
+  }, []);
+
+  const isAdminView =
+    adminView?.active === true;
+
+  /* =========================================================
+     DATE FORMATTER
+  ========================================================= */
+
+  const formatRequestDateTime = (
+    request: any
+  ) => {
     const value =
       request.createdAt ||
       request.requestedAt ||
@@ -51,24 +162,21 @@ export default function RequestsPage() {
     try {
       let date: Date;
 
-      // Firestore Timestamp
       if (
         typeof value === "object" &&
-        typeof value.toDate === "function"
+        typeof value.toDate ===
+          "function"
       ) {
         date = value.toDate();
-      }
-
-      // Firestore timestamp-like object
-      else if (
+      } else if (
         typeof value === "object" &&
-        value.seconds !== undefined
+        value.seconds !==
+          undefined
       ) {
-        date = new Date(value.seconds * 1000);
-      }
-
-      // Normal JS date / timestamp
-      else {
+        date = new Date(
+          value.seconds * 1000
+        );
+      } else {
         date = new Date(value);
       }
 
@@ -76,105 +184,204 @@ export default function RequestsPage() {
         return "";
       }
 
-      return date.toLocaleString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      });
+      return date.toLocaleString(
+        "en-IN",
+        {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        }
+      );
     } catch {
       return "";
     }
   };
 
-  // =========================================================
-  // LOAD REQUESTS
-  // =========================================================
+  /* =========================================================
+     LOAD REQUESTS
+  ========================================================= */
 
   useEffect(() => {
-    const loadRequests = async () => {
-      try {
-        const currentUser = JSON.parse(
-          localStorage.getItem("ridemateUser") || "{}"
-        );
+    const loadRequests =
+      async () => {
+        try {
+          let activeUserName = "";
 
-        if (!currentUser.name) return;
+          /* ===============================================
+             ADMIN INVESTIGATION MODE
+          =============================================== */
 
-        const snapshot = await getDocs(
-          collection(db, "rideRequests")
-        );
+          const savedAdminView =
+            localStorage.getItem(
+              "ridemateAdminView"
+            );
 
-        const received: any[] = [];
-        const sent: any[] = [];
+          if (savedAdminView) {
+            const parsedAdminView =
+              JSON.parse(
+                savedAdminView
+              );
 
-        snapshot.forEach((docSnap) => {
-          const request = docSnap.data();
-
-          // =================================================
-          // REQUESTS RECEIVED
-          // =================================================
-
-          if (request.tripOwner === currentUser.name) {
-            received.push({
-              id: docSnap.id,
-              ...request,
-            });
+            if (
+              parsedAdminView?.active &&
+              parsedAdminView.userName
+            ) {
+              activeUserName =
+                parsedAdminView.userName;
+            }
           }
 
-          // =================================================
-          // REQUESTS SENT
-          // =================================================
+          /* ===============================================
+             NORMAL USER
+          =============================================== */
 
-          if (request.requester === currentUser.name) {
-            sent.push({
-              id: docSnap.id,
-              ...request,
-            });
+          if (!activeUserName) {
+            const currentUser =
+              JSON.parse(
+                localStorage.getItem(
+                  "ridemateUser"
+                ) || "{}"
+              );
+
+            activeUserName =
+              currentUser.name ||
+              currentUser.username ||
+              "";
           }
-        });
 
-        setReceivedRequests(received);
-        setSentRequests(sent);
-      } catch (error) {
-        console.error(
-          "Failed to load requests:",
-          error
-        );
-      }
-    };
+          setCurrentUserName(
+            activeUserName
+          );
+
+          if (!activeUserName) {
+            setReceivedRequests([]);
+            setSentRequests([]);
+            return;
+          }
+
+          console.log(
+            "Ride Requests active user:",
+            activeUserName
+          );
+
+          const snapshot =
+            await getDocs(
+              collection(
+                db,
+                "rideRequests"
+              )
+            );
+
+          const received: any[] =
+            [];
+
+          const sent: any[] = [];
+
+          snapshot.forEach(
+            (docSnap) => {
+              const request =
+                docSnap.data();
+
+              /* =========================================
+                 REQUESTS RECEIVED
+              ========================================= */
+
+              if (
+                request.tripOwner ===
+                activeUserName
+              ) {
+                received.push({
+                  id: docSnap.id,
+                  ...request,
+                });
+              }
+
+              /* =========================================
+                 REQUESTS SENT
+              ========================================= */
+
+              if (
+                request.requester ===
+                activeUserName
+              ) {
+                sent.push({
+                  id: docSnap.id,
+                  ...request,
+                });
+              }
+            }
+          );
+
+          setReceivedRequests(
+            received
+          );
+
+          setSentRequests(
+            sent
+          );
+        } catch (error) {
+          console.error(
+            "Failed to load requests:",
+            error
+          );
+        }
+      };
 
     loadRequests();
-  }, []);
+  }, [isAdminView]);
 
-  // =========================================================
-  // APPROVE / REJECT REQUEST
-  // ONLY USED FOR RECEIVED REQUESTS
-  // =========================================================
+  /* =========================================================
+     APPROVE / REJECT REQUEST
+     ONLY NORMAL USER
+  ========================================================= */
 
   const updateRequest = async (
     requestId: string,
-    status: "approved" | "rejected",
+    status:
+      | "approved"
+      | "rejected",
     tripId: string
   ) => {
-    try {
-      setUpdatingRequestId(requestId);
+    /* ===============================================
+       BLOCK ADMIN INVESTIGATION MODE
+    =============================================== */
 
-      const request = receivedRequests.find(
-        (r) => r.id === requestId
+    if (isAdminView) {
+      alert(
+        "Admin View Mode is read-only.\n\nYou cannot approve or reject requests while investigating a user account."
       );
+
+      return;
+    }
+
+    try {
+      setUpdatingRequestId(
+        requestId
+      );
+
+      const request =
+        receivedRequests.find(
+          (r) =>
+            r.id === requestId
+        );
 
       if (!request) {
         return;
       }
 
-      // =====================================================
-      // UPDATE REQUEST STATUS
-      // =====================================================
+      /* ===============================================
+         UPDATE REQUEST STATUS
+      =============================================== */
 
       await updateDoc(
-        doc(db, "rideRequests", requestId),
+        doc(
+          db,
+          "rideRequests",
+          requestId
+        ),
         {
           status,
           tripCompleted: false,
@@ -182,83 +389,107 @@ export default function RequestsPage() {
         }
       );
 
-      // =====================================================
-      // CREATE / UPDATE TRIP CHAT
-      // ONLY WHEN APPROVED
-      // =====================================================
+      /* ===============================================
+         CREATE / UPDATE TRIP CHAT
+         ONLY WHEN APPROVED
+      =============================================== */
 
-      if (status === "approved") {
-        const chatRef = doc(
-          db,
-          "tripChats",
-          tripId
-        );
+      if (
+        status === "approved"
+      ) {
+        const chatRef =
+          doc(
+            db,
+            "tripChats",
+            tripId
+          );
 
         const existingChat =
-          await getDoc(chatRef);
+          await getDoc(
+            chatRef
+          );
 
-        if (!existingChat.exists()) {
-          await setDoc(chatRef, {
-            tripId,
+        if (
+          !existingChat.exists()
+        ) {
+          await setDoc(
+            chatRef,
+            {
+              tripId,
 
-            destination:
-              request.destination,
+              destination:
+                request.destination,
 
-            owner:
-              request.tripOwner,
+              owner:
+                request.tripOwner,
 
-            members: [
-              request.tripOwner,
-              request.requester,
-            ],
+              members: [
+                request.tripOwner,
+                request.requester,
+              ],
 
-            createdAt: Date.now(),
+              createdAt:
+                Date.now(),
 
-            completed: false,
-          });
+              completed: false,
+            }
+          );
         } else {
           await updateDoc(
             chatRef,
             {
-              members: arrayUnion(
-                request.requester
-              ),
+              members:
+                arrayUnion(
+                  request.requester
+                ),
             }
           );
         }
       }
 
-      // =====================================================
-      // SEND NOTIFICATION
-      // =====================================================
+      /* ===============================================
+         SEND NOTIFICATION
+      =============================================== */
 
       await addDoc(
-        collection(db, "notifications"),
+        collection(
+          db,
+          "notifications"
+        ),
         {
-          user: request.requester,
+          user:
+            request.requester,
 
           text:
-            status === "approved"
+            status ===
+            "approved"
               ? `🎉 ${request.tripOwner} approved your ride request to ${request.destination}`
               : `❌ ${request.tripOwner} rejected your ride request to ${request.destination}`,
 
-          createdAt: Date.now(),
+          createdAt:
+            Date.now(),
 
           read: false,
         }
       );
 
-      // =====================================================
-      // REMOVE FROM RECEIVED REQUESTS
-      // =====================================================
+      /* ===============================================
+         REMOVE FROM RECEIVED
+      =============================================== */
 
-      setReceivedRequests((prev) =>
-        prev.filter(
-          (r) => r.id !== requestId
-        )
+      setReceivedRequests(
+        (prev) =>
+          prev.filter(
+            (r) =>
+              r.id !==
+              requestId
+          )
       );
 
-      setExpandedRequestId(null);
+      setExpandedRequestId(
+        null
+      );
+
       setExpandedTrip(null);
     } catch (error) {
       console.error(
@@ -270,46 +501,72 @@ export default function RequestsPage() {
         "Something went wrong. Please try again."
       );
     } finally {
-      setUpdatingRequestId(null);
+      setUpdatingRequestId(
+        null
+      );
     }
   };
 
-  // =========================================================
-  // TOGGLE CARD
-  // =========================================================
+  /* =========================================================
+     TOGGLE CARD
+  ========================================================= */
 
-  const toggleCard = async (request: any) => {
-    if (expandedRequestId === request.id) {
-      setExpandedRequestId(null);
+  const toggleCard = async (
+    request: any
+  ) => {
+    if (
+      expandedRequestId ===
+      request.id
+    ) {
+      setExpandedRequestId(
+        null
+      );
+
       setExpandedTrip(null);
+
       return;
     }
 
-    setExpandedRequestId(request.id);
+    setExpandedRequestId(
+      request.id
+    );
+
     setExpandedTrip(null);
+
     setLoadingTrip(true);
 
     try {
       if (!request.tripId) {
-        setExpandedTrip(request);
+        setExpandedTrip(
+          request
+        );
+
         return;
       }
 
-      const tripRef = doc(
-        db,
-        "trips",
-        request.tripId
-      );
+      const tripRef =
+        doc(
+          db,
+          "trips",
+          request.tripId
+        );
 
-      const tripSnap = await getDoc(tripRef);
+      const tripSnap =
+        await getDoc(
+          tripRef
+        );
 
-      if (tripSnap.exists()) {
+      if (
+        tripSnap.exists()
+      ) {
         setExpandedTrip({
           id: tripSnap.id,
           ...tripSnap.data(),
         });
       } else {
-        setExpandedTrip(request);
+        setExpandedTrip(
+          request
+        );
       }
     } catch (error) {
       console.error(
@@ -317,15 +574,17 @@ export default function RequestsPage() {
         error
       );
 
-      setExpandedTrip(request);
+      setExpandedTrip(
+        request
+      );
     } finally {
       setLoadingTrip(false);
     }
   };
 
-  // =========================================================
-  // TRIP DETAILS
-  // =========================================================
+  /* =========================================================
+     TRIP DETAILS
+  ========================================================= */
 
   const TripDetails = ({
     request,
@@ -334,7 +593,9 @@ export default function RequestsPage() {
     request: any;
     showActions?: boolean;
   }) => {
-    const trip = expandedTrip || request;
+    const trip =
+      expandedTrip ||
+      request;
 
     const destination =
       trip.destination ||
@@ -415,9 +676,7 @@ export default function RequestsPage() {
           </div>
         ) : (
           <>
-            {/* ===========================================
-                TRIP HEADER
-            =========================================== */}
+            {/* TRIP HEADER */}
 
             <div
               className="
@@ -463,9 +722,7 @@ export default function RequestsPage() {
               </div>
             </div>
 
-            {/* ===========================================
-                DESTINATION
-            =========================================== */}
+            {/* DESTINATION */}
 
             <div
               className="
@@ -498,9 +755,7 @@ export default function RequestsPage() {
               </p>
             </div>
 
-            {/* ===========================================
-                TRIP INFORMATION
-            =========================================== */}
+            {/* TRIP INFORMATION */}
 
             <div
               className="
@@ -510,7 +765,7 @@ export default function RequestsPage() {
                 gap-2
               "
             >
-              {/* STARTING LOCATION */}
+              {/* START */}
 
               <div
                 className="
@@ -607,7 +862,8 @@ export default function RequestsPage() {
                     truncate
                   "
                 >
-                  {bike || "Not specified"}
+                  {bike ||
+                    "Not specified"}
                 </p>
               </div>
 
@@ -643,9 +899,7 @@ export default function RequestsPage() {
               </div>
             </div>
 
-            {/* ===========================================
-                DEPARTURE
-            =========================================== */}
+            {/* DEPARTURE */}
 
             {tripDate && (
               <div
@@ -675,16 +929,17 @@ export default function RequestsPage() {
                     mt-1
                   "
                 >
-                  {formatRequestDateTime({
-                    createdAt: tripDate,
-                  })}
+                  {formatRequestDateTime(
+                    {
+                      createdAt:
+                        tripDate,
+                    }
+                  )}
                 </p>
               </div>
             )}
 
-            {/* ===========================================
-                RIDE TYPE
-            =========================================== */}
+            {/* RIDE TYPE */}
 
             {rideType && (
               <div
@@ -702,15 +957,14 @@ export default function RequestsPage() {
                   font-bold
                 "
               >
-                {rideType === "group"
+                {rideType ===
+                "group"
                   ? "👥 Group Ride"
                   : "👤 Individual Ride"}
               </div>
             )}
 
-            {/* ===========================================
-                RIDE STORY
-            =========================================== */}
+            {/* RIDE STORY */}
 
             {rideStory && (
               <div
@@ -745,13 +999,52 @@ export default function RequestsPage() {
               </div>
             )}
 
-            {/* ===========================================
-                APPROVE / REJECT
-                ONLY FOR RECEIVED REQUESTS
-            =========================================== */}
+            {/* ADMIN READ ONLY */}
+
+            {isAdminView &&
+              request.status ===
+                "pending" &&
+              showActions && (
+                <div
+                  className="
+                    mt-5
+                    pt-4
+                    border-t
+                    border-zinc-800
+                  "
+                >
+                  <div
+                    className="
+                      bg-orange-500/10
+                      border
+                      border-orange-500/20
+                      rounded-xl
+                      px-4
+                      py-3
+                      text-center
+                    "
+                  >
+                    <p
+                      className="
+                        text-orange-400
+                        font-bold
+                        text-sm
+                      "
+                    >
+                      🔒 Investigation Mode —
+                      Approve / Reject disabled
+                    </p>
+                  </div>
+                </div>
+              )}
+
+            {/* APPROVE / REJECT */}
+            {/* ONLY NORMAL USER */}
 
             {showActions &&
-              request.status === "pending" && (
+              !isAdminView &&
+              request.status ===
+                "pending" && (
                 <div
                   className="
                     mt-5
@@ -836,9 +1129,9 @@ export default function RequestsPage() {
     );
   };
 
-  // =========================================================
-  // REQUEST CARD - RECEIVED
-  // =========================================================
+  /* =========================================================
+     REQUEST CARD - RECEIVED
+  ========================================================= */
 
   const ReceivedRequestCard = ({
     request,
@@ -846,11 +1139,14 @@ export default function RequestsPage() {
     request: any;
   }) => {
     const isExpanded =
-      expandedRequestId === request.id;
+      expandedRequestId ===
+      request.id;
 
     return (
       <div
-        onClick={() => toggleCard(request)}
+        onClick={() =>
+          toggleCard(request)
+        }
         className="
           bg-zinc-900
           rounded-3xl
@@ -864,10 +1160,6 @@ export default function RequestsPage() {
           hover:border-orange-500/40
         "
       >
-        {/* ===============================================
-            COLLAPSED HEADER
-        =============================================== */}
-
         <div
           className="
             flex
@@ -876,8 +1168,6 @@ export default function RequestsPage() {
             sm:gap-4
           "
         >
-          {/* USER IMAGE */}
-
           <img
             src={
               request.requesterImage ||
@@ -894,8 +1184,6 @@ export default function RequestsPage() {
               shrink-0
             "
           />
-
-          {/* MAIN INFORMATION */}
 
           <div
             className="
@@ -935,11 +1223,10 @@ export default function RequestsPage() {
                 font-bold
               "
             >
-              Status: {request.status}
+              Status:{" "}
+              {request.status}
             </p>
           </div>
-
-          {/* DATE / TIME */}
 
           <div
             className="
@@ -977,10 +1264,6 @@ export default function RequestsPage() {
           </div>
         </div>
 
-        {/* ===============================================
-            EXPANDED DETAILS
-        =============================================== */}
-
         {isExpanded && (
           <TripDetails
             request={request}
@@ -991,9 +1274,9 @@ export default function RequestsPage() {
     );
   };
 
-  // =========================================================
-  // REQUEST CARD - SENT
-  // =========================================================
+  /* =========================================================
+     REQUEST CARD - SENT
+  ========================================================= */
 
   const SentRequestCard = ({
     request,
@@ -1001,11 +1284,14 @@ export default function RequestsPage() {
     request: any;
   }) => {
     const isExpanded =
-      expandedRequestId === request.id;
+      expandedRequestId ===
+      request.id;
 
     return (
       <div
-        onClick={() => toggleCard(request)}
+        onClick={() =>
+          toggleCard(request)
+        }
         className="
           bg-zinc-900
           p-4
@@ -1019,10 +1305,6 @@ export default function RequestsPage() {
           hover:border-orange-500/40
         "
       >
-        {/* ===============================================
-            COLLAPSED HEADER
-        =============================================== */}
-
         <div
           className="
             flex
@@ -1061,8 +1343,6 @@ export default function RequestsPage() {
             </p>
           </div>
 
-          {/* DATE / TIME */}
-
           <div
             className="
               text-right
@@ -1098,10 +1378,6 @@ export default function RequestsPage() {
           </div>
         </div>
 
-        {/* ===============================================
-            STATUS
-        =============================================== */}
-
         <p
           className="
             mt-3
@@ -1131,11 +1407,6 @@ export default function RequestsPage() {
           )}
         </p>
 
-        {/* ===============================================
-            EXPANDED DETAILS
-            NO APPROVE / REJECT BUTTONS HERE
-        =============================================== */}
-
         {isExpanded && (
           <TripDetails
             request={request}
@@ -1146,9 +1417,9 @@ export default function RequestsPage() {
     );
   };
 
-  // =========================================================
-  // PAGE
-  // =========================================================
+  /* =========================================================
+     PAGE
+  ========================================================= */
 
   return (
     <PageBackground>
@@ -1161,8 +1432,36 @@ export default function RequestsPage() {
         "
       >
         {/* ===============================================
-            TITLE
+            ADMIN INVESTIGATION NOTICE
         =============================================== */}
+
+        {isAdminView && (
+          <div
+            className="
+              mb-6
+              bg-orange-600
+              text-black
+              rounded-2xl
+              px-4
+              py-3
+              text-center
+              font-black
+              text-sm
+              sm:text-base
+            "
+          >
+            🛡️ INVESTIGATION MODE — Viewing{" "}
+            {adminView?.userName ||
+              currentUserName ||
+              "User"}'s Ride Requests
+
+            <span className="ml-2 opacity-70">
+              (Read Only)
+            </span>
+          </div>
+        )}
+
+        {/* TITLE */}
 
         <h1
           className="
@@ -1177,9 +1476,7 @@ export default function RequestsPage() {
           Ride Requests 🚀
         </h1>
 
-        {/* ===============================================
-            TABS
-        =============================================== */}
+        {/* TABS */}
 
         <div
           className="
@@ -1192,7 +1489,9 @@ export default function RequestsPage() {
         >
           <button
             onClick={() =>
-              setActiveTab("received")
+              setActiveTab(
+                "received"
+              )
             }
             className={`
               px-4
@@ -1203,7 +1502,8 @@ export default function RequestsPage() {
               text-sm
               sm:text-base
               ${
-                activeTab === "received"
+                activeTab ===
+                "received"
                   ? "bg-orange-500 text-black"
                   : "bg-zinc-900 border border-zinc-800"
               }
@@ -1214,7 +1514,9 @@ export default function RequestsPage() {
 
           <button
             onClick={() =>
-              setActiveTab("sent")
+              setActiveTab(
+                "sent"
+              )
             }
             className={`
               px-4
@@ -1225,7 +1527,8 @@ export default function RequestsPage() {
               text-sm
               sm:text-base
               ${
-                activeTab === "sent"
+                activeTab ===
+                "sent"
                   ? "bg-orange-500 text-black"
                   : "bg-zinc-900 border border-zinc-800"
               }
@@ -1235,20 +1538,24 @@ export default function RequestsPage() {
           </button>
         </div>
 
-        {/* ===============================================
-            RECEIVED REQUESTS
-        =============================================== */}
+        {/* =================================================
+            RECEIVED
+        ================================================= */}
 
-        {activeTab === "received" && (
+        {activeTab ===
+          "received" && (
           <>
-            {receivedRequests.length === 0 ? (
+            {receivedRequests.length ===
+            0 ? (
               <p
                 className="
                   text-zinc-400
                   mb-10
                 "
               >
-                No requests received
+                {isAdminView
+                  ? "This user has not received any ride requests."
+                  : "No requests received"}
               </p>
             ) : (
               <div
@@ -1260,8 +1567,12 @@ export default function RequestsPage() {
                 {receivedRequests.map(
                   (request) => (
                     <ReceivedRequestCard
-                      key={request.id}
-                      request={request}
+                      key={
+                        request.id
+                      }
+                      request={
+                        request
+                      }
                     />
                   )
                 )}
@@ -1270,23 +1581,31 @@ export default function RequestsPage() {
           </>
         )}
 
-        {/* ===============================================
-            SENT REQUESTS
-        =============================================== */}
+        {/* =================================================
+            SENT
+        ================================================= */}
 
-        {activeTab === "sent" && (
+        {activeTab ===
+          "sent" && (
           <>
-            {sentRequests.length === 0 ? (
+            {sentRequests.length ===
+            0 ? (
               <p className="text-zinc-400">
-                No requests sent
+                {isAdminView
+                  ? "This user has not sent any ride requests."
+                  : "No requests sent"}
               </p>
             ) : (
               <div className="space-y-4">
                 {sentRequests.map(
                   (request) => (
                     <SentRequestCard
-                      key={request.id}
-                      request={request}
+                      key={
+                        request.id
+                      }
+                      request={
+                        request
+                      }
                     />
                   )
                 )}
