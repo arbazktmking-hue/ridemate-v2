@@ -44,6 +44,20 @@ import {
   signOut,
 } from "firebase/auth";
 
+
+/* =========================================================
+   ADMIN INVESTIGATION MODE
+========================================================= */
+
+type AdminView = {
+  active?: boolean;
+  userId?: string;
+  userName?: string;
+  userEmail?: string;
+  userImage?: string;
+};
+
+
 export default function RiderPage() {
 
   const params = useParams();
@@ -53,6 +67,11 @@ export default function RiderPage() {
     decodeURIComponent(
       params.name as string
     );
+
+
+  /* =========================================================
+     PROFILE DATA
+  ========================================================= */
 
   const [riderTrips, setRiderTrips] =
     useState<any[]>([]);
@@ -108,11 +127,21 @@ export default function RiderPage() {
   const [newComment, setNewComment] =
     useState("");
 
-  /*
-  ============================================================
-  PROFILE PHOTO UPLOAD STATE
-  ============================================================
-  */
+
+  /* =========================================================
+     ADMIN VIEW STATE
+  ========================================================= */
+
+  const [adminView, setAdminView] =
+    useState<AdminView | null>(null);
+
+  const isAdminView =
+    adminView?.active === true;
+
+
+  /* =========================================================
+     PROFILE PHOTO UPLOAD STATE
+  ========================================================= */
 
   const [uploadingProfileImage, setUploadingProfileImage] =
     useState(false);
@@ -120,13 +149,134 @@ export default function RiderPage() {
   const profileInputRef =
     useRef<HTMLInputElement | null>(null);
 
-  /*
-  ============================================================
-  LOGOUT
-  ============================================================
-  */
+
+  /* =========================================================
+     LOAD ADMIN VIEW
+  ========================================================= */
+
+  useEffect(() => {
+
+    const loadAdminView = () => {
+
+      try {
+
+        const savedAdminView =
+          localStorage.getItem(
+            "ridemateAdminView"
+          );
+
+
+        if (savedAdminView) {
+
+          const parsed =
+            JSON.parse(
+              savedAdminView
+            );
+
+
+          if (
+            parsed?.active
+          ) {
+
+            setAdminView(
+              parsed
+            );
+
+            return;
+
+          }
+
+        }
+
+
+        setAdminView(null);
+
+      } catch (error) {
+
+        console.error(
+          "Failed to load admin view:",
+          error
+        );
+
+        setAdminView(null);
+
+      }
+
+    };
+
+
+    loadAdminView();
+
+
+    window.addEventListener(
+      "storage",
+      loadAdminView
+    );
+
+
+    window.addEventListener(
+      "ridemateAdminViewChanged",
+      loadAdminView
+    );
+
+
+    return () => {
+
+      window.removeEventListener(
+        "storage",
+        loadAdminView
+      );
+
+
+      window.removeEventListener(
+        "ridemateAdminViewChanged",
+        loadAdminView
+      );
+
+    };
+
+  }, []);
+
+
+  /* =========================================================
+     ADMIN ACTION BLOCKER
+  ========================================================= */
+
+  const blockedAdminAction = (
+    action: string
+  ) => {
+
+    if (!isAdminView) {
+      return false;
+    }
+
+
+    alert(
+      `Admin View Mode is read-only.\n\nYou cannot ${action} while investigating a user account.`
+    );
+
+
+    return true;
+
+  };
+
+
+  /* =========================================================
+     LOGOUT
+  ========================================================= */
 
   const logout = async () => {
+
+    if (
+      blockedAdminAction(
+        "logout from the account"
+      )
+    ) {
+
+      return;
+
+    }
+
 
     try {
 
@@ -151,31 +301,40 @@ export default function RiderPage() {
 
   };
 
-  /*
-  ============================================================
-  CHANGE PROFILE PICTURE
-  ============================================================
-  */
+
+  /* =========================================================
+     CHANGE PROFILE PICTURE
+  ========================================================= */
 
   const changeProfilePicture = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
 
+    if (
+      blockedAdminAction(
+        "change the profile picture"
+      )
+    ) {
+
+      return;
+
+    }
+
+
     const file =
       event.target.files?.[0];
 
-    if (!file) return;
+
+    if (!file) {
+      return;
+    }
+
 
     try {
 
-      /*
-      ----------------------------------------------------------
-      CHECK FIREBASE LOGIN
-      ----------------------------------------------------------
-      */
-
       const firebaseUser =
         auth.currentUser;
+
 
       if (!firebaseUser) {
 
@@ -187,14 +346,11 @@ export default function RiderPage() {
 
       }
 
-      /*
-      ----------------------------------------------------------
-      CHECK FILE TYPE
-      ----------------------------------------------------------
-      */
 
       if (
-        !file.type.startsWith("image/")
+        !file.type.startsWith(
+          "image/"
+        )
       ) {
 
         alert(
@@ -205,14 +361,10 @@ export default function RiderPage() {
 
       }
 
-      /*
-      ----------------------------------------------------------
-      CHECK FILE SIZE
-      ----------------------------------------------------------
-      */
 
       const maxSize =
         10 * 1024 * 1024;
+
 
       if (
         file.size > maxSize
@@ -226,15 +378,11 @@ export default function RiderPage() {
 
       }
 
+
       setUploadingProfileImage(
         true
       );
 
-      /*
-      ----------------------------------------------------------
-      UNIQUE FILE NAME
-      ----------------------------------------------------------
-      */
 
       const safeFileName =
         file.name.replace(
@@ -242,17 +390,14 @@ export default function RiderPage() {
           "_"
         );
 
+
       const fileName =
         `${Date.now()}_${safeFileName}`;
 
-      /*
-      ----------------------------------------------------------
-      FIREBASE STORAGE
-      ----------------------------------------------------------
-      */
 
       const storage =
         getStorage(app);
+
 
       const storageRef =
         ref(
@@ -260,42 +405,29 @@ export default function RiderPage() {
           `profilePictures/${firebaseUser.uid}/${fileName}`
         );
 
+
       console.log(
         "Uploading profile picture..."
       );
 
-      /*
-      ----------------------------------------------------------
-      UPLOAD
-      ----------------------------------------------------------
-      */
 
       await uploadBytes(
         storageRef,
         file
       );
 
-      /*
-      ----------------------------------------------------------
-      DOWNLOAD URL
-      ----------------------------------------------------------
-      */
 
       const downloadURL =
         await getDownloadURL(
           storageRef
         );
 
+
       console.log(
         "New profile picture URL:",
         downloadURL
       );
 
-      /*
-      ----------------------------------------------------------
-      UPDATE FIRESTORE
-      ----------------------------------------------------------
-      */
 
       await updateDoc(
         doc(
@@ -304,15 +436,11 @@ export default function RiderPage() {
           firebaseUser.uid
         ),
         {
-          image: downloadURL,
+          image:
+            downloadURL,
         }
       );
 
-      /*
-      ----------------------------------------------------------
-      UPDATE LOCAL STORAGE
-      ----------------------------------------------------------
-      */
 
       const savedUser =
         JSON.parse(
@@ -320,6 +448,7 @@ export default function RiderPage() {
             "ridemateUser"
           ) || "{}"
         );
+
 
       const updatedUser = {
 
@@ -339,6 +468,7 @@ export default function RiderPage() {
 
       };
 
+
       localStorage.setItem(
         "ridemateUser",
         JSON.stringify(
@@ -346,28 +476,21 @@ export default function RiderPage() {
         )
       );
 
-      /*
-      ----------------------------------------------------------
-      UPDATE REACT STATE IMMEDIATELY
-      ----------------------------------------------------------
-      */
 
       setCurrentUser(
         updatedUser
       );
 
+
       setRiderImage(
         downloadURL
       );
 
-      /*
-      Force browser to treat
-      this as a fresh image.
-      */
 
       setProfileImageVersion(
         Date.now()
       );
+
 
       alert(
         "Profile picture updated successfully! 🔥"
@@ -390,6 +513,7 @@ export default function RiderPage() {
         false
       );
 
+
       if (
         profileInputRef.current
       ) {
@@ -403,11 +527,10 @@ export default function RiderPage() {
 
   };
 
-  /*
-  ============================================================
-  OPEN POST
-  ============================================================
-  */
+
+  /* =========================================================
+     OPEN POST
+  ========================================================= */
 
   const openPost = async (
     post: any
@@ -416,6 +539,7 @@ export default function RiderPage() {
     setSelectedPost(
       post
     );
+
 
     try {
 
@@ -436,10 +560,12 @@ export default function RiderPage() {
           )
         );
 
+
       const snapshot =
         await getDocs(
           q
         );
+
 
       const comments =
         snapshot.docs.map(
@@ -451,6 +577,7 @@ export default function RiderPage() {
             ...commentDoc.data(),
           })
         );
+
 
       setPostComments(
         comments
@@ -467,29 +594,51 @@ export default function RiderPage() {
 
   };
 
-  /*
-  ============================================================
-  ADD COMMENT
-  ============================================================
-  */
+
+  /* =========================================================
+     ADD COMMENT TO POST
+  ========================================================= */
 
   const addCommentToPost =
     async () => {
 
       if (
-        !newComment.trim()
-      )
+        blockedAdminAction(
+          "comment on posts"
+        )
+      ) {
+
         return;
+
+      }
+
+
+      if (
+        !newComment.trim()
+      ) {
+
+        return;
+
+      }
+
 
       if (
         !currentUser?.name
-      )
+      ) {
+
         return;
+
+      }
+
 
       if (
         !selectedPost
-      )
+      ) {
+
         return;
+
+      }
+
 
       try {
 
@@ -519,9 +668,11 @@ export default function RiderPage() {
           }
         );
 
+
         setNewComment(
           ""
         );
+
 
         openPost(
           selectedPost
@@ -538,13 +689,13 @@ export default function RiderPage() {
 
     };
 
-  /*
-  ============================================================
-  ACHIEVEMENTS
-  ============================================================
-  */
+
+  /* =========================================================
+     ACHIEVEMENTS
+  ========================================================= */
 
   const achievements: string[] = [];
+
 
   if (
     riderTrips.length >= 1
@@ -553,12 +704,14 @@ export default function RiderPage() {
       "🏍 First Ride"
     );
 
+
   if (
     riderTrips.length >= 5
   )
     achievements.push(
       "🥈 Road Explorer"
     );
+
 
   if (
     riderTrips.length >= 10
@@ -567,12 +720,14 @@ export default function RiderPage() {
       "🥇 RideMate Legend"
     );
 
+
   if (
     totalDistance >= 500
   )
     achievements.push(
       "🔵 Explorer"
     );
+
 
   if (
     totalDistance >= 2000
@@ -581,12 +736,14 @@ export default function RiderPage() {
       "🟣 Road Warrior"
     );
 
+
   if (
     totalDistance >= 5000
   )
     achievements.push(
       "🟠 Adventure Master"
     );
+
 
   if (
     totalDistance >= 10000
@@ -595,12 +752,14 @@ export default function RiderPage() {
       "🔴 RideMate Legend"
     );
 
+
   if (
     totalLikes >= 50
   )
     achievements.push(
       "❤️ Popular Rider"
     );
+
 
   if (
     totalLikes >= 100
@@ -609,12 +768,14 @@ export default function RiderPage() {
       "🔥 Viral Rider"
     );
 
+
   if (
     followers >= 10
   )
     achievements.push(
       "👥 Community Star"
     );
+
 
   if (
     followers >= 50
@@ -623,11 +784,10 @@ export default function RiderPage() {
       "👑 RideMate Icon"
     );
 
-  /*
-  ============================================================
-  LOAD RIDER DATA
-  ============================================================
-  */
+
+  /* =========================================================
+     LOAD RIDER DATA
+  ========================================================= */
 
   useEffect(() => {
 
@@ -636,11 +796,9 @@ export default function RiderPage() {
 
         try {
 
-          /*
-          ======================================================
-          LOAD SAVED USER
-          ======================================================
-          */
+          /* ==================================================
+             LOAD SAVED USER
+          ================================================== */
 
           const savedUser =
             JSON.parse(
@@ -649,24 +807,23 @@ export default function RiderPage() {
               ) || "{}"
             );
 
-          /*
-          ======================================================
-          FIND PROFILE IMAGE
-          ======================================================
-          */
+
+          /* ==================================================
+             FIND PROFILE IMAGE
+          ================================================== */
 
           let profileImage =
             "";
 
-          /*
-          ------------------------------------------------------
-          OWN PROFILE
-          ------------------------------------------------------
-          */
+
+          /* ==================================================
+             OWN PROFILE
+          ================================================== */
 
           if (
             savedUser?.uid &&
-            savedUser?.name === riderName
+            savedUser?.name ===
+              riderName
           ) {
 
             const userDoc =
@@ -678,12 +835,14 @@ export default function RiderPage() {
                 )
               );
 
+
             if (
               userDoc.exists()
             ) {
 
               const userData =
                 userDoc.data();
+
 
               profileImage =
                 userData.image ||
@@ -693,11 +852,27 @@ export default function RiderPage() {
 
           }
 
-          /*
-          ------------------------------------------------------
-          OTHER RIDER PROFILE
-          ------------------------------------------------------
-          */
+
+          /* ==================================================
+             ADMIN VIEW SELECTED USER IMAGE
+          ================================================== */
+
+          if (
+            isAdminView &&
+            adminView?.userName ===
+              riderName &&
+            adminView?.userImage
+          ) {
+
+            profileImage =
+              adminView.userImage;
+
+          }
+
+
+          /* ==================================================
+             OTHER RIDER PROFILE
+          ================================================== */
 
           if (
             !profileImage
@@ -711,6 +886,7 @@ export default function RiderPage() {
                 )
               );
 
+
             usersSnapshot.forEach(
               (
                 userDoc
@@ -718,6 +894,7 @@ export default function RiderPage() {
 
                 const user =
                   userDoc.data();
+
 
                 if (
                   user.username ===
@@ -740,11 +917,10 @@ export default function RiderPage() {
 
           }
 
-          /*
-          ======================================================
-          LOAD COMPLETED TRIPS
-          ======================================================
-          */
+
+          /* ==================================================
+             LOAD COMPLETED TRIPS
+          ================================================== */
 
           const snapshot =
             await getDocs(
@@ -754,17 +930,22 @@ export default function RiderPage() {
               )
             );
 
+
           const trips: any[] =
             [];
+
 
           let likes =
             0;
 
+
           let distance =
             0;
 
+
           let image =
             profileImage;
+
 
           snapshot.forEach(
             (
@@ -773,6 +954,7 @@ export default function RiderPage() {
 
               const trip =
                 tripDoc.data();
+
 
               if (
                 trip.userName ===
@@ -790,11 +972,13 @@ export default function RiderPage() {
 
                 });
 
+
                 likes +=
                   Number(
                     trip.likes ||
                       0
                   );
+
 
                 distance +=
                   Number(
@@ -802,10 +986,6 @@ export default function RiderPage() {
                       0
                   );
 
-                /*
-                Trip image is ONLY
-                fallback.
-                */
 
                 if (
                   !image &&
@@ -822,28 +1002,25 @@ export default function RiderPage() {
             }
           );
 
-          /*
-          ======================================================
-          SET PROFILE DATA
-          ======================================================
-          */
+
+          /* ==================================================
+             SET PROFILE DATA
+          ================================================== */
 
           setRiderTrips(
             trips
           );
 
+
           setTotalLikes(
             likes
           );
+
 
           setTotalDistance(
             distance
           );
 
-          /*
-          Only update rider image
-          if we actually found one.
-          */
 
           if (
             image
@@ -855,11 +1032,10 @@ export default function RiderPage() {
 
           }
 
-          /*
-          ======================================================
-          LOAD POSTS
-          ======================================================
-          */
+
+          /* ==================================================
+             LOAD POSTS
+          ================================================== */
 
           const postSnapshot =
             await getDocs(
@@ -869,8 +1045,10 @@ export default function RiderPage() {
               )
             );
 
+
           const posts: any[] =
             [];
+
 
           postSnapshot.forEach(
             (
@@ -879,6 +1057,7 @@ export default function RiderPage() {
 
               const post =
                 postDoc.data();
+
 
               if (
                 post.userName ===
@@ -900,9 +1079,6 @@ export default function RiderPage() {
             }
           );
 
-          /*
-          Newest first
-          */
 
           posts.sort(
             (
@@ -919,15 +1095,15 @@ export default function RiderPage() {
               )
           );
 
+
           setRiderPosts(
             posts
           );
 
-          /*
-          ======================================================
-          LOAD REVIEWS
-          ======================================================
-          */
+
+          /* ==================================================
+             LOAD REVIEWS
+          ================================================== */
 
           const reviewSnapshot =
             await getDocs(
@@ -937,12 +1113,15 @@ export default function RiderPage() {
               )
             );
 
+
           const riderReviews:
             any[] =
             [];
 
+
           let totalRating =
             0;
+
 
           reviewSnapshot.forEach(
             (
@@ -952,6 +1131,7 @@ export default function RiderPage() {
               const review =
                 reviewDoc.data();
 
+
               if (
                 review.rider ===
                 riderName
@@ -960,6 +1140,7 @@ export default function RiderPage() {
                 riderReviews.push(
                   review
                 );
+
 
                 totalRating +=
                   Number(
@@ -971,6 +1152,7 @@ export default function RiderPage() {
 
             }
           );
+
 
           setReviews(
             riderReviews.sort(
@@ -989,9 +1171,11 @@ export default function RiderPage() {
             )
           );
 
+
           setReviewCount(
             riderReviews.length
           );
+
 
           setAvgRating(
             riderReviews.length
@@ -1000,11 +1184,10 @@ export default function RiderPage() {
               : 0
           );
 
-          /*
-          ======================================================
-          BADGE
-          ======================================================
-          */
+
+          /* ==================================================
+             BADGE
+          ================================================== */
 
           if (
             trips.length >= 10
@@ -1045,17 +1228,19 @@ export default function RiderPage() {
 
       };
 
+
     loadRider();
 
   }, [
-    riderName
+    riderName,
+    isAdminView,
+    adminView?.userImage,
   ]);
 
-  /*
-  ============================================================
-  LOAD CURRENT USER + FOLLOW STATUS
-  ============================================================
-  */
+
+  /* =========================================================
+     LOAD CURRENT USER + FOLLOW STATUS
+  ========================================================= */
 
   useEffect(() => {
 
@@ -1071,17 +1256,21 @@ export default function RiderPage() {
               ) || "{}"
             );
 
+
           setCurrentUser(
             savedUser
           );
+
 
           if (
             !savedUser.name
           )
             return;
 
+
           const followId =
             `${savedUser.name}_${riderName}`;
+
 
           const followDoc =
             await getDoc(
@@ -1092,15 +1281,15 @@ export default function RiderPage() {
               )
             );
 
+
           setIsFollowing(
             followDoc.exists()
           );
 
-          /*
-          ======================================================
-          FOLLOW COUNTS
-          ======================================================
-          */
+
+          /* ==================================================
+             FOLLOW COUNTS
+          ================================================== */
 
           const followsSnapshot =
             await getDocs(
@@ -1110,11 +1299,14 @@ export default function RiderPage() {
               )
             );
 
+
           let count =
             0;
 
+
           let followingCount =
             0;
+
 
           followsSnapshot.forEach(
             (
@@ -1124,6 +1316,7 @@ export default function RiderPage() {
               const follow =
                 followDoc.data();
 
+
               if (
                 follow.following ===
                 riderName
@@ -1132,6 +1325,7 @@ export default function RiderPage() {
                 count++;
 
               }
+
 
               if (
                 follow.follower ===
@@ -1145,9 +1339,11 @@ export default function RiderPage() {
             }
           );
 
+
           setFollowers(
             count
           );
+
 
           setFollowing(
             followingCount
@@ -1166,20 +1362,32 @@ export default function RiderPage() {
 
       };
 
+
     checkFollowStatus();
 
   }, [
-    riderName
+    riderName,
+    isAdminView,
   ]);
 
-  /*
-  ============================================================
-  FOLLOW / UNFOLLOW
-  ============================================================
-  */
+
+  /* =========================================================
+     FOLLOW / UNFOLLOW
+  ========================================================= */
 
   const toggleFollow =
     async () => {
+
+      if (
+        blockedAdminAction(
+          "follow or unfollow riders"
+        )
+      ) {
+
+        return;
+
+      }
+
 
       const currentUser =
         JSON.parse(
@@ -1188,13 +1396,16 @@ export default function RiderPage() {
           ) || "{}"
         );
 
+
       if (
         !currentUser.name
       )
         return;
 
+
       const followId =
         `${currentUser.name}_${riderName}`;
+
 
       try {
 
@@ -1210,9 +1421,11 @@ export default function RiderPage() {
             )
           );
 
+
           setIsFollowing(
             false
           );
+
 
           setFollowers(
             (
@@ -1243,6 +1456,7 @@ export default function RiderPage() {
             }
           );
 
+
           await addDoc(
             collection(
               db,
@@ -1262,9 +1476,11 @@ export default function RiderPage() {
             }
           );
 
+
           setIsFollowing(
             true
           );
+
 
           setFollowers(
             (
@@ -1288,21 +1504,15 @@ export default function RiderPage() {
 
     };
 
-  /*
-  ============================================================
-  RENDER
-  ============================================================
-  */
+
+  /* =========================================================
+     PROFILE STATE
+  ========================================================= */
 
   const isOwnProfile =
     currentUser?.name ===
     riderName;
 
-  /*
-  ============================================================
-  PROFILE IMAGE URL
-  ============================================================
-  */
 
   const displayedProfileImage =
     riderImage
@@ -1313,21 +1523,89 @@ export default function RiderPage() {
         }v=${profileImageVersion}`
       : "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300";
 
+
+  /* =========================================================
+     RENDER
+  ========================================================= */
+
   return (
 
-    <main className="min-h-screen bg-black text-white px-6 pt-24 pb-10">
+    <main
+      className="
+        min-h-screen
+        bg-black
+        text-white
+        px-6
+        pt-24
+        pb-10
+      "
+    >
 
-      <div className="max-w-4xl mx-auto">
+      <div
+        className="
+          max-w-4xl
+          mx-auto
+        "
+      >
 
-        <div className="text-center">
+        {/* ==================================================
+            ADMIN INVESTIGATION BANNER
+        ================================================== */}
+
+        {isAdminView && (
+
+          <div
+            className="
+              mb-8
+              bg-orange-600
+              text-black
+              rounded-2xl
+              px-4
+              py-3
+              text-center
+              font-black
+              text-sm
+              sm:text-base
+              shadow-lg
+              shadow-orange-500/20
+            "
+          >
+
+            🛡️ INVESTIGATION MODE — Viewing{" "}
+            {adminView?.userName ||
+              riderName}'s Profile
+
+            <span className="ml-2 opacity-70">
+              (Read Only)
+            </span>
+
+          </div>
+
+        )}
+
+
+        <div
+          className="
+            text-center
+          "
+        >
 
           {/* ==================================================
               PROFILE PHOTO
           ================================================== */}
 
-          <div className="flex justify-center">
+          <div
+            className="
+              flex
+              justify-center
+            "
+          >
 
-            <div className="relative">
+            <div
+              className="
+                relative
+              "
+            >
 
               <img
                 src={
@@ -1345,11 +1623,13 @@ export default function RiderPage() {
                 "
               />
 
+
               {/* ==================================================
                   CHANGE PROFILE PHOTO
               ================================================== */}
 
-              {isOwnProfile && (
+              {isOwnProfile &&
+                !isAdminView && (
 
                 <>
 
@@ -1393,6 +1673,7 @@ export default function RiderPage() {
 
                   </button>
 
+
                   <input
                     ref={
                       profileInputRef
@@ -1413,57 +1694,72 @@ export default function RiderPage() {
 
           </div>
 
+
           {/* ==================================================
               UPLOAD STATUS
           ================================================== */}
 
           {isOwnProfile &&
+            !isAdminView &&
             uploadingProfileImage && (
 
-              <p className="
-                text-orange-400
-                font-bold
-                mt-3
-              ">
+              <p
+                className="
+                  text-orange-400
+                  font-bold
+                  mt-3
+                "
+              >
                 Uploading profile picture... ⏳
               </p>
 
             )}
 
-          {isOwnProfile && (
 
-            <p className="
-              text-zinc-500
-              text-sm
-              mt-2
-            ">
+          {isOwnProfile &&
+            !isAdminView && (
+
+            <p
+              className="
+                text-zinc-500
+                text-sm
+                mt-2
+              "
+            >
               Tap the 📷 button to change your profile picture
             </p>
 
           )}
 
+
           {/* ==================================================
               NAME
           ================================================== */}
 
-          <h1 className="
-            text-5xl
-            font-black
-            text-orange-500
-            mt-6
-          ">
+          <h1
+            className="
+              text-5xl
+              font-black
+              text-orange-500
+              mt-6
+            "
+          >
             {riderName}
           </h1>
 
-          <div className="
-            mt-2
-            mb-6
-            text-lg
-            font-bold
-            text-yellow-400
-          ">
+
+          <div
+            className="
+              mt-2
+              mb-6
+              text-lg
+              font-bold
+              text-yellow-400
+            "
+          >
             {badge}
           </div>
+
 
           {/* ==================================================
               FOLLOW + MESSAGE
@@ -1471,39 +1767,48 @@ export default function RiderPage() {
 
           {!isOwnProfile && (
 
-            <div className="
-              mt-10
-              mb-10
-              flex
-              flex-col
-              gap-3
-              items-center
-            ">
+            <div
+              className="
+                mt-10
+                mb-10
+                flex
+                flex-col
+                gap-3
+                items-center
+              "
+            >
 
               <button
                 onClick={
                   toggleFollow
+                }
+                disabled={
+                  isAdminView
                 }
                 className={`
                   px-8
                   py-3
                   rounded-2xl
                   font-black
+                  transition
                   ${
-                    isFollowing
+                    isAdminView
+                      ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                      : isFollowing
                       ? "bg-zinc-700"
                       : "bg-orange-500 text-black"
                   }
                 `}
               >
 
-                {
-                  isFollowing
-                    ? "Following ✅"
-                    : "Follow 👥"
-                }
+                {isAdminView
+                  ? "Follow 🔒"
+                  : isFollowing
+                  ? "Following ✅"
+                  : "Follow 👥"}
 
               </button>
+
 
               <Link
                 href={`/chat/${encodeURIComponent(
@@ -1524,16 +1829,19 @@ export default function RiderPage() {
 
           )}
 
+
           {/* ==================================================
               STATS
           ================================================== */}
 
-          <div className="
-            grid
-            grid-cols-3
-            gap-4
-            mt-10
-          ">
+          <div
+            className="
+              grid
+              grid-cols-3
+              gap-4
+              mt-10
+            "
+          >
 
             {/* FOLLOWERS */}
 
@@ -1553,23 +1861,28 @@ export default function RiderPage() {
               "
             >
 
-              <p className="
-                text-2xl
-                font-black
-                text-white
-              ">
+              <p
+                className="
+                  text-2xl
+                  font-black
+                  text-white
+                "
+              >
                 {followers}
               </p>
 
-              <p className="
-                text-sm
-                text-zinc-400
-                mt-1
-              ">
+              <p
+                className="
+                  text-sm
+                  text-zinc-400
+                  mt-1
+                "
+              >
                 Followers
               </p>
 
             </Link>
+
 
             {/* FOLLOWING */}
 
@@ -1589,23 +1902,28 @@ export default function RiderPage() {
               "
             >
 
-              <p className="
-                text-2xl
-                font-black
-                text-white
-              ">
+              <p
+                className="
+                  text-2xl
+                  font-black
+                  text-white
+                "
+              >
                 {following}
               </p>
 
-              <p className="
-                text-sm
-                text-zinc-400
-                mt-1
-              ">
+              <p
+                className="
+                  text-sm
+                  text-zinc-400
+                  mt-1
+                "
+              >
                 Following
               </p>
 
             </Link>
+
 
             {/* RATING */}
 
@@ -1625,19 +1943,23 @@ export default function RiderPage() {
               "
             >
 
-              <p className="
-                text-2xl
-                font-black
-                text-yellow-400
-              ">
+              <p
+                className="
+                  text-2xl
+                  font-black
+                  text-yellow-400
+                "
+              >
                 {avgRating.toFixed(1)}
               </p>
 
-              <p className="
-                text-sm
-                text-zinc-400
-                mt-1
-              ">
+              <p
+                className="
+                  text-sm
+                  text-zinc-400
+                  mt-1
+                "
+              >
                 Rating
               </p>
 
@@ -1645,13 +1967,16 @@ export default function RiderPage() {
 
           </div>
 
+
           {/* ==================================================
               RIDER BIO
           ================================================== */}
 
-          <div className="
-            mt-6
-          ">
+          <div
+            className="
+              mt-6
+            "
+          >
 
             <button
               onClick={() =>
@@ -1679,53 +2004,59 @@ export default function RiderPage() {
 
             </button>
 
+
             {showBio && (
 
-              <div className="
-                space-y-3
-                mt-4
-              ">
+              <div
+                className="
+                  space-y-3
+                  mt-4
+                "
+              >
 
-                {/* TRIPS */}
-
-                <div className="
-                  bg-zinc-900
-                  p-4
-                  rounded-2xl
-                ">
+                <div
+                  className="
+                    bg-zinc-900
+                    p-4
+                    rounded-2xl
+                  "
+                >
                   🏍 Trips Posted:{" "}
                   {riderTrips.length}
                 </div>
 
-                {/* LIKES */}
 
-                <div className="
-                  bg-zinc-900
-                  p-4
-                  rounded-2xl
-                ">
+                <div
+                  className="
+                    bg-zinc-900
+                    p-4
+                    rounded-2xl
+                  "
+                >
                   ❤️ Likes Received:{" "}
                   {totalLikes}
                 </div>
 
-                {/* DISTANCE */}
 
-                <div className="
-                  bg-zinc-900
-                  p-4
-                  rounded-2xl
-                ">
+                <div
+                  className="
+                    bg-zinc-900
+                    p-4
+                    rounded-2xl
+                  "
+                >
                   🛣️ Total Distance:{" "}
                   {totalDistance} KM
                 </div>
 
-                {/* RIDER LEVEL */}
 
-                <div className="
-                  bg-zinc-900
-                  p-4
-                  rounded-2xl
-                ">
+                <div
+                  className="
+                    bg-zinc-900
+                    p-4
+                    rounded-2xl
+                  "
+                >
 
                   {
                     totalDistance >= 10000
@@ -1741,25 +2072,31 @@ export default function RiderPage() {
 
                 </div>
 
-                {/* ACHIEVEMENTS */}
 
-                <div className="
-                  bg-zinc-900
-                  p-4
-                  rounded-2xl
-                ">
+                <div
+                  className="
+                    bg-zinc-900
+                    p-4
+                    rounded-2xl
+                  "
+                >
 
-                  <h3 className="
-                    text-orange-500
-                    font-black
-                    mb-3
-                  ">
+                  <h3
+                    className="
+                      text-orange-500
+                      font-black
+                      mb-3
+                    "
+                  >
                     🏅 Achievements
                   </h3>
 
-                  <div className="
-                    space-y-2
-                  ">
+
+                  <div
+                    className="
+                      space-y-2
+                    "
+                  >
 
                     {achievements.map(
                       (
@@ -1785,12 +2122,15 @@ export default function RiderPage() {
                       )
                     )}
 
+
                     {achievements.length ===
                       0 && (
 
-                      <p className="
-                        text-zinc-500
-                      ">
+                      <p
+                        className="
+                          text-zinc-500
+                        "
+                      >
                         Keep riding to unlock achievements 🏍️
                       </p>
 
@@ -1806,45 +2146,55 @@ export default function RiderPage() {
 
           </div>
 
+
           {/* ==================================================
               POSTS
           ================================================== */}
 
-          <div className="
-            mt-10
-          ">
+          <div
+            className="
+              mt-10
+            "
+          >
 
-            <h2 className="
-              text-3xl
-              font-black
-              text-orange-500
-              mt-8
-              mb-6
-            ">
+            <h2
+              className="
+                text-3xl
+                font-black
+                text-orange-500
+                mt-8
+                mb-6
+              "
+            >
               Posts
             </h2>
+
 
             {riderPosts.length ===
             0 ? (
 
-              <div className="
-                bg-zinc-900
-                border
-                border-zinc-800
-                rounded-2xl
-                p-10
-                text-zinc-500
-              ">
+              <div
+                className="
+                  bg-zinc-900
+                  border
+                  border-zinc-800
+                  rounded-2xl
+                  p-10
+                  text-zinc-500
+                "
+              >
                 No posts yet 🏍️
               </div>
 
             ) : (
 
-              <div className="
-                grid
-                grid-cols-3
-                gap-1
-              ">
+              <div
+                className="
+                  grid
+                  grid-cols-3
+                  gap-1
+                "
+              >
 
                 {riderPosts.map(
                   (
@@ -1908,14 +2258,16 @@ export default function RiderPage() {
 
                       ) : (
 
-                        <div className="
-                          w-full
-                          h-full
-                          flex
-                          items-center
-                          justify-center
-                          text-zinc-500
-                        ">
+                        <div
+                          className="
+                            w-full
+                            h-full
+                            flex
+                            items-center
+                            justify-center
+                            text-zinc-500
+                          "
+                        >
                           No Media
                         </div>
 
@@ -1932,15 +2284,19 @@ export default function RiderPage() {
 
           </div>
 
+
           {/* ==================================================
               LOGOUT
           ================================================== */}
 
-          {isOwnProfile && (
+          {isOwnProfile &&
+            !isAdminView && (
 
-            <div className="
-              mt-12
-            ">
+            <div
+              className="
+                mt-12
+              "
+            >
 
               <button
                 onClick={
@@ -1968,25 +2324,30 @@ export default function RiderPage() {
 
       </div>
 
+
       {/* ======================================================
           POST MODAL
       ====================================================== */}
 
       {selectedPost && (
 
-        <div className="
-          fixed
-          inset-0
-          bg-black/95
-          z-[9999]
-          overflow-y-auto
-        ">
+        <div
+          className="
+            fixed
+            inset-0
+            bg-black/95
+            z-[9999]
+            overflow-y-auto
+          "
+        >
 
-          <div className="
-            max-w-3xl
-            mx-auto
-            p-6
-          ">
+          <div
+            className="
+              max-w-3xl
+              mx-auto
+              p-6
+            "
+          >
 
             <button
               onClick={() => {
@@ -2011,6 +2372,7 @@ export default function RiderPage() {
             >
               ❌
             </button>
+
 
             {/* MEDIA */}
 
@@ -2045,16 +2407,21 @@ export default function RiderPage() {
 
             )}
 
+
             {/* POST INFO */}
 
-            <div className="
-              mt-6
-            ">
+            <div
+              className="
+                mt-6
+              "
+            >
 
-              <h2 className="
-                text-2xl
-                font-black
-              ">
+              <h2
+                className="
+                  text-2xl
+                  font-black
+                "
+              >
                 ❤️{" "}
                 {
                   selectedPost.likes ||
@@ -2063,10 +2430,13 @@ export default function RiderPage() {
                 Likes
               </h2>
 
-              <p className="
-                mt-3
-                text-zinc-300
-              ">
+
+              <p
+                className="
+                  mt-3
+                  text-zinc-300
+                "
+              >
                 {
                   selectedPost.caption ||
                   "No caption"
@@ -2075,33 +2445,44 @@ export default function RiderPage() {
 
             </div>
 
-            <hr className="
-              my-6
-              border-zinc-800
-            " />
+
+            <hr
+              className="
+                my-6
+                border-zinc-800
+              "
+            />
+
 
             {/* COMMENTS */}
 
-            <h2 className="
-              text-xl
-              font-black
-              mb-4
-            ">
+            <h2
+              className="
+                text-xl
+                font-black
+                mb-4
+              "
+            >
               Comments
             </h2>
 
-            <div className="
-              space-y-3
-            ">
+
+            <div
+              className="
+                space-y-3
+              "
+            >
 
               {postComments.length ===
               0 ? (
 
-                <p className="
-                  text-zinc-500
-                  text-center
-                  py-6
-                ">
+                <p
+                  className="
+                    text-zinc-500
+                    text-center
+                    py-6
+                  "
+                >
                   No comments yet.
                 </p>
 
@@ -2131,10 +2512,12 @@ export default function RiderPage() {
                         }
                       </b>
 
-                      <p className="
-                        text-zinc-300
-                        mt-1
-                      ">
+                      <p
+                        className="
+                          text-zinc-300
+                          mt-1
+                        "
+                      >
                         {
                           comment.text
                         }
@@ -2149,74 +2532,111 @@ export default function RiderPage() {
 
             </div>
 
-            {/* COMMENT INPUT */}
 
-            <div className="
-              flex
-              gap-3
-              mt-6
-            ">
+            {/* ==================================================
+                COMMENT INPUT
+            ================================================== */}
 
-              <input
-                value={
-                  newComment
-                }
-                onChange={(
-                  e
-                ) =>
-                  setNewComment(
-                    e.target.value
-                  )
-                }
-                onKeyDown={async (
-                  e
-                ) => {
+            {isAdminView ? (
 
-                  if (
-                    e.key ===
-                    "Enter"
-                  ) {
-
-                    e.preventDefault();
-
-                    await addCommentToPost();
-
-                  }
-
-                }}
-                placeholder="Write a comment..."
+              <div
                 className="
-                  flex-1
-                  p-3
-                  rounded-xl
-                  bg-zinc-900
+                  mt-6
+                  bg-orange-500/10
                   border
-                  border-zinc-800
-                  outline-none
-                  focus:border-orange-500
-                "
-              />
-
-              <button
-                onClick={
-                  addCommentToPost
-                }
-                disabled={
-                  !newComment.trim()
-                }
-                className="
-                  bg-orange-500
-                  text-black
-                  px-6
+                  border-orange-500/20
                   rounded-xl
-                  font-bold
-                  disabled:opacity-40
+                  px-4
+                  py-3
+                  text-center
                 "
               >
-                Send
-              </button>
 
-            </div>
+                <p
+                  className="
+                    text-orange-400
+                    text-sm
+                    font-bold
+                  "
+                >
+                  🔒 Investigation Mode — Comments are read-only
+                </p>
+
+              </div>
+
+            ) : (
+
+              <div
+                className="
+                  flex
+                  gap-3
+                  mt-6
+                "
+              >
+
+                <input
+                  value={
+                    newComment
+                  }
+                  onChange={(
+                    e
+                  ) =>
+                    setNewComment(
+                      e.target.value
+                    )
+                  }
+                  onKeyDown={async (
+                    e
+                  ) => {
+
+                    if (
+                      e.key ===
+                      "Enter"
+                    ) {
+
+                      e.preventDefault();
+
+                      await addCommentToPost();
+
+                    }
+
+                  }}
+                  placeholder="Write a comment..."
+                  className="
+                    flex-1
+                    p-3
+                    rounded-xl
+                    bg-zinc-900
+                    border
+                    border-zinc-800
+                    outline-none
+                    focus:border-orange-500
+                  "
+                />
+
+
+                <button
+                  onClick={
+                    addCommentToPost
+                  }
+                  disabled={
+                    !newComment.trim()
+                  }
+                  className="
+                    bg-orange-500
+                    text-black
+                    px-6
+                    rounded-xl
+                    font-bold
+                    disabled:opacity-40
+                  "
+                >
+                  Send
+                </button>
+
+              </div>
+
+            )}
 
           </div>
 

@@ -7,18 +7,73 @@ export default function ProfilePage() {
   const router = useRouter();
 
   useEffect(() => {
-    const savedUser = localStorage.getItem("ridemateUser");
+    try {
+      /* =====================================================
+         ADMIN INVESTIGATION MODE
+      ===================================================== */
 
-    if (!savedUser) {
+      const savedAdminView =
+        localStorage.getItem("ridemateAdminView");
+
+      if (savedAdminView) {
+        const adminView =
+          JSON.parse(savedAdminView);
+
+        if (
+          adminView?.active &&
+          adminView?.userName
+        ) {
+          router.replace(
+            `/rider/${encodeURIComponent(
+              adminView.userName
+            )}`
+          );
+
+          return;
+        }
+      }
+
+
+      /* =====================================================
+         NORMAL USER
+      ===================================================== */
+
+      const savedUser =
+        localStorage.getItem("ridemateUser");
+
+      if (!savedUser) {
+        router.replace("/login");
+        return;
+      }
+
+      const currentUser =
+        JSON.parse(savedUser);
+
+      const userName =
+        currentUser.name ||
+        currentUser.username ||
+        "";
+
+      if (!userName) {
+        router.replace("/login");
+        return;
+      }
+
+      router.replace(
+        `/rider/${encodeURIComponent(
+          userName
+        )}`
+      );
+
+    } catch (error) {
+      console.error(
+        "Failed to open profile:",
+        error
+      );
+
       router.replace("/login");
-      return;
     }
 
-    const currentUser = JSON.parse(savedUser);
-
-    router.replace(
-      `/rider/${encodeURIComponent(currentUser.name)}`
-    );
   }, [router]);
 
   return null;
