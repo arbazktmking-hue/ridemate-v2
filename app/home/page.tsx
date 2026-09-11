@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import {
@@ -8,6 +8,9 @@ import {
   getDocs,
   query,
   orderBy,
+  limit,
+  startAfter,
+  where,
   doc,
   updateDoc,
   arrayUnion,
@@ -16,6 +19,8 @@ import {
   addDoc,
   deleteDoc,
   setDoc,
+  QueryDocumentSnapshot,
+  DocumentData,
 } from "firebase/firestore";
 
 import { db } from "../firebase";
@@ -54,6 +59,8 @@ type AdminView = {
   userImage?: string;
 };
 
+const POSTS_PER_PAGE = 15;
+
 export default function FeedPage() {
   /* =========================================================
      STATE
@@ -61,6 +68,7 @@ export default function FeedPage() {
 
   const [trips, setTrips] = useState<FeedPost[]>([]);
   const [savedTrips, setSavedTrips] = useState<string[]>([]);
+
   const [heartAnimation, setHeartAnimation] =
     useState<string | null>(null);
 
@@ -76,6 +84,29 @@ export default function FeedPage() {
   const [adminView, setAdminView] =
     useState<AdminView | null>(null);
 
+  const [loadingFeed, setLoadingFeed] =
+    useState(true);
+
+  const [loadingMore, setLoadingMore] =
+    useState(false);
+
+  const [hasMorePosts, setHasMorePosts] =
+    useState(true);
+
+  const [feedError, setFeedError] =
+    useState(false);
+
+  const lastPostDocRef =
+    useRef<QueryDocumentSnapshot<DocumentData> | null>(
+      null
+    );
+
+  const loadingMoreRef =
+    useRef(false);
+
+  const feedInitializedRef =
+    useRef(false);
+
   /* =========================================================
      GET ACTIVE VIEW USER
   ========================================================= */
@@ -84,7 +115,9 @@ export default function FeedPage() {
     const loadViewUser = () => {
       try {
         const savedAdminView =
-          localStorage.getItem("ridemateAdminView");
+          localStorage.getItem(
+            "ridemateAdminView"
+          );
 
         if (savedAdminView) {
           const parsedAdminView =
@@ -156,73 +189,89 @@ export default function FeedPage() {
     adminView?.active === true;
 
   /* =========================================================
-     LOAD FOLLOWER-ONLY POSTS
+     GET ACTIVE USER NAME
   ========================================================= */
 
-  useEffect(() => {
-    const fetchTrips = async () => {
-      try {
-        let userName = "";
-
-        /* ADMIN VIEW */
-
-        const savedAdminView =
-          localStorage.getItem(
-            "ridemateAdminView"
-          );
-
-        if (savedAdminView) {
-          const parsedAdminView =
-            JSON.parse(savedAdminView);
-
-          if (parsedAdminView?.active) {
-            userName =
-              parsedAdminView.userName || "";
-          }
-        }
-
-        /* NORMAL USER */
-
-        if (!userName) {
-          const savedUser =
-            localStorage.getItem(
-              "ridemateUser"
-            );
-
-          if (savedUser) {
-            const currentUser =
-              JSON.parse(savedUser);
-
-            userName =
-              currentUser.name ||
-              currentUser.username ||
-              "";
-          }
-        }
-
-        setCurrentUserName(userName);
-
-        if (!userName) {
-          setTrips([]);
-          return;
-        }
-
-        console.log(
-          "Home active user:",
-          userName
+  const getActiveUserName = () => {
+    try {
+      const savedAdminView =
+        localStorage.getItem(
+          "ridemateAdminView"
         );
 
-        /* =====================================================
-           GET PEOPLE CURRENT USER FOLLOWS
-        ===================================================== */
+      if (savedAdminView) {
+        const parsedAdminView =
+          JSON.parse(savedAdminView);
+
+        if (parsedAdminView?.active) {
+          return (
+            parsedAdminView.userName || ""
+          );
+        }
+      }
+
+      const savedUser =
+        localStorage.getItem(
+          "ridemateUser"
+        );
+
+      if (savedUser) {
+        const user =
+          JSON.parse(savedUser);
+
+        return (
+          user.name ||
+          user.username ||
+          ""
+        );
+      }
+    } catch (error) {
+      console.error(
+        "Failed to get active user:",
+        error
+      );
+    }
+
+    return "";
+  };
+
+  /* =========================================================
+     LOAD FOLLOWING USERS
+  ========================================================= */
+
+  const getFollowingUsers =
+    async (
+      userName: string
+    ): Promise<Set<string>> => {
+      const followingUsers =
+        new Set<string>();
+
+      try {
+        /*
+         * We still use the existing follows structure.
+         *
+         * This is better than loading the entire feed first,
+         * but the follows collection itself can be optimized
+         * further later if it becomes very large.
+         */
+
+        const followsQuery =
+          query(
+            collection(
+              db,
+              "follows"
+            ),
+            where(
+              "follower",
+              "==",
+              userName
+            )
+          );
 
         const followsSnapshot =
           await getDocs(
-            collection(db, "follows")
+            followsQuery
           );
-
-        const followingUsers =
-          new Set<string>();
 
         followsSnapshot.forEach(
           (followDoc) => {
@@ -230,43 +279,160 @@ export default function FeedPage() {
               followDoc.data();
 
             if (
-              follow.follower ===
-              userName
+              follow.following
             ) {
-              if (follow.following) {
-                followingUsers.add(
-                  follow.following
-                );
-              }
+              followingUsers.add(
+                follow.following
+              );
             }
           }
         );
+      } catch (error) {
+        console.error(
+          "Failed to load following users:",
+          error
+        );
+      }
 
-        /* Always include own posts */
+      /*
+       * Always include own posts.
+       */
 
-        followingUsers.add(userName);
+      followingUsers.add(
+        userName
+      );
 
-        /* =====================================================
-           LOAD ALL POSTS
-        ===================================================== */
+      return followingUsers;
+    };
 
-        const postsQuery =
-          query(
-            collection(db, "feedPosts"),
-            orderBy(
-              "createdAt",
-              "desc"
-            )
+  /* =========================================================
+     LOAD FEED POSTS
+  ========================================================= */
+
+  const loadFeedPosts =
+    async (
+      userName: string,
+      loadNextPage = false
+    ) => {
+      if (
+        !userName ||
+        loadingMoreRef.current
+      ) {
+        return;
+      }
+
+      if (
+        loadNextPage &&
+        !hasMorePosts
+      ) {
+        return;
+      }
+
+      try {
+        if (loadNextPage) {
+          loadingMoreRef.current =
+            true;
+
+          setLoadingMore(true);
+        } else {
+          setLoadingFeed(true);
+          setFeedError(false);
+        }
+
+        /*
+         * Get people this user follows.
+         */
+
+        const followingUsers =
+          await getFollowingUsers(
+            userName
           );
 
+        /*
+         * Build paginated feed query.
+         *
+         * Only the latest 15 posts are
+         * downloaded per request.
+         */
+
+        let postsQuery;
+
+        if (
+          loadNextPage &&
+          lastPostDocRef.current
+        ) {
+          postsQuery =
+            query(
+              collection(
+                db,
+                "feedPosts"
+              ),
+              orderBy(
+                "createdAt",
+                "desc"
+              ),
+              startAfter(
+                lastPostDocRef.current
+              ),
+              limit(
+                POSTS_PER_PAGE
+              )
+            );
+        } else {
+          postsQuery =
+            query(
+              collection(
+                db,
+                "feedPosts"
+              ),
+              orderBy(
+                "createdAt",
+                "desc"
+              ),
+              limit(
+                POSTS_PER_PAGE
+              )
+            );
+        }
+
         const querySnapshot =
-          await getDocs(postsQuery);
+          await getDocs(
+            postsQuery
+          );
 
-        const loadedTrips: FeedPost[] = [];
+        /*
+         * Remember last document
+         * for pagination.
+         */
 
-        /* =====================================================
-           FILTER POSTS
-        ===================================================== */
+        if (
+          querySnapshot.docs.length >
+          0
+        ) {
+          lastPostDocRef.current =
+            querySnapshot.docs[
+              querySnapshot.docs.length - 1
+            ];
+        }
+
+        /*
+         * If fewer than 15 came back,
+         * there are no more pages.
+         */
+
+        if (
+          querySnapshot.docs.length <
+          POSTS_PER_PAGE
+        ) {
+          setHasMorePosts(false);
+        }
+
+        /*
+         * Filter only followed users.
+         */
+
+        const loadedTrips: FeedPost[] =
+          [];
 
         querySnapshot.forEach(
           (postDoc) => {
@@ -281,33 +447,42 @@ export default function FeedPage() {
             ) {
               loadedTrips.push({
                 id: postDoc.id,
+
                 userName:
                   post.userName || "",
+
                 userImage:
                   post.userImage || "",
+
                 mediaUrl:
                   post.mediaUrl || "",
+
                 mediaType:
                   post.mediaType || "",
+
                 caption:
                   post.caption || "",
+
                 likes:
                   typeof post.likes ===
                   "number"
                     ? post.likes
                     : 0,
+
                 likedBy:
                   Array.isArray(
                     post.likedBy
                   )
                     ? post.likedBy
                     : [],
+
                 comments:
                   Array.isArray(
                     post.comments
                   )
                     ? post.comments
                     : [],
+
                 createdAt:
                   post.createdAt || 0,
               });
@@ -315,40 +490,85 @@ export default function FeedPage() {
           }
         );
 
-        /* =====================================================
-           REMOVE DUPLICATES
-        ===================================================== */
-
-        const uniqueTrips =
-          loadedTrips.filter(
-            (
-              trip,
-              index,
-              self
-            ) =>
-              index ===
-              self.findIndex(
-                (t) =>
-                  t.id ===
-                  trip.id
-              )
+        if (loadNextPage) {
+          setTrips(
+            (previous) => [
+              ...previous,
+              ...loadedTrips,
+            ]
           );
+        } else {
+          setTrips(
+            loadedTrips
+          );
+        }
 
-        setTrips(uniqueTrips);
-
-        console.log(
-          "Follower-only posts loaded:",
-          uniqueTrips.length
-        );
+        setFeedError(false);
       } catch (error) {
         console.error(
           "Failed to load Home feed:",
           error
         );
+
+        setFeedError(true);
+      } finally {
+        setLoadingFeed(false);
+        setLoadingMore(false);
+
+        loadingMoreRef.current =
+          false;
       }
     };
 
-    fetchTrips();
+  /* =========================================================
+     INITIAL FEED LOAD
+  ========================================================= */
+
+  useEffect(() => {
+    const startFeed =
+      async () => {
+        const userName =
+          getActiveUserName();
+
+        setCurrentUserName(
+          userName
+        );
+
+        if (!userName) {
+          setTrips([]);
+          setLoadingFeed(false);
+          return;
+        }
+
+        /*
+         * Reset pagination when
+         * changing user/view mode.
+         */
+
+        lastPostDocRef.current =
+          null;
+
+        setHasMorePosts(true);
+
+        feedInitializedRef.current =
+          false;
+
+        await loadFeedPosts(
+          userName,
+          false
+        );
+
+        feedInitializedRef.current =
+          true;
+      };
+
+    startFeed();
+
+    /*
+     * We intentionally depend on admin mode only.
+     * This prevents unnecessary Firebase reloads
+     * on ordinary state changes.
+     */
   }, [isAdminView]);
 
   /* =========================================================
@@ -359,59 +579,44 @@ export default function FeedPage() {
     const loadSavedTrips =
       async () => {
         try {
-          let userName = "";
-
-          /* ADMIN VIEW */
-
-          const savedAdminView =
-            localStorage.getItem(
-              "ridemateAdminView"
-            );
-
-          if (savedAdminView) {
-            const parsedAdminView =
-              JSON.parse(savedAdminView);
-
-            if (parsedAdminView?.active) {
-              userName =
-                parsedAdminView.userName ||
-                "";
-            }
-          }
-
-          /* NORMAL USER */
-
-          if (!userName) {
-            const savedUser =
-              localStorage.getItem(
-                "ridemateUser"
-              );
-
-            if (savedUser) {
-              const user =
-                JSON.parse(savedUser);
-
-              userName =
-                user.name ||
-                user.username ||
-                "";
-            }
-          }
+          const userName =
+            getActiveUserName();
 
           if (!userName) {
             setSavedTrips([]);
             return;
           }
 
-          const snapshot =
-            await getDocs(
+          /*
+           * IMPORTANT:
+           *
+           * Old code downloaded the entire
+           * savedTrips collection.
+           *
+           * Now Firestore only returns documents
+           * belonging to this user.
+           */
+
+          const savedQuery =
+            query(
               collection(
                 db,
                 "savedTrips"
+              ),
+              where(
+                "user",
+                "==",
+                userName
               )
             );
 
-          const saved: string[] = [];
+          const snapshot =
+            await getDocs(
+              savedQuery
+            );
+
+          const saved: string[] =
+            [];
 
           snapshot.forEach(
             (savedDoc) => {
@@ -419,19 +624,18 @@ export default function FeedPage() {
                 savedDoc.data();
 
               if (
-                data.user ===
-                userName
+                data.tripId
               ) {
-                if (data.tripId) {
-                  saved.push(
-                    data.tripId
-                  );
-                }
+                saved.push(
+                  data.tripId
+                );
               }
             }
           );
 
-          setSavedTrips(saved);
+          setSavedTrips(
+            saved
+          );
         } catch (error) {
           console.error(
             "Failed to load saved posts:",
@@ -442,6 +646,41 @@ export default function FeedPage() {
 
     loadSavedTrips();
   }, [isAdminView]);
+
+  /* =========================================================
+     INFINITE SCROLL
+  ========================================================= */
+
+  const handleFeedScroll =
+    (
+      event: React.UIEvent<HTMLDivElement>
+    ) => {
+      const element =
+        event.currentTarget;
+
+      const distanceFromBottom =
+        element.scrollHeight -
+        element.scrollTop -
+        element.clientHeight;
+
+      /*
+       * Start loading before the user
+       * reaches the absolute bottom.
+       */
+
+      if (
+        distanceFromBottom <
+          element.clientHeight * 1.5 &&
+        hasMorePosts &&
+        !loadingMoreRef.current &&
+        feedInitializedRef.current
+      ) {
+        loadFeedPosts(
+          getActiveUserName(),
+          true
+        );
+      }
+    };
 
   /* =========================================================
      ADMIN VIEW
@@ -496,19 +735,19 @@ export default function FeedPage() {
         const saveId =
           `${user.name}_${tripId}`;
 
-        if (
+        const isCurrentlySaved =
           savedTrips.includes(
             tripId
-          )
-        ) {
-          await deleteDoc(
-            doc(
-              db,
-              "savedTrips",
-              saveId
-            )
           );
 
+        /*
+         * Optimistic UI:
+         * change the button immediately.
+         */
+
+        if (
+          isCurrentlySaved
+        ) {
           setSavedTrips(
             (prev) =>
               prev.filter(
@@ -517,24 +756,64 @@ export default function FeedPage() {
               )
           );
         } else {
-          await setDoc(
-            doc(
-              db,
-              "savedTrips",
-              saveId
-            ),
-            {
-              user: user.name,
-              tripId,
-            }
-          );
-
           setSavedTrips(
             (prev) => [
               ...prev,
               tripId,
             ]
           );
+        }
+
+        try {
+          if (
+            isCurrentlySaved
+          ) {
+            await deleteDoc(
+              doc(
+                db,
+                "savedTrips",
+                saveId
+              )
+            );
+          } else {
+            await setDoc(
+              doc(
+                db,
+                "savedTrips",
+                saveId
+              ),
+              {
+                user: user.name,
+                tripId,
+              }
+            );
+          }
+        } catch (firebaseError) {
+          /*
+           * Roll back optimistic UI
+           * if Firebase fails.
+           */
+
+          if (
+            isCurrentlySaved
+          ) {
+            setSavedTrips(
+              (prev) => [
+                ...prev,
+                tripId,
+              ]
+            );
+          } else {
+            setSavedTrips(
+              (prev) =>
+                prev.filter(
+                  (id) =>
+                    id !== tripId
+                )
+            );
+          }
+
+          throw firebaseError;
         }
       } catch (error) {
         console.error(
@@ -590,122 +869,57 @@ export default function FeedPage() {
           return false;
         }
 
-        const tripRef =
-          doc(
-            db,
-            "feedPosts",
-            id
+        const trip =
+          trips.find(
+            (item) =>
+              item.id === id
           );
 
-        let didLike = false;
+        const localLiked =
+          Array.isArray(
+            trip?.likedBy
+          ) &&
+          trip!.likedBy!.includes(
+            userName
+          );
 
-        await runTransaction(
-          db,
-          async (transaction) => {
-            const tripDoc =
-              await transaction.get(
-                tripRef
-              );
-
-            if (!tripDoc.exists()) {
-              throw new Error(
-                "Post no longer exists."
-              );
-            }
-
-            const data =
-              tripDoc.data();
-
-            const likedBy =
-              Array.isArray(
-                data.likedBy
-              )
-                ? data.likedBy
-                : [];
-
-            const currentLikes =
-              typeof data.likes ===
-              "number"
-                ? data.likes
-                : 0;
-
-            const alreadyLiked =
-              likedBy.includes(
-                userName
-              );
-
-            if (alreadyLiked) {
-              didLike = false;
-
-              transaction.update(
-                tripRef,
-                {
-                  likes:
-                    Math.max(
-                      0,
-                      currentLikes -
-                        1
-                    ),
-                  likedBy:
-                    arrayRemove(
-                      userName
-                    ),
-                }
-              );
-            } else {
-              didLike = true;
-
-              transaction.update(
-                tripRef,
-                {
-                  likes:
-                    currentLikes +
-                    1,
-                  likedBy:
-                    arrayUnion(
-                      userName
-                    ),
-                }
-              );
-            }
-          }
-        );
-
-        /* Update local UI */
+        /*
+         * OPTIMISTIC UI
+         *
+         * Update the screen immediately
+         * instead of waiting for Firebase.
+         */
 
         setTrips(
           (prevTrips) =>
             prevTrips.map(
-              (trip) => {
+              (post) => {
                 if (
-                  trip.id !== id
+                  post.id !== id
                 ) {
-                  return trip;
+                  return post;
                 }
 
                 const currentLikedBy =
                   Array.isArray(
-                    trip.likedBy
+                    post.likedBy
                   )
-                    ? trip.likedBy
+                    ? post.likedBy
                     : [];
 
-                const alreadyLiked =
-                  currentLikedBy.includes(
-                    userName
-                  );
-
                 if (
-                  alreadyLiked
+                  localLiked
                 ) {
                   return {
-                    ...trip,
+                    ...post,
+
                     likes:
                       Math.max(
                         0,
-                        (trip.likes ||
+                        (post.likes ||
                           0) - 1
                       ),
+
                     likedBy:
                       currentLikedBy.filter(
                         (name) =>
@@ -716,10 +930,12 @@ export default function FeedPage() {
                 }
 
                 return {
-                  ...trip,
+                  ...post,
+
                   likes:
-                    (trip.likes ||
+                    (post.likes ||
                       0) + 1,
+
                   likedBy: [
                     ...currentLikedBy,
                     userName,
@@ -729,13 +945,162 @@ export default function FeedPage() {
             )
         );
 
-        /* Notify post owner when liking */
-
-        const trip =
-          trips.find(
-            (item) =>
-              item.id === id
+        const tripRef =
+          doc(
+            db,
+            "feedPosts",
+            id
           );
+
+        let didLike =
+          !localLiked;
+
+        try {
+          await runTransaction(
+            db,
+            async (
+              transaction
+            ) => {
+              const tripDoc =
+                await transaction.get(
+                  tripRef
+                );
+
+              if (
+                !tripDoc.exists()
+              ) {
+                throw new Error(
+                  "Post no longer exists."
+                );
+              }
+
+              const data =
+                tripDoc.data();
+
+              const likedBy =
+                Array.isArray(
+                  data.likedBy
+                )
+                  ? data.likedBy
+                  : [];
+
+              const currentLikes =
+                typeof data.likes ===
+                "number"
+                  ? data.likes
+                  : 0;
+
+              const alreadyLiked =
+                likedBy.includes(
+                  userName
+                );
+
+              if (
+                alreadyLiked
+              ) {
+                didLike = false;
+
+                transaction.update(
+                  tripRef,
+                  {
+                    likes:
+                      Math.max(
+                        0,
+                        currentLikes -
+                          1
+                      ),
+
+                    likedBy:
+                      arrayRemove(
+                        userName
+                      ),
+                  }
+                );
+              } else {
+                didLike = true;
+
+                transaction.update(
+                  tripRef,
+                  {
+                    likes:
+                      currentLikes +
+                      1,
+
+                    likedBy:
+                      arrayUnion(
+                        userName
+                      ),
+                  }
+                );
+              }
+            }
+          );
+        } catch (firebaseError) {
+          /*
+           * Roll back optimistic UI.
+           */
+
+          setTrips(
+            (prevTrips) =>
+              prevTrips.map(
+                (post) => {
+                  if (
+                    post.id !== id
+                  ) {
+                    return post;
+                  }
+
+                  const likedBy =
+                    Array.isArray(
+                      post.likedBy
+                    )
+                      ? post.likedBy
+                      : [];
+
+                  if (
+                    localLiked
+                  ) {
+                    return {
+                      ...post,
+
+                      likes:
+                        (post.likes ||
+                          0) + 1,
+
+                      likedBy: [
+                        ...likedBy,
+                        userName,
+                      ],
+                    };
+                  }
+
+                  return {
+                    ...post,
+
+                    likes:
+                      Math.max(
+                        0,
+                        (post.likes ||
+                          0) - 1
+                      ),
+
+                    likedBy:
+                      likedBy.filter(
+                        (name) =>
+                          name !==
+                          userName
+                      ),
+                  };
+                }
+              )
+          );
+
+          throw firebaseError;
+        }
+
+        /*
+         * Notify post owner.
+         */
 
         if (
           didLike &&
@@ -752,10 +1117,13 @@ export default function FeedPage() {
             {
               user:
                 trip.userName,
+
               text:
                 `${userName} liked your post ❤️`,
+
               createdAt:
                 Date.now(),
+
               read: false,
             }
           );
@@ -811,13 +1179,16 @@ export default function FeedPage() {
           return false;
         }
 
-        const newComment: Comment = {
-          user: user.name,
-          image:
-            user.image || "",
-          text:
-            commentTextValue.trim(),
-        };
+        const newComment: Comment =
+          {
+            user: user.name,
+
+            image:
+              user.image || "",
+
+            text:
+              commentTextValue.trim(),
+          };
 
         const tripRef =
           doc(
@@ -843,7 +1214,9 @@ export default function FeedPage() {
               tripId
           );
 
-        /* Notify post owner */
+        /*
+         * Notify post owner.
+         */
 
         if (
           trip &&
@@ -859,16 +1232,21 @@ export default function FeedPage() {
             {
               user:
                 trip.userName,
+
               text:
                 `${user.name} commented on your post 💬`,
+
               createdAt:
                 Date.now(),
+
               read: false,
             }
           );
         }
 
-        /* Update feed */
+        /*
+         * Update feed immediately.
+         */
 
         setTrips(
           (prevTrips) =>
@@ -878,9 +1256,11 @@ export default function FeedPage() {
                 tripId
                   ? {
                       ...trip,
+
                       comments: [
                         ...(trip.comments ||
                           []),
+
                         newComment,
                       ],
                     }
@@ -888,7 +1268,9 @@ export default function FeedPage() {
             )
         );
 
-        /* Update popup */
+        /*
+         * Update comment popup.
+         */
 
         setCommentPost(
           (current) => {
@@ -899,9 +1281,11 @@ export default function FeedPage() {
             ) {
               return {
                 ...current,
+
                 comments: [
                   ...(current.comments ||
                     []),
+
                   newComment,
                 ],
               };
@@ -956,6 +1340,50 @@ export default function FeedPage() {
         setCommentText("");
       }
     };
+
+  /* =========================================================
+     LOADING SCREEN
+  ========================================================= */
+
+  if (
+    loadingFeed &&
+    trips.length === 0
+  ) {
+    return (
+      <main
+        className="
+          fixed
+          inset-0
+          top-16
+          bg-black
+          text-white
+          flex
+          items-center
+          justify-center
+        "
+      >
+        <div className="text-center">
+          <div
+            className="
+              w-10
+              h-10
+              border-4
+              border-zinc-700
+              border-t-orange-500
+              rounded-full
+              animate-spin
+              mx-auto
+              mb-4
+            "
+          />
+
+          <p className="text-zinc-400">
+            Loading your rides...
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   /* =========================================================
      RENDER
@@ -1085,10 +1513,11 @@ export default function FeedPage() {
           [-ms-overflow-style:none]
           [&::-webkit-scrollbar]:hidden
         "
+        onScroll={handleFeedScroll}
       >
         <div>
           {trips.map(
-            (trip) => (
+            (trip, index) => (
               <div
                 key={trip.id}
                 className="
@@ -1135,7 +1564,9 @@ export default function FeedPage() {
                     }
                   }}
                 >
-                  {/* MEDIA */}
+                  {/* =================================================
+                      IMAGE
+                  ================================================= */}
 
                   {trip.mediaUrl ? (
                     trip.mediaType?.startsWith(
@@ -1145,12 +1576,21 @@ export default function FeedPage() {
                         src={
                           trip.mediaUrl
                         }
-                        alt="Post"
+                        alt={
+                          trip.caption ||
+                          "RideMate post"
+                        }
                         className="
                           w-full
                           h-full
                           object-cover
                         "
+                        loading={
+                          index < 2
+                            ? "eager"
+                            : "lazy"
+                        }
+                        decoding="async"
                       />
                     ) : trip.mediaType?.startsWith(
                         "video"
@@ -1164,10 +1604,17 @@ export default function FeedPage() {
                           h-full
                           object-cover
                         "
-                        autoPlay
+                        autoPlay={
+                          index < 2
+                        }
                         muted
                         loop
                         playsInline
+                        preload={
+                          index < 2
+                            ? "metadata"
+                            : "none"
+                        }
                       />
                     ) : (
                       <div
@@ -1245,6 +1692,8 @@ export default function FeedPage() {
                           border-orange-500
                           object-cover
                         "
+                        loading="lazy"
+                        decoding="async"
                       />
                     ) : (
                       <div
@@ -1491,7 +1940,35 @@ export default function FeedPage() {
           )}
 
           {/* =====================================================
-              EMPTY FEED
+              LOAD MORE INDICATOR
+          ===================================================== */}
+
+          {loadingMore && (
+            <div
+              className="
+                h-20
+                flex
+                items-center
+                justify-center
+                bg-black
+              "
+            >
+              <div
+                className="
+                  w-6
+                  h-6
+                  border-2
+                  border-zinc-700
+                  border-t-orange-500
+                  rounded-full
+                  animate-spin
+                "
+              />
+            </div>
+          )}
+
+          {/* =====================================================
+              EMPTY / ERROR FEED
           ===================================================== */}
 
           {trips.length === 0 && (
@@ -1506,52 +1983,113 @@ export default function FeedPage() {
               "
             >
               <div>
-                <div className="text-6xl mb-5">
-                  🏍️
-                </div>
+                {feedError ? (
+                  <>
+                    <div className="text-6xl mb-5">
+                      ⚠️
+                    </div>
 
-                <h2
-                  className="
-                    text-2xl
-                    sm:text-3xl
-                    font-black
-                  "
-                >
-                  {isAdminView
-                    ? "No posts found for this user"
-                    : "Your RideMate feed is quiet"}
-                </h2>
+                    <h2
+                      className="
+                        text-2xl
+                        sm:text-3xl
+                        font-black
+                      "
+                    >
+                      Unable to load feed
+                    </h2>
 
-                <p
-                  className="
-                    text-zinc-400
-                    mt-3
-                    max-w-md
-                  "
-                >
-                  {isAdminView
-                    ? "This user has no posts from riders they follow."
-                    : "Follow riders to see their posts here, or create your own post."}
-                </p>
+                    <p
+                      className="
+                        text-zinc-400
+                        mt-3
+                        max-w-md
+                      "
+                    >
+                      Something went wrong while
+                      loading your RideMate feed.
+                    </p>
 
-                {!isAdminView && (
-                  <Link
-                    href="/search"
-                    className="
-                      inline-block
-                      mt-5
-                      bg-orange-500
-                      text-black
-                      px-5
-                      py-2.5
-                      rounded-full
-                      font-black
-                      hover:bg-orange-400
-                      transition
-                    "
-                  >
-                    Find Riders
-                  </Link>
+                    <button
+                      onClick={() => {
+                        lastPostDocRef.current =
+                          null;
+
+                        setHasMorePosts(
+                          true
+                        );
+
+                        loadFeedPosts(
+                          getActiveUserName(),
+                          false
+                        );
+                      }}
+                      className="
+                        inline-block
+                        mt-5
+                        bg-orange-500
+                        text-black
+                        px-5
+                        py-2.5
+                        rounded-full
+                        font-black
+                        hover:bg-orange-400
+                        transition
+                      "
+                    >
+                      Try Again
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-6xl mb-5">
+                      🏍️
+                    </div>
+
+                    <h2
+                      className="
+                        text-2xl
+                        sm:text-3xl
+                        font-black
+                      "
+                    >
+                      {isAdminView
+                        ? "No posts found for this user"
+                        : "Your RideMate feed is quiet"}
+                    </h2>
+
+                    <p
+                      className="
+                        text-zinc-400
+                        mt-3
+                        max-w-md
+                      "
+                    >
+                      {isAdminView
+                        ? "This user has no posts from riders they follow."
+                        : "Follow riders to see their posts here, or create your own post."}
+                    </p>
+
+                    {!isAdminView && (
+                      <Link
+                        href="/search"
+                        className="
+                          inline-block
+                          mt-5
+                          bg-orange-500
+                          text-black
+                          px-5
+                          py-2.5
+                          rounded-full
+                          font-black
+                          hover:bg-orange-400
+                          transition
+                        "
+                      >
+                        Find Riders
+                      </Link>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -1676,6 +2214,7 @@ export default function FeedPage() {
                             rounded-full
                             object-cover
                           "
+                          loading="lazy"
                         />
                       ) : (
                         <div
