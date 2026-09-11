@@ -1603,6 +1603,16 @@ export default function RiderPage() {
     riderName;
 
 
+  /*
+     IMPORTANT:
+     displayedProfileImage is used for the small circular
+     profile picture and includes a cache-busting value.
+
+     riderImage itself is the ORIGINAL Firebase Storage URL.
+     The enlarged viewer uses riderImage directly so it does
+     not add another URL parameter to the original image.
+  */
+
   const displayedProfileImage =
     riderImage
       ? `${riderImage}${
@@ -1701,9 +1711,19 @@ export default function RiderPage() {
                   displayedProfileImage
                 }
                 alt="Rider"
-                onClick={() =>
-                  setShowProfileImage(true)
-                }
+                onClick={() => {
+
+                  if (
+                    riderImage
+                  ) {
+
+                    setShowProfileImage(
+                      true
+                    );
+
+                  }
+
+                }}
                 className="
                   w-36
                   h-36
@@ -2745,19 +2765,21 @@ export default function RiderPage() {
           PROFILE IMAGE VIEWER
       ====================================================== */}
 
-      {showProfileImage && (
+      {showProfileImage &&
+        riderImage && (
 
         <div
           className="
             fixed
             inset-0
             z-[10000]
-            bg-black/90
-            backdrop-blur-sm
+            bg-black/95
+            backdrop-blur-md
             flex
             items-center
             justify-center
-            p-6
+            p-4
+            sm:p-8
             cursor-pointer
           "
           onClick={() =>
@@ -2776,23 +2798,29 @@ export default function RiderPage() {
             }
             className="
               absolute
-              top-6
-              right-6
+              top-5
+              right-5
+              sm:top-7
+              sm:right-7
               w-12
               h-12
+              sm:w-14
+              sm:h-14
               rounded-full
               bg-black/70
               border
               border-white/20
               text-white
               text-2xl
+              sm:text-3xl
               flex
               items-center
               justify-center
               hover:bg-orange-500
               hover:text-black
+              hover:border-orange-500
               transition
-              z-10
+              z-20
             "
             aria-label="Close profile picture"
           >
@@ -2800,39 +2828,43 @@ export default function RiderPage() {
           </button>
 
 
-         {/* ==================================================
-    ENLARGED PROFILE IMAGE
-================================================== */}
+          {/* ==================================================
+              IMAGE CONTAINER
+          ================================================== */}
 
-<div
-  className="
-    relative
-    flex
-    items-center
-    justify-center
-    cursor-default
-  "
-  onClick={(e) =>
-    e.stopPropagation()
-  }
->
+          <div
+            className="
+              relative
+              flex
+              items-center
+              justify-center
+              max-w-[95vw]
+              max-h-[90vh]
+              cursor-default
+            "
+            onClick={(e) =>
+              e.stopPropagation()
+            }
+          >
 
-  <img
-    src={displayedProfileImage}
-    alt={`${riderName}'s profile picture`}
-    className="
-      w-[75vw]
-      max-w-[700px]
-      h-auto
-      max-h-[80vh]
-      object-contain
-      rounded-2xl
-      border-2
-      border-orange-500/60
-      shadow-2xl
-    "
-  />
-</div>
+            <img
+              src={riderImage}
+              alt={`${riderName}'s profile picture`}
+              className="
+                block
+                w-auto
+                h-auto
+                max-w-[92vw]
+                max-h-[85vh]
+                object-contain
+                rounded-2xl
+                border-2
+                border-orange-500/70
+                shadow-2xl
+              "
+            />
+
+          </div>
 
         </div>
 
