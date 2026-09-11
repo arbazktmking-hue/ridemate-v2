@@ -2800,41 +2800,39 @@ export default function RiderPage() {
           </button>
 
 
-          {/* ==================================================
-              ENLARGED PROFILE IMAGE
-          ================================================== */}
+         {/* ==================================================
+    ENLARGED PROFILE IMAGE
+================================================== */}
 
-          <div
-            className="
-              relative
-              max-w-[90vw]
-              max-h-[85vh]
-              cursor-default
-            "
-            onClick={(e) =>
-              e.stopPropagation()
-            }
-          >
+<div
+  className="
+    relative
+    flex
+    items-center
+    justify-center
+    cursor-default
+  "
+  onClick={(e) =>
+    e.stopPropagation()
+  }
+>
 
-            <img
-              src={
-                displayedProfileImage
-              }
-              alt={`${riderName}'s profile picture`}
-              className="
-                max-w-[90vw]
-                max-h-[85vh]
-                w-auto
-                h-auto
-                object-contain
-                rounded-2xl
-                border-2
-                border-orange-500/60
-                shadow-2xl
-              "
-            />
-
-          </div>
+  <img
+    src={displayedProfileImage}
+    alt={`${riderName}'s profile picture`}
+    className="
+      w-[75vw]
+      max-w-[700px]
+      h-auto
+      max-h-[80vh]
+      object-contain
+      rounded-2xl
+      border-2
+      border-orange-500/60
+      shadow-2xl
+    "
+  />
+</div>
 
         </div>
 
