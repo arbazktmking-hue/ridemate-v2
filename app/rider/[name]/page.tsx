@@ -129,6 +129,14 @@ export default function RiderPage() {
 
 
   /* =========================================================
+     PROFILE IMAGE VIEWER
+  ========================================================= */
+
+  const [showProfileImage, setShowProfileImage] =
+    useState(false);
+
+
+  /* =========================================================
      ADMIN VIEW STATE
   ========================================================= */
 
@@ -236,6 +244,87 @@ export default function RiderPage() {
     };
 
   }, []);
+
+
+  /* =========================================================
+     CLOSE PROFILE IMAGE WITH ESC
+  ========================================================= */
+
+  useEffect(() => {
+
+    if (!showProfileImage) {
+      return;
+    }
+
+
+    const handleEscape = (
+      event: KeyboardEvent
+    ) => {
+
+      if (
+        event.key === "Escape"
+      ) {
+
+        setShowProfileImage(
+          false
+        );
+
+      }
+
+    };
+
+
+    window.addEventListener(
+      "keydown",
+      handleEscape
+    );
+
+
+    return () => {
+
+      window.removeEventListener(
+        "keydown",
+        handleEscape
+      );
+
+    };
+
+  }, [
+    showProfileImage,
+  ]);
+
+
+  /* =========================================================
+     LOCK BODY SCROLL WHEN PROFILE IMAGE IS OPEN
+  ========================================================= */
+
+  useEffect(() => {
+
+    if (
+      showProfileImage
+    ) {
+
+      document.body.style.overflow =
+        "hidden";
+
+    } else {
+
+      document.body.style.overflow =
+        "";
+
+    }
+
+
+    return () => {
+
+      document.body.style.overflow =
+        "";
+
+    };
+
+  }, [
+    showProfileImage,
+  ]);
 
 
   /* =========================================================
@@ -1612,6 +1701,9 @@ export default function RiderPage() {
                   displayedProfileImage
                 }
                 alt="Rider"
+                onClick={() =>
+                  setShowProfileImage(true)
+                }
                 className="
                   w-36
                   h-36
@@ -1620,6 +1712,9 @@ export default function RiderPage() {
                   border-orange-500
                   shadow-2xl
                   object-cover
+                  cursor-pointer
+                  hover:scale-105
+                  transition
                 "
               />
 
@@ -2526,6 +2621,7 @@ export default function RiderPage() {
                     </div>
 
                   )
+
                 )
 
               )}
@@ -2637,6 +2733,106 @@ export default function RiderPage() {
               </div>
 
             )}
+
+          </div>
+
+        </div>
+
+      )}
+
+
+      {/* ======================================================
+          PROFILE IMAGE VIEWER
+      ====================================================== */}
+
+      {showProfileImage && (
+
+        <div
+          className="
+            fixed
+            inset-0
+            z-[10000]
+            bg-black/90
+            backdrop-blur-sm
+            flex
+            items-center
+            justify-center
+            p-6
+            cursor-pointer
+          "
+          onClick={() =>
+            setShowProfileImage(false)
+          }
+        >
+
+          {/* ==================================================
+              CLOSE BUTTON
+          ================================================== */}
+
+          <button
+            type="button"
+            onClick={() =>
+              setShowProfileImage(false)
+            }
+            className="
+              absolute
+              top-6
+              right-6
+              w-12
+              h-12
+              rounded-full
+              bg-black/70
+              border
+              border-white/20
+              text-white
+              text-2xl
+              flex
+              items-center
+              justify-center
+              hover:bg-orange-500
+              hover:text-black
+              transition
+              z-10
+            "
+            aria-label="Close profile picture"
+          >
+            ✕
+          </button>
+
+
+          {/* ==================================================
+              ENLARGED PROFILE IMAGE
+          ================================================== */}
+
+          <div
+            className="
+              relative
+              max-w-[90vw]
+              max-h-[85vh]
+              cursor-default
+            "
+            onClick={(e) =>
+              e.stopPropagation()
+            }
+          >
+
+            <img
+              src={
+                displayedProfileImage
+              }
+              alt={`${riderName}'s profile picture`}
+              className="
+                max-w-[90vw]
+                max-h-[85vh]
+                w-auto
+                h-auto
+                object-contain
+                rounded-2xl
+                border-2
+                border-orange-500/60
+                shadow-2xl
+              "
+            />
 
           </div>
 

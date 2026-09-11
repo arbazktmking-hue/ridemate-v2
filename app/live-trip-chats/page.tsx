@@ -491,7 +491,7 @@ export default function LiveTripChatsPage() {
             className="
               text-zinc-500
               text-sm
-              mb-6
+              mb-2
             "
           >
             Active and pending trip conversations belonging to{" "}
@@ -512,7 +512,7 @@ export default function LiveTripChatsPage() {
             className="
               text-zinc-500
               text-sm
-              mb-6
+              mb-2
             "
           >
             Your active trip conversations and trips that
@@ -520,6 +520,33 @@ export default function LiveTripChatsPage() {
           </p>
 
         )}
+
+
+        {/* =================================================
+            SAFETY NOTICE
+        ================================================= */}
+
+        <p
+          className="
+            text-zinc-600
+            text-[11px]
+            sm:text-xs
+            mb-6
+            flex
+            items-center
+            gap-1.5
+          "
+        >
+          <span className="text-yellow-500">
+            ⚠️
+          </span>
+
+          <span>
+            Do not exchange personal details or financial
+            information until the trip has started.
+          </span>
+
+        </p>
 
 
         {/* =================================================
