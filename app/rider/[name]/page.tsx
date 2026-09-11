@@ -28,7 +28,7 @@ import {
 
 import {
   ref,
-  uploadBytesResumable,
+  uploadBytes,
   getDownloadURL,
   getStorage,
 } from "firebase/storage";
@@ -254,8 +254,12 @@ export default function RiderPage() {
 
   useEffect(() => {
 
-    if (!showProfileImage) {
+    if (
+      !showProfileImage
+    ) {
+
       return;
+
     }
 
 
@@ -297,7 +301,7 @@ export default function RiderPage() {
 
 
   /* =========================================================
-     LOCK BODY SCROLL WHEN PROFILE IMAGE IS OPEN
+     LOCK BODY SCROLL
   ========================================================= */
 
   useEffect(() => {
@@ -338,7 +342,9 @@ export default function RiderPage() {
   ) => {
 
     if (!isAdminView) {
+
       return false;
+
     }
 
 
@@ -371,11 +377,17 @@ export default function RiderPage() {
 
     try {
 
-      await signOut(auth);
+      await signOut(
+        auth
+      );
+
 
       localStorage.clear();
 
-      router.replace("/login");
+
+      router.replace(
+        "/login"
+      );
 
     } catch (error) {
 
@@ -383,6 +395,7 @@ export default function RiderPage() {
         "Logout error:",
         error
       );
+
 
       alert(
         "Logout failed"
@@ -417,14 +430,16 @@ export default function RiderPage() {
 
 
     if (!file) {
+
       return;
+
     }
 
 
     try {
 
       /* =====================================================
-         CHECK FILE TYPE
+         FILE TYPE
       ===================================================== */
 
       if (
@@ -443,7 +458,7 @@ export default function RiderPage() {
 
 
       /* =====================================================
-         CHECK FILE SIZE
+         FILE SIZE
       ===================================================== */
 
       const maxSize =
@@ -464,7 +479,7 @@ export default function RiderPage() {
 
 
       /* =====================================================
-         CHECK LOGIN
+         FIREBASE AUTH
       ===================================================== */
 
       const firebaseUser =
@@ -483,7 +498,7 @@ export default function RiderPage() {
 
 
       /* =====================================================
-         START UPLOAD
+         START
       ===================================================== */
 
       setUploadingProfileImage(
@@ -491,17 +506,45 @@ export default function RiderPage() {
       );
 
       setUploadProgress(
-        0
+        5
       );
 
 
       console.log(
-        "Starting profile picture upload..."
+        "================================="
+      );
+
+      console.log(
+        "PROFILE IMAGE UPLOAD STARTED"
+      );
+
+      console.log(
+        "User:",
+        firebaseUser.uid
+      );
+
+      console.log(
+        "File:",
+        file.name
+      );
+
+      console.log(
+        "Size:",
+        file.size
+      );
+
+      console.log(
+        "Type:",
+        file.type
+      );
+
+      console.log(
+        "================================="
       );
 
 
       /* =====================================================
-         CREATE SAFE FILE NAME
+         SAFE FILE NAME
       ===================================================== */
 
       const safeFileName =
@@ -516,118 +559,78 @@ export default function RiderPage() {
 
 
       /* =====================================================
-         FIREBASE STORAGE
+         STORAGE
       ===================================================== */
 
       const storage =
-        getStorage(app);
+        getStorage(
+          app
+        );
+
+
+      const storagePath =
+        `profilePictures/${firebaseUser.uid}/${fileName}`;
 
 
       const storageRef =
         ref(
           storage,
-          `profilePictures/${firebaseUser.uid}/${fileName}`
+          storagePath
         );
 
 
       console.log(
-        "Uploading to:",
-        `profilePictures/${firebaseUser.uid}/${fileName}`
+        "Storage path:",
+        storagePath
       );
 
 
       /* =====================================================
-         RESUMABLE UPLOAD
+         UPLOAD
+
+         IMPORTANT:
+         Using uploadBytes instead of
+         uploadBytesResumable.
+
+         This avoids the 0% resumable-upload
+         problem you were experiencing.
       ===================================================== */
 
-      const uploadTask =
-        uploadBytesResumable(
-          storageRef,
-          file,
-          {
-            contentType:
-              file.type,
-
-            cacheControl:
-              "public,max-age=31536000",
-          }
-        );
+      setUploadProgress(
+        15
+      );
 
 
-      await new Promise<void>(
-        (
-          resolve,
-          reject
-        ) => {
-
-          uploadTask.on(
-            "state_changed",
-
-            /* =================================================
-               UPLOAD PROGRESS
-            ================================================= */
-
-            (snapshot) => {
-
-              const progress =
-                Math.round(
-                  (
-                    snapshot.bytesTransferred /
-                    snapshot.totalBytes
-                  ) * 100
-                );
+      console.log(
+        "Uploading image to Firebase Storage..."
+      );
 
 
-              setUploadProgress(
-                progress
-              );
+      await uploadBytes(
+        storageRef,
+        file,
+        {
+          contentType:
+            file.type,
 
-
-              console.log(
-                `Profile upload progress: ${progress}%`
-              );
-
-            },
-
-            /* =================================================
-               UPLOAD ERROR
-            ================================================= */
-
-            (error) => {
-
-              console.error(
-                "Firebase Storage upload error:",
-                error
-              );
-
-              reject(
-                error
-              );
-
-            },
-
-            /* =================================================
-               UPLOAD COMPLETE
-            ================================================= */
-
-            () => {
-
-              console.log(
-                "Firebase Storage upload completed."
-              );
-
-              resolve();
-
-            }
-
-          );
-
+          cacheControl:
+            "public,max-age=31536000",
         }
       );
 
 
+      console.log(
+        "Firebase Storage upload completed."
+      );
+
+
+      setUploadProgress(
+        70
+      );
+
+
       /* =====================================================
-         GET DOWNLOAD URL
+         DOWNLOAD URL
       ===================================================== */
 
       const downloadURL =
@@ -637,13 +640,18 @@ export default function RiderPage() {
 
 
       console.log(
-        "New profile picture URL:",
+        "Download URL:",
         downloadURL
       );
 
 
+      setUploadProgress(
+        80
+      );
+
+
       /* =====================================================
-         SAVE IMAGE TO FIRESTORE
+         SAVE TO FIRESTORE
       ===================================================== */
 
       await setDoc(
@@ -653,6 +661,7 @@ export default function RiderPage() {
           firebaseUser.uid
         ),
         {
+
           image:
             downloadURL,
 
@@ -668,6 +677,11 @@ export default function RiderPage() {
 
       console.log(
         "Profile image saved to Firestore."
+      );
+
+
+      setUploadProgress(
+        90
       );
 
 
@@ -716,7 +730,7 @@ export default function RiderPage() {
 
 
       /* =====================================================
-         UPDATE REACT STATE
+         UPDATE PAGE
       ===================================================== */
 
       setCurrentUser(
@@ -740,7 +754,7 @@ export default function RiderPage() {
 
 
       /* =====================================================
-         CLOSE IMAGE VIEWER IF OPEN
+         CLOSE VIEWER
       ===================================================== */
 
       setShowProfileImage(
@@ -748,23 +762,102 @@ export default function RiderPage() {
       );
 
 
+      console.log(
+        "PROFILE IMAGE UPDATE COMPLETE"
+      );
+
+
       alert(
         "Profile picture updated successfully! 🔥"
       );
 
-
-    } catch (error) {
+    } catch (error: any) {
 
       console.error(
-        "Profile picture upload error:",
+        "================================="
+      );
+
+      console.error(
+        "PROFILE PICTURE UPLOAD ERROR"
+      );
+
+      console.error(
+        "Error:",
         error
       );
 
-
-      alert(
-        "Failed to update profile picture.\n\nPlease check your internet connection and try again."
+      console.error(
+        "Error code:",
+        error?.code
       );
 
+      console.error(
+        "Error message:",
+        error?.message
+      );
+
+      console.error(
+        "================================="
+      );
+
+
+      let errorMessage =
+        "Failed to update profile picture.";
+
+
+      if (
+        error?.code ===
+        "storage/unauthorized"
+      ) {
+
+        errorMessage =
+          "Firebase Storage permission denied.\n\nPlease check your Firebase Storage Rules.";
+
+      } else if (
+        error?.code ===
+        "storage/unauthenticated"
+      ) {
+
+        errorMessage =
+          "Firebase authentication expired.\n\nPlease logout and login again.";
+
+      } else if (
+        error?.code ===
+        "storage/quota-exceeded"
+      ) {
+
+        errorMessage =
+          "Firebase Storage quota has been exceeded.";
+
+      } else if (
+        error?.code ===
+        "storage/canceled"
+      ) {
+
+        errorMessage =
+          "The upload was cancelled.";
+
+      } else if (
+        error?.code ===
+        "storage/retry-limit-exceeded"
+      ) {
+
+        errorMessage =
+          "Firebase could not complete the upload.\n\nPlease check your internet connection and try again.";
+
+      } else if (
+        error?.message
+      ) {
+
+        errorMessage =
+          `Upload failed.\n\n${error.message}`;
+
+      }
+
+
+      alert(
+        errorMessage
+      );
 
     } finally {
 
@@ -836,6 +929,7 @@ export default function RiderPage() {
           (
             commentDoc
           ) => ({
+
             id:
               commentDoc.id,
 
@@ -862,7 +956,7 @@ export default function RiderPage() {
 
 
   /* =========================================================
-     ADD COMMENT TO POST
+     ADD COMMENT
   ========================================================= */
 
   const addCommentToPost =
@@ -1062,10 +1156,6 @@ export default function RiderPage() {
 
         try {
 
-          /* ==================================================
-             LOAD SAVED USER
-          ================================================== */
-
           const savedUser =
             JSON.parse(
               localStorage.getItem(
@@ -1073,10 +1163,6 @@ export default function RiderPage() {
               ) || "{}"
             );
 
-
-          /* ==================================================
-             FIND PROFILE IMAGE
-          ================================================== */
 
           let profileImage =
             "";
@@ -1137,7 +1223,7 @@ export default function RiderPage() {
 
 
           /* ==================================================
-             OTHER RIDER PROFILE
+             OTHER RIDER
           ================================================== */
 
           if (
@@ -1164,17 +1250,12 @@ export default function RiderPage() {
 
                 if (
                   user.username ===
-                  riderName
+                  riderName &&
+                  user.image
                 ) {
 
-                  if (
-                    user.image
-                  ) {
-
-                    profileImage =
-                      user.image;
-
-                  }
+                  profileImage =
+                    user.image;
 
                 }
 
@@ -1185,7 +1266,7 @@ export default function RiderPage() {
 
 
           /* ==================================================
-             LOAD COMPLETED TRIPS
+             COMPLETED TRIPS
           ================================================== */
 
           const snapshot =
@@ -1269,10 +1350,6 @@ export default function RiderPage() {
           );
 
 
-          /* ==================================================
-             SET PROFILE DATA
-          ================================================== */
-
           setRiderTrips(
             trips
           );
@@ -1300,7 +1377,7 @@ export default function RiderPage() {
 
 
           /* ==================================================
-             LOAD POSTS
+             POSTS
           ================================================== */
 
           const postSnapshot =
@@ -1368,7 +1445,7 @@ export default function RiderPage() {
 
 
           /* ==================================================
-             LOAD REVIEWS
+             REVIEWS
           ================================================== */
 
           const reviewSnapshot =
@@ -1481,9 +1558,7 @@ export default function RiderPage() {
 
           }
 
-        } catch (
-          error
-        ) {
+        } catch (error) {
 
           console.error(
             "Failed to load rider:",
@@ -1505,7 +1580,7 @@ export default function RiderPage() {
 
 
   /* =========================================================
-     LOAD CURRENT USER + FOLLOW STATUS
+     CURRENT USER + FOLLOW STATUS
   ========================================================= */
 
   useEffect(() => {
@@ -1530,8 +1605,11 @@ export default function RiderPage() {
 
           if (
             !savedUser.name
-          )
+          ) {
+
             return;
+
+          }
 
 
           const followId =
@@ -1552,10 +1630,6 @@ export default function RiderPage() {
             followDoc.exists()
           );
 
-
-          /* ==================================================
-             FOLLOW COUNTS
-          ================================================== */
 
           const followsSnapshot =
             await getDocs(
@@ -1615,9 +1689,7 @@ export default function RiderPage() {
             followingCount
           );
 
-        } catch (
-          error
-        ) {
+        } catch (error) {
 
           console.error(
             "Follow status error:",
@@ -1665,8 +1737,11 @@ export default function RiderPage() {
 
       if (
         !currentUser.name
-      )
+      ) {
+
         return;
+
+      }
 
 
       const followId =
@@ -1757,9 +1832,7 @@ export default function RiderPage() {
 
         }
 
-      } catch (
-        error
-      ) {
+      } catch (error) {
 
         console.error(
           "Follow error:",
@@ -1787,7 +1860,7 @@ export default function RiderPage() {
             ? "&"
             : "?"
         }v=${profileImageVersion}`
-      : "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300";
+      : "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&q=90";
 
 
   /* =========================================================
@@ -1815,7 +1888,7 @@ export default function RiderPage() {
       >
 
         {/* ==================================================
-            ADMIN INVESTIGATION BANNER
+            ADMIN BANNER
         ================================================== */}
 
         {isAdminView && (
@@ -1877,7 +1950,7 @@ export default function RiderPage() {
                 src={
                   displayedProfileImage
                 }
-                alt="Rider"
+                alt={`${riderName}'s profile picture`}
                 onClick={() => {
 
                   if (
@@ -1902,6 +1975,7 @@ export default function RiderPage() {
                   cursor-pointer
                   hover:scale-105
                   transition
+                  duration-200
                 "
               />
 
@@ -2001,8 +2075,10 @@ export default function RiderPage() {
                     mb-2
                   "
                 >
+
                   Uploading profile picture...{" "}
                   {uploadProgress}%
+
                 </p>
 
 
@@ -2022,7 +2098,7 @@ export default function RiderPage() {
                       bg-orange-500
                       rounded-full
                       transition-all
-                      duration-200
+                      duration-300
                     "
                     style={{
                       width:
@@ -2954,7 +3030,15 @@ export default function RiderPage() {
 
       {/* ======================================================
           PROFILE IMAGE VIEWER
-          SMALL / BLURRED / INLINE STYLE
+
+          This is an overlay on the SAME PAGE.
+
+          It does NOT navigate anywhere.
+
+          The background is blurred and darkened.
+
+          The image is larger and uses object-contain
+          so the complete image remains visible.
       ====================================================== */}
 
       {showProfileImage &&
@@ -2968,13 +3052,15 @@ export default function RiderPage() {
             flex
             items-center
             justify-center
-            bg-black/40
-            backdrop-blur-md
-            p-5
-            cursor-pointer
+            bg-black/35
+            backdrop-blur-xl
+            p-4
+            sm:p-8
           "
           onClick={() =>
-            setShowProfileImage(false)
+            setShowProfileImage(
+              false
+            )
           }
         >
 
@@ -2985,21 +3071,28 @@ export default function RiderPage() {
           <button
             type="button"
             onClick={() =>
-              setShowProfileImage(false)
+              setShowProfileImage(
+                false
+              )
             }
             className="
               absolute
               top-5
               right-5
+              sm:top-7
+              sm:right-7
               w-11
               h-11
+              sm:w-12
+              sm:h-12
               rounded-full
-              bg-black/60
-              backdrop-blur-sm
+              bg-black/70
+              backdrop-blur-md
               border
               border-white/20
               text-white
               text-xl
+              sm:text-2xl
               flex
               items-center
               justify-center
@@ -3016,7 +3109,15 @@ export default function RiderPage() {
 
 
           {/* ==================================================
-              IMAGE
+              IMAGE CARD
+
+              Larger than before.
+
+              IMPORTANT:
+              We are NOT using a small fixed width like
+              max-w-[340px].
+
+              The image can grow up to the available screen.
           ================================================== */}
 
           <div
@@ -3025,6 +3126,9 @@ export default function RiderPage() {
               flex
               items-center
               justify-center
+              w-full
+              max-w-[900px]
+              max-h-[90vh]
               cursor-default
             "
             onClick={(
@@ -3035,20 +3139,21 @@ export default function RiderPage() {
           >
 
             <img
-              src={riderImage}
+              src={
+                riderImage
+              }
               alt={`${riderName}'s profile picture`}
               className="
                 block
-                w-[70vw]
-                max-w-[340px]
-                sm:max-w-[380px]
-                max-h-[60vh]
+                w-auto
                 h-auto
+                max-w-[92vw]
+                max-h-[82vh]
                 object-contain
                 rounded-2xl
                 border-2
                 border-orange-500
-                shadow-[0_0_35px_rgba(249,115,22,0.25)]
+                shadow-2xl
               "
             />
 
