@@ -14,19 +14,11 @@ import {
   MessageCircle,
   Bike,
   Bell,
-  User,
   Route,
   Search,
   Bookmark,
   UsersRound,
 } from "lucide-react";
-
-type UserData = {
-  uid?: string;
-  name?: string;
-  email?: string;
-  image?: string;
-};
 
 type AdminViewData = {
   active?: boolean;
@@ -44,27 +36,20 @@ export default function Navbar() {
   const [notificationCount, setNotificationCount] = useState(0);
   const [rideCount, setRideCount] = useState(0);
 
-  // Normal logged-in admin/user
-  const [user, setUser] = useState<UserData | null>(null);
+  // =========================================================
+  // ADMIN INVESTIGATION MODE
+  // =========================================================
 
-  // Admin investigation mode
   const [adminView, setAdminView] =
     useState<AdminViewData | null>(null);
 
   // =========================================================
-  // LOAD USER + ADMIN VIEW
+  // LOAD ADMIN VIEW
   // =========================================================
 
   useEffect(() => {
     const loadIdentity = () => {
       try {
-        const savedUser =
-          localStorage.getItem("ridemateUser");
-
-        if (savedUser) {
-          setUser(JSON.parse(savedUser));
-        }
-
         const savedAdminView =
           localStorage.getItem("ridemateAdminView");
 
@@ -85,6 +70,8 @@ export default function Navbar() {
           "Failed to load navbar identity:",
           error
         );
+
+        setAdminView(null);
       }
     };
 
@@ -215,21 +202,6 @@ export default function Navbar() {
     loadRideCount();
   }, []);
 
-  // =========================================================
-  // DISPLAY USER
-  // =========================================================
-
-  const displayUser = adminView?.active
-    ? {
-        name:
-          adminView.userName || "Unknown User",
-        email:
-          adminView.userEmail || "",
-        image:
-          adminView.userImage || "",
-      }
-    : user;
-
   return (
     <>
       {/* =====================================================
@@ -313,7 +285,9 @@ export default function Navbar() {
           flex
           items-center
           justify-between
-          ${adminView?.active ? "top-[40px]" : "top-0"}
+          ${adminView?.active
+            ? "top-[40px]"
+            : "top-0"}
         `}
       >
         {/* =================================================
@@ -358,6 +332,7 @@ export default function Navbar() {
         ================================================= */}
 
         <div className="flex items-center gap-2">
+
           {/* Search */}
 
           <a
@@ -441,7 +416,20 @@ export default function Navbar() {
               transition
             "
           >
-            <User size={20} />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M20 21a8 8 0 0 0-16 0" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
           </a>
         </div>
       </nav>
@@ -484,6 +472,7 @@ export default function Navbar() {
                 : "top-0"}
             `}
           >
+
             {/* Close button */}
 
             <button
@@ -550,43 +539,11 @@ export default function Navbar() {
             )}
 
             {/* =================================================
-                USER INFORMATION
-            ================================================= */}
-
-            {displayUser && (
-              <>
-                <img
-                  src={
-                    displayUser.image ||
-                    "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300"
-                  }
-                  alt="Profile"
-                  className="
-                    w-20
-                    h-20
-                    rounded-full
-                    border-4
-                    border-orange-500
-                    object-cover
-                  "
-                />
-
-                <h2 className="mt-3 font-black text-lg">
-                  {displayUser.name ||
-                    "Unknown User"}
-                </h2>
-
-                <p className="text-zinc-400 text-sm">
-                  {displayUser.email || ""}
-                </p>
-              </>
-            )}
-
-            {/* =================================================
                 MENU ITEMS
             ================================================= */}
 
-            <div className="flex flex-col gap-4 mt-8 text-lg">
+            <div className="flex flex-col gap-4 text-lg">
+
               {/* Home */}
 
               <a
