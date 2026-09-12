@@ -375,6 +375,7 @@ LOCATION TYPE
 */
 
 type LocationData = {
+  name?: string;
   address: string;
   latitude: number;
   longitude: number;
@@ -396,6 +397,74 @@ type LocationPickerProps = {
     location: LocationData
   ) => void;
 };
+
+/*
+=========================================================
+CLEAN PLACE NAME HELPER
+=========================================================
+*/
+
+function getCleanPlaceName(
+  displayName: string | undefined,
+  formattedAddress: string
+) {
+  const rawName =
+    displayName?.trim() || "";
+
+  /*
+  Google may sometimes return a plus code
+  such as:
+
+  X4WV+742
+
+  We don't want that to become the
+  destination name.
+  */
+
+  const looksLikePlusCode =
+    /^[A-Z0-9]{2,8}\+[A-Z0-9]{2,8}$/i.test(
+      rawName.replace(/\s+/g, "")
+    );
+
+  if (
+    rawName &&
+    !looksLikePlusCode
+  ) {
+    return rawName;
+  }
+
+  /*
+  Try the first meaningful part of
+  the formatted address.
+  */
+
+  const firstPart =
+    formattedAddress
+      .split(",")
+      .map((part) => part.trim())
+      .find(Boolean);
+
+  if (firstPart) {
+    /*
+    Remove common plus-code prefix
+    if Google returned:
+
+    X4WV+742, Billigiranganabetta...
+    */
+
+    const withoutPlusCode =
+      firstPart.replace(
+        /^[A-Z0-9]{2,8}\+[A-Z0-9]{2,8}\s*/i,
+        ""
+      ).trim();
+
+    if (withoutPlusCode) {
+      return withoutPlusCode;
+    }
+  }
+
+  return "Selected location";
+}
 
 /*
 =========================================================
@@ -656,6 +725,7 @@ function LocationPicker({
 
           const updateLocation =
             ({
+              name,
               latitude,
               longitude,
               address,
@@ -676,6 +746,7 @@ function LocationPicker({
               map.setZoom(16);
 
               setSelectedLocation({
+                name,
                 latitude,
                 longitude,
                 address,
@@ -720,16 +791,76 @@ function LocationPicker({
                   );
                 }
 
+                const formattedAddress =
+                  result.formatted_address ||
+                  `${latitude.toFixed(
+                    6
+                  )}, ${longitude.toFixed(
+                    6
+                  )}`;
+
+                /*
+                Find a useful human-readable
+                name from Google address components.
+                */
+
+                const pointOfInterest =
+                  result.address_components?.find(
+                    (component: any) =>
+                      component.types?.includes(
+                        "point_of_interest"
+                      )
+                  )?.long_name;
+
+                const establishment =
+                  result.address_components?.find(
+                    (component: any) =>
+                      component.types?.includes(
+                        "establishment"
+                      )
+                  )?.long_name;
+
+                const naturalFeature =
+                  result.address_components?.find(
+                    (component: any) =>
+                      component.types?.includes(
+                        "natural_feature"
+                      )
+                  )?.long_name;
+
+                const premise =
+                  result.address_components?.find(
+                    (component: any) =>
+                      component.types?.includes(
+                        "premise"
+                      )
+                  )?.long_name;
+
+                const route =
+                  result.address_components?.find(
+                    (component: any) =>
+                      component.types?.includes(
+                        "route"
+                      )
+                  )?.long_name;
+
+                const name =
+                  pointOfInterest ||
+                  establishment ||
+                  naturalFeature ||
+                  premise ||
+                  route ||
+                  getCleanPlaceName(
+                    undefined,
+                    formattedAddress
+                  );
+
                 updateLocation({
+                  name,
                   latitude,
                   longitude,
                   address:
-                    result.formatted_address ||
-                    `${latitude.toFixed(
-                      6
-                    )}, ${longitude.toFixed(
-                      6
-                    )}`,
+                    formattedAddress,
                   placeId:
                     result.place_id ||
                     "",
@@ -920,7 +1051,21 @@ function LocationPicker({
                   place.displayName ||
                   "Selected location";
 
+                /*
+                =================================================
+                CLEAN DESTINATION NAME
+                =================================================
+                */
+
+                const placeName =
+                  getCleanPlaceName(
+                    place.displayName,
+                    address
+                  );
+
                 updateLocation({
+                  name:
+                    placeName,
                   latitude,
                   longitude,
                   address,
@@ -1285,7 +1430,9 @@ function LocationPicker({
                   sm:text-base
                 "
               >
-                📍 {selectedLocation.address}
+                📍{" "}
+                {selectedLocation.name ||
+                  selectedLocation.address}
               </p>
 
               <p
@@ -1631,23 +1778,11 @@ function CreateTripContent() {
                 destination.longitude,
             },
 
-            /*
-            IMPORTANT:
-            TWO_WHEELER keeps this as
-            motorcycle routing.
-            */
-
             travelMode:
               "TWO_WHEELER",
 
             routingPreference:
               "TRAFFIC_UNAWARE",
-
-            /*
-            IMPORTANT:
-            No "units" property here.
-            Google returns distanceMeters.
-            */
 
             fields: [
               "distanceMeters",
@@ -1782,8 +1917,15 @@ function CreateTripContent() {
           const trip =
             snap.data();
 
+          /*
+          ===================================================
+          BASIC DATA
+          ===================================================
+          */
+
           setDestination(
-            trip.destination ||
+            trip.destinationName ||
+              trip.destination ||
               ""
           );
 
@@ -1884,6 +2026,11 @@ function CreateTripContent() {
               "number"
           ) {
             setDestinationLocationData({
+              name:
+                trip.destinationName ||
+                trip.destination ||
+                "",
+
               latitude:
                 trip.destinationLat,
 
@@ -1953,6 +2100,11 @@ function CreateTripContent() {
           location
         );
 
+        /*
+        Starting location continues
+        using the full address.
+        */
+
         setStartLocation(
           location.address
         );
@@ -1961,8 +2113,14 @@ function CreateTripContent() {
           location
         );
 
+        /*
+        Destination uses the clean
+        human-readable place name.
+        */
+
         setDestination(
-          location.address
+          location.name ||
+            location.address
         );
       }
 
@@ -2109,6 +2267,17 @@ function CreateTripContent() {
 
         /*
         =====================================================
+        CLEAN DESTINATION NAME
+        =====================================================
+        */
+
+        const cleanDestinationName =
+          destinationLocationData.name ||
+          destination ||
+          destinationLocationData.address;
+
+        /*
+        =====================================================
         TRIP DATA
         =====================================================
         */
@@ -2120,11 +2289,16 @@ function CreateTripContent() {
           rideType,
 
           /*
+          ===================================================
           DESTINATION
+          ===================================================
           */
 
           destination:
-            destinationLocationData.address,
+            cleanDestinationName,
+
+          destinationName:
+            cleanDestinationName,
 
           destinationLat:
             destinationLocationData.latitude,
@@ -2135,6 +2309,11 @@ function CreateTripContent() {
           destinationRadiusKm:
             DESTINATION_RADIUS_KM,
 
+          /*
+          Full Google address is still
+          preserved internally.
+          */
+
           destinationFormattedAddress:
             destinationLocationData.address,
 
@@ -2143,7 +2322,9 @@ function CreateTripContent() {
             "",
 
           /*
+          ===================================================
           START
+          ===================================================
           */
 
           startCity,
@@ -2165,7 +2346,9 @@ function CreateTripContent() {
             "",
 
           /*
+          ===================================================
           DISTANCE
+          ===================================================
           */
 
           distance:
@@ -2175,7 +2358,9 @@ function CreateTripContent() {
             finalDistanceKm,
 
           /*
+          ===================================================
           OTHER TRIP DATA
+          ===================================================
           */
 
           bike,
@@ -2741,9 +2926,8 @@ function CreateTripContent() {
                   "
                 >
                   📍{" "}
-                  {
-                    destinationLocationData.address
-                  }
+                  {destinationLocationData.name ||
+                    destinationLocationData.address}
                 </p>
 
                 <p

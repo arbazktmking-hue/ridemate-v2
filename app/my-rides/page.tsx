@@ -149,10 +149,6 @@ export default function MyRidesPage() {
 
         let activeUserName = "";
 
-        /*
-         * ADMIN INVESTIGATION MODE
-         */
-
         const savedAdminView =
           localStorage.getItem(
             "ridemateAdminView"
@@ -160,7 +156,9 @@ export default function MyRidesPage() {
 
         if (savedAdminView) {
           const parsedAdminView =
-            JSON.parse(savedAdminView);
+            JSON.parse(
+              savedAdminView
+            );
 
           if (
             parsedAdminView?.active &&
@@ -170,10 +168,6 @@ export default function MyRidesPage() {
               parsedAdminView.userName;
           }
         }
-
-        /*
-         * NORMAL USER
-         */
 
         if (!activeUserName) {
           const currentUser =
@@ -211,25 +205,29 @@ export default function MyRidesPage() {
 
         const tripsSnapshot =
           await getDocs(
-            collection(db, "trips")
+            collection(
+              db,
+              "trips"
+            )
           );
 
-        const tripsMap: Record<
-          string,
-          Ride
-        > = {};
+        const tripsMap =
+          new Map<string, Ride>();
 
         tripsSnapshot.forEach(
           (tripDoc) => {
-            tripsMap[tripDoc.id] = {
-              id: tripDoc.id,
-              ...tripDoc.data(),
-            };
+            tripsMap.set(
+              tripDoc.id,
+              {
+                id: tripDoc.id,
+                ...tripDoc.data(),
+              }
+            );
           }
         );
 
         /* =====================================================
-           LOAD ALL REQUESTS
+           LOAD ALL RIDE REQUESTS
         ===================================================== */
 
         const requestsSnapshot =
@@ -241,17 +239,18 @@ export default function MyRidesPage() {
           );
 
         /* =====================================================
-           CREATE APPROVED MEMBERS MAP
+           APPROVED MEMBER MAP
            tripId -> approved rider
         ===================================================== */
 
-        const approvedMembersMap: Record<
-          string,
-          {
-            name: string;
-            image: string;
-          }
-        > = {};
+        const approvedMembersMap =
+          new Map<
+            string,
+            {
+              name: string;
+              image: string;
+            }
+          >();
 
         requestsSnapshot.forEach(
           (requestDoc) => {
@@ -263,60 +262,37 @@ export default function MyRidesPage() {
                 "approved" &&
               request.tripId
             ) {
-              approvedMembersMap[
-                request.tripId
-              ] = {
-                name:
-                  request.requester ||
-                  "",
-                image:
-                  request.requesterImage ||
-                  "",
-              };
+              approvedMembersMap.set(
+                request.tripId,
+                {
+                  name:
+                    request.requester ||
+                    request.requesterName ||
+                    request.userName ||
+                    request.name ||
+                    "",
+                  image:
+                    request.requesterImage ||
+                    request.userImage ||
+                    "",
+                }
+              );
             }
           }
         );
 
-        const upcoming: Ride[] = [];
-        const history: Ride[] = [];
-
-        const now = new Date();
-
         /* =====================================================
-           HELPER
+           ONE MAP FOR ALL USER RIDES
+           
+           IMPORTANT:
+           One trip ID = one My Rides entry.
         ===================================================== */
 
-        const isTripCompletedOrPast = (
-          trip: any
-        ) => {
-          if (
-            trip.status ===
-            "completed"
-          ) {
-            return true;
-          }
-
-          if (trip.tripDate) {
-            const tripDate =
-              new Date(
-                trip.tripDate
-              );
-
-            if (
-              !isNaN(
-                tripDate.getTime()
-              ) &&
-              tripDate < now
-            ) {
-              return true;
-            }
-          }
-
-          return false;
-        };
+        const userRides =
+          new Map<string, Ride>();
 
         /* =====================================================
-           TRIPS POSTED BY ACTIVE USER
+           HOSTED TRIPS
         ===================================================== */
 
         tripsSnapshot.forEach(
@@ -332,20 +308,16 @@ export default function MyRidesPage() {
             }
 
             const approvedMember =
-              approvedMembersMap[
+              approvedMembersMap.get(
                 tripDoc.id
-              ] || null;
+              );
 
-            const tripData: Ride = {
+            const ride: Ride = {
               id: tripDoc.id,
               ...trip,
 
               role: "Host",
 
-              /*
-               * Admin Investigation Mode
-               * is strictly read-only.
-               */
               canEdit:
                 !isAdminView,
 
@@ -358,30 +330,19 @@ export default function MyRidesPage() {
                 "",
             };
 
-            /* COMPLETED / PAST */
+            /*
+             * Store by actual Firestore trip ID.
+             */
 
-            if (
-              isTripCompletedOrPast(
-                trip
-              )
-            ) {
-              history.push(
-                tripData
-              );
-
-              return;
-            }
-
-            /* UPCOMING */
-
-            upcoming.push(
-              tripData
+            userRides.set(
+              tripDoc.id,
+              ride
             );
           }
         );
 
         /* =====================================================
-           TRIPS JOINED BY ACTIVE USER
+           JOINED / APPROVED RIDER TRIPS
         ===================================================== */
 
         requestsSnapshot.forEach(
@@ -403,24 +364,45 @@ export default function MyRidesPage() {
               return;
             }
 
-            const actualTrip =
-              tripsMap[
-                request.tripId
-              ];
+            const tripId =
+              request.tripId;
 
-            /* =================================================
-               ACTUAL TRIP EXISTS
-            ================================================= */
+            if (!tripId) {
+              return;
+            }
+
+            const actualTrip =
+              tripsMap.get(
+                tripId
+              );
+
+            /*
+             * Actual trip exists.
+             */
 
             if (actualTrip) {
+              /*
+               * If the user is already the host,
+               * keep the host record.
+               */
+              if (
+                actualTrip.userName ===
+                activeUserName
+              ) {
+                return;
+              }
+
               const joinedTrip: Ride = {
                 ...actualTrip,
 
-                id: actualTrip.id,
+                id:
+                  actualTrip.id,
 
-                role: "Rider",
+                role:
+                  "Rider",
 
-                canEdit: false,
+                canEdit:
+                  false,
 
                 tripOwner:
                   actualTrip.userName ||
@@ -478,16 +460,19 @@ export default function MyRidesPage() {
                   "",
               };
 
+              /*
+               * IMPORTANT:
+               * Only add if this trip ID has not
+               * already been added.
+               */
+
               if (
-                isTripCompletedOrPast(
-                  actualTrip
+                !userRides.has(
+                  tripId
                 )
               ) {
-                history.push(
-                  joinedTrip
-                );
-              } else {
-                upcoming.push(
+                userRides.set(
+                  tripId,
                   joinedTrip
                 );
               }
@@ -496,12 +481,12 @@ export default function MyRidesPage() {
             }
 
             /* =================================================
-               FALLBACK
+               FALLBACK WHEN TRIP DOCUMENT IS MISSING
             ================================================= */
 
             const fallbackRide: Ride = {
               id:
-                request.tripId,
+                tripId,
 
               destination:
                 request.destination ||
@@ -511,7 +496,8 @@ export default function MyRidesPage() {
                 request.tripOwner ||
                 "",
 
-              role: "Rider",
+              role:
+                "Rider",
 
               tripDate:
                 request.tripDate ||
@@ -537,7 +523,8 @@ export default function MyRidesPage() {
                 request.rideType ||
                 "",
 
-              canEdit: false,
+              canEdit:
+                false,
 
               tripOwner:
                 request.tripOwner ||
@@ -557,90 +544,160 @@ export default function MyRidesPage() {
             };
 
             if (
-              fallbackRide.tripDate
+              !userRides.has(
+                tripId
+              )
             ) {
-              const fallbackDate =
-                new Date(
-                  fallbackRide.tripDate
-                );
-
-              if (
-                !isNaN(
-                  fallbackDate.getTime()
-                ) &&
-                fallbackDate < now
-              ) {
-                history.push(
-                  fallbackRide
-                );
-
-                return;
-              }
+              userRides.set(
+                tripId,
+                fallbackRide
+              );
             }
-
-            upcoming.push(
-              fallbackRide
-            );
           }
         );
 
         /* =====================================================
-           REMOVE DUPLICATE UPCOMING RIDES
+           CLASSIFY RIDES
+           
+           CRITICAL:
+           ONLY status === "completed"
+           means History.
+           
+           The trip date is NOT used to mark
+           a trip as completed.
         ===================================================== */
 
-        const uniqueUpcoming =
-          upcoming.filter(
-            (
-              ride,
-              index,
-              self
-            ) =>
-              index ===
-              self.findIndex(
-                (r) =>
-                  r.id ===
-                  ride.id
-              )
-          );
+        const upcoming: Ride[] = [];
+        const history: Ride[] = [];
+
+        userRides.forEach(
+          (ride) => {
+            if (
+              ride.status ===
+              "completed"
+            ) {
+              history.push(
+                ride
+              );
+            } else {
+              upcoming.push(
+                ride
+              );
+            }
+          }
+        );
 
         /* =====================================================
-           REMOVE DUPLICATE HISTORY
+           SORT
+           
+           Upcoming:
+           earliest trip first.
+           
+           History:
+           newest trip first.
         ===================================================== */
 
-        const uniqueHistory =
-          history.filter(
-            (
-              ride,
-              index,
-              self
-            ) =>
-              index ===
-              self.findIndex(
-                (r) =>
-                  r.id ===
-                  ride.id
+        const getTime =
+          (value: any) => {
+            if (!value) {
+              return 0;
+            }
+
+            try {
+              if (
+                typeof value ===
+                  "object" &&
+                typeof value.toDate ===
+                  "function"
+              ) {
+                return value
+                  .toDate()
+                  .getTime();
+              }
+
+              if (
+                typeof value ===
+                  "object" &&
+                value.seconds !==
+                  undefined
+              ) {
+                return (
+                  Number(
+                    value.seconds
+                  ) * 1000
+                );
+              }
+
+              const date =
+                new Date(
+                  value
+                );
+
+              return isNaN(
+                date.getTime()
               )
-          );
+                ? 0
+                : date.getTime();
+            } catch {
+              return 0;
+            }
+          };
+
+        upcoming.sort(
+          (a, b) =>
+            getTime(
+              a.tripDate
+            ) -
+            getTime(
+              b.tripDate
+            )
+        );
+
+        history.sort(
+          (a, b) =>
+            getTime(
+              b.completionVerifiedAt ||
+                b.tripDate ||
+                b.createdAt
+            ) -
+            getTime(
+              a.completionVerifiedAt ||
+                a.tripDate ||
+                a.createdAt
+            )
+        );
+
+        console.log(
+          "Upcoming rides:",
+          upcoming
+        );
+
+        console.log(
+          "Ride history:",
+          history
+        );
 
         setUpcomingRides(
-          uniqueUpcoming
+          upcoming
         );
 
         setRideHistory(
-          uniqueHistory
+          history
         );
-
       } catch (error) {
         console.error(
           "Failed to load rides:",
           error
         );
+
+        setUpcomingRides([]);
+        setRideHistory([]);
       } finally {
         setLoading(false);
       }
     };
 
-    loadRides();
+    void loadRides();
   }, [isAdminView]);
 
   /* =========================================================
@@ -650,11 +707,6 @@ export default function MyRidesPage() {
   const editRide = (
     tripId: string
   ) => {
-    /*
-     * Never allow editing while
-     * investigating a user.
-     */
-
     if (isAdminView) {
       alert(
         "Admin View Mode is read-only.\n\nYou cannot edit this ride while investigating a user account."
@@ -675,13 +727,13 @@ export default function MyRidesPage() {
   ========================================================= */
 
   const toggleRide = (
-    rideId: string
+    rideKey: string
   ) => {
     setExpandedRide(
       (current) =>
-        current === rideId
+        current === rideKey
           ? null
-          : rideId
+          : rideKey
     );
   };
 
@@ -714,13 +766,15 @@ export default function MyRidesPage() {
           undefined
       ) {
         date = new Date(
-          value.seconds *
-            1000
+          Number(
+            value.seconds
+          ) * 1000
         );
       } else {
-        date = new Date(
-          value
-        );
+        date =
+          new Date(
+            value
+          );
       }
 
       if (
@@ -867,9 +921,7 @@ export default function MyRidesPage() {
           }
         `}
       >
-        {/* =================================================
-            COLLAPSED CARD
-        ================================================= */}
+        {/* COLLAPSED CARD */}
 
         <div
           onClick={() =>
@@ -884,8 +936,6 @@ export default function MyRidesPage() {
           "
         >
           <div className="flex items-center gap-4">
-
-            {/* TRIP ICON */}
 
             <div
               className="
@@ -906,8 +956,6 @@ export default function MyRidesPage() {
             >
               🏔️
             </div>
-
-            {/* BASIC INFO */}
 
             <div className="flex-1 min-w-0">
 
@@ -995,9 +1043,7 @@ export default function MyRidesPage() {
           </div>
         </div>
 
-        {/* =================================================
-            EXPANDED SECTION
-        ================================================= */}
+        {/* EXPANDED */}
 
         <div
           className={`
@@ -1025,9 +1071,7 @@ export default function MyRidesPage() {
               "
             >
 
-              {/* =================================================
-                  PERSON YOU RODE WITH
-              ================================================= */}
+              {/* PERSON YOU RODE WITH */}
 
               {otherMember && (
                 <div
@@ -1040,7 +1084,6 @@ export default function MyRidesPage() {
                     p-4
                   "
                 >
-
                   <p
                     className="
                       text-zinc-500
@@ -1088,9 +1131,7 @@ export default function MyRidesPage() {
                 </div>
               )}
 
-              {/* =================================================
-                  TRIP DETAILS
-              ================================================= */}
+              {/* TRIP DETAILS */}
 
               <div
                 className="
@@ -1101,358 +1142,138 @@ export default function MyRidesPage() {
                 "
               >
 
-                {/* START */}
-
                 {trip.startLocation && (
-                  <div
-                    className="
-                      bg-black
-                      border
-                      border-zinc-800
-                      rounded-xl
-                      p-3
-                    "
-                  >
-
-                    <span
-                      className="
-                        text-zinc-500
-                        text-[10px]
-                        uppercase
-                        font-black
-                      "
-                    >
+                  <div className="bg-black border border-zinc-800 rounded-xl p-3">
+                    <span className="text-zinc-500 text-[10px] uppercase font-black">
                       Starting From
                     </span>
 
-                    <p
-                      className="
-                        font-bold
-                        text-sm
-                        mt-1
-                      "
-                    >
+                    <p className="font-bold text-sm mt-1">
                       📍{" "}
                       {trip.startLocation}
                     </p>
-
                   </div>
                 )}
 
-                {/* DISTANCE */}
-
                 {trip.distance && (
-                  <div
-                    className="
-                      bg-black
-                      border
-                      border-zinc-800
-                      rounded-xl
-                      p-3
-                    "
-                  >
-
-                    <span
-                      className="
-                        text-zinc-500
-                        text-[10px]
-                        uppercase
-                        font-black
-                      "
-                    >
+                  <div className="bg-black border border-zinc-800 rounded-xl p-3">
+                    <span className="text-zinc-500 text-[10px] uppercase font-black">
                       Distance
                     </span>
 
-                    <p
-                      className="
-                        font-bold
-                        text-sm
-                        mt-1
-                      "
-                    >
+                    <p className="font-bold text-sm mt-1">
                       🛣️{" "}
-                      {trip.distance} KM
+                      {trip.distance}
                     </p>
-
                   </div>
                 )}
 
-                {/* DEPARTURE */}
-
                 {trip.tripDate && (
-                  <div
-                    className="
-                      bg-black
-                      border
-                      border-zinc-800
-                      rounded-xl
-                      p-3
-                    "
-                  >
-
-                    <span
-                      className="
-                        text-zinc-500
-                        text-[10px]
-                        uppercase
-                        font-black
-                      "
-                    >
+                  <div className="bg-black border border-zinc-800 rounded-xl p-3">
+                    <span className="text-zinc-500 text-[10px] uppercase font-black">
                       Departure
                     </span>
 
-                    <p
-                      className="
-                        font-bold
-                        text-xs
-                        mt-1
-                      "
-                    >
+                    <p className="font-bold text-xs mt-1">
                       🗓️{" "}
                       {formatTripDate(
                         trip.tripDate
                       )}
                     </p>
-
                   </div>
                 )}
 
-                {/* BIKE */}
-
                 {trip.bike && (
-                  <div
-                    className="
-                      bg-black
-                      border
-                      border-zinc-800
-                      rounded-xl
-                      p-3
-                    "
-                  >
-
-                    <span
-                      className="
-                        text-zinc-500
-                        text-[10px]
-                        uppercase
-                        font-black
-                      "
-                    >
+                  <div className="bg-black border border-zinc-800 rounded-xl p-3">
+                    <span className="text-zinc-500 text-[10px] uppercase font-black">
                       Bike
                     </span>
 
-                    <p
-                      className="
-                        font-bold
-                        text-sm
-                        mt-1
-                      "
-                    >
+                    <p className="font-bold text-sm mt-1">
                       🏍️{" "}
                       {trip.bike}
                     </p>
-
                   </div>
                 )}
-
-                {/* CONTRIBUTION */}
 
                 {trip.tripPrice !==
                   undefined &&
                   trip.tripPrice !==
                     "" && (
-                    <div
-                      className="
-                        bg-black
-                        border
-                        border-zinc-800
-                        rounded-xl
-                        p-3
-                      "
-                    >
-
-                      <span
-                        className="
-                          text-zinc-500
-                          text-[10px]
-                          uppercase
-                          font-black
-                        "
-                      >
+                    <div className="bg-black border border-zinc-800 rounded-xl p-3">
+                      <span className="text-zinc-500 text-[10px] uppercase font-black">
                         Contribution
                       </span>
 
-                      <p
-                        className="
-                          font-bold
-                          text-sm
-                          mt-1
-                        "
-                      >
+                      <p className="font-bold text-sm mt-1">
                         ₹
                         {
                           trip.tripPrice
                         }
                       </p>
-
                     </div>
                   )}
 
-                {/* RIDE TYPE */}
-
                 {trip.rideType && (
-                  <div
-                    className="
-                      bg-black
-                      border
-                      border-zinc-800
-                      rounded-xl
-                      p-3
-                    "
-                  >
-
-                    <span
-                      className="
-                        text-zinc-500
-                        text-[10px]
-                        uppercase
-                        font-black
-                      "
-                    >
+                  <div className="bg-black border border-zinc-800 rounded-xl p-3">
+                    <span className="text-zinc-500 text-[10px] uppercase font-black">
                       Ride Type
                     </span>
 
-                    <p
-                      className="
-                        font-bold
-                        text-sm
-                        mt-1
-                      "
-                    >
+                    <p className="font-bold text-sm mt-1">
                       {trip.rideType ===
                       "group"
                         ? "👥 Group Ride"
                         : "👤 Individual Ride"}
                     </p>
-
                   </div>
                 )}
 
               </div>
 
-              {/* =================================================
-                  RIDE STORY
-              ================================================= */}
+              {/* RIDE STORY */}
 
               {(trip.story ||
                 trip.rideStory ||
                 trip.description) && (
-                <div
-                  className="
-                    mt-3
-                    bg-black
-                    border
-                    border-zinc-800
-                    rounded-xl
-                    p-3
-                  "
-                >
-
-                  <span
-                    className="
-                      text-zinc-500
-                      text-[10px]
-                      uppercase
-                      font-black
-                    "
-                  >
+                <div className="mt-3 bg-black border border-zinc-800 rounded-xl p-3">
+                  <span className="text-zinc-500 text-[10px] uppercase font-black">
                     Ride Story
                   </span>
 
-                  <p
-                    className="
-                      text-zinc-300
-                      text-sm
-                      mt-1
-                      leading-relaxed
-                    "
-                  >
+                  <p className="text-zinc-300 text-sm mt-1 leading-relaxed">
                     {trip.story ||
                       trip.rideStory ||
                       trip.description}
                   </p>
-
                 </div>
               )}
 
-              {/* =================================================
-                  HISTORY STATUS
-              ================================================= */}
+              {/* HISTORY STATUS */}
 
               {history && (
-                <div
-                  className="
-                    mt-3
-                    bg-green-500/10
-                    border
-                    border-green-500/20
-                    rounded-xl
-                    px-4
-                    py-3
-                    text-center
-                  "
-                >
-
-                  <p
-                    className="
-                      text-green-400
-                      font-black
-                      text-sm
-                    "
-                  >
-                    ✓ Completed / Past Ride
+                <div className="mt-3 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 text-center">
+                  <p className="text-green-400 font-black text-sm">
+                    ✓ Completed Ride
                   </p>
-
                 </div>
               )}
 
-              {/* =================================================
-                  ADMIN READ ONLY NOTICE
-              ================================================= */}
+              {/* ADMIN NOTICE */}
 
               {isAdminView &&
                 trip.role ===
                   "Host" &&
                 !history && (
-                  <div
-                    className="
-                      mt-3
-                      bg-orange-500/10
-                      border
-                      border-orange-500/20
-                      rounded-xl
-                      px-4
-                      py-3
-                      text-center
-                    "
-                  >
-                    <p
-                      className="
-                        text-orange-400
-                        font-bold
-                        text-sm
-                      "
-                    >
+                  <div className="mt-3 bg-orange-500/10 border border-orange-500/20 rounded-xl px-4 py-3 text-center">
+                    <p className="text-orange-400 font-bold text-sm">
                       🔒 Investigation Mode —
                       Ride editing disabled
                     </p>
                   </div>
                 )}
 
-              {/* =================================================
-                  EDIT BUTTON
-                  ONLY NORMAL USER + UPCOMING HOST
-              ================================================= */}
+              {/* EDIT */}
 
               {trip.canEdit ===
                 true &&
@@ -1508,11 +1329,9 @@ export default function MyRidesPage() {
         "
       >
         <div className="max-w-5xl mx-auto">
-
           <div className="text-center py-20 text-zinc-400">
             Loading your rides...
           </div>
-
         </div>
       </main>
     );
@@ -1532,12 +1351,7 @@ export default function MyRidesPage() {
         sm:p-6
       "
     >
-
       <div className="max-w-5xl mx-auto">
-
-        {/* =================================================
-            ADMIN INVESTIGATION NOTICE
-        ================================================= */}
 
         {isAdminView && (
           <div
@@ -1565,8 +1379,6 @@ export default function MyRidesPage() {
           </div>
         )}
 
-        {/* PAGE TITLE */}
-
         <h1
           className="
             text-4xl
@@ -1579,9 +1391,7 @@ export default function MyRidesPage() {
           My Rides
         </h1>
 
-        {/* =================================================
-            TABS
-        ================================================= */}
+        {/* TABS */}
 
         <div className="flex gap-3 mb-8">
 
@@ -1643,9 +1453,7 @@ export default function MyRidesPage() {
 
         </div>
 
-        {/* =================================================
-            UPCOMING RIDES
-        ================================================= */}
+        {/* UPCOMING */}
 
         {activeTab ===
           "upcoming" && (
@@ -1663,7 +1471,6 @@ export default function MyRidesPage() {
                   text-center
                 "
               >
-
                 <h2 className="text-2xl font-black mb-2">
                   No upcoming rides
                 </h2>
@@ -1673,7 +1480,6 @@ export default function MyRidesPage() {
                     ? "This user has no upcoming rides."
                     : "Your upcoming rides will appear here."}
                 </p>
-
               </div>
             ) : (
               upcomingRides.map(
@@ -1690,9 +1496,7 @@ export default function MyRidesPage() {
           </div>
         )}
 
-        {/* =================================================
-            HISTORY
-        ================================================= */}
+        {/* HISTORY */}
 
         {activeTab ===
           "history" && (
@@ -1710,7 +1514,6 @@ export default function MyRidesPage() {
                   text-center
                 "
               >
-
                 <h2 className="text-2xl font-black mb-2">
                   No ride history
                 </h2>
@@ -1720,7 +1523,6 @@ export default function MyRidesPage() {
                     ? "This user has no completed rides."
                     : "Your completed rides will appear here."}
                 </p>
-
               </div>
             ) : (
               rideHistory.map(

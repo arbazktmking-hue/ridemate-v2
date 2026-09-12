@@ -263,6 +263,20 @@ function FeedContent() {
   ] = useState(false);
 
   /* =========================================================
+     FEMALE RIDER FILTER
+  ========================================================= */
+
+  const [
+    currentUserGender,
+    setCurrentUserGender,
+  ] = useState("");
+
+  const [
+    femaleOnly,
+    setFemaleOnly,
+  ] = useState(false);
+
+  /* =========================================================
      NORMALIZE LOCATION
   ========================================================= */
 
@@ -276,7 +290,74 @@ function FeedContent() {
   };
 
   /* =========================================================
-     LOAD TRIPS
+     LOAD CURRENT USER GENDER
+  ========================================================= */
+
+  useEffect(() => {
+    const loadCurrentUserGender =
+      async () => {
+        try {
+          /*
+           * Do not show the female filter while
+           * an admin is investigating another user.
+           */
+          const savedAdminView =
+            localStorage.getItem(
+              "ridemateAdminView"
+            );
+
+          if (savedAdminView) {
+            try {
+              const parsedAdminView =
+                JSON.parse(
+                  savedAdminView
+                );
+
+              if (
+                parsedAdminView?.active
+              ) {
+                setCurrentUserGender("");
+                setFemaleOnly(false);
+                return;
+              }
+            } catch {
+              // Ignore malformed admin view
+            }
+          }
+
+          const savedUser =
+            localStorage.getItem(
+              "ridemateUser"
+            );
+
+          if (!savedUser) {
+            setCurrentUserGender("");
+            return;
+          }
+
+          const user =
+            JSON.parse(savedUser);
+
+          setCurrentUserGender(
+            String(
+              user.gender || ""
+            ).trim()
+          );
+        } catch (error) {
+          console.error(
+            "Failed to load current user gender:",
+            error
+          );
+
+          setCurrentUserGender("");
+        }
+      };
+
+    loadCurrentUserGender();
+  }, []);
+
+  /* =========================================================
+     LOAD TRIPS + USER GENDERS
   ========================================================= */
 
   useEffect(() => {
@@ -295,14 +376,97 @@ function FeedContent() {
         const querySnapshot =
           await getDocs(q);
 
+        /* =====================================================
+           LOAD USER GENDERS
+        ===================================================== */
+
+        const usersSnapshot =
+          await getDocs(
+            collection(
+              db,
+              "users"
+            )
+          );
+
+        const genderMap: Record<
+          string,
+          string
+        > = {};
+
+        usersSnapshot.forEach(
+          (userDoc) => {
+            const userData =
+              userDoc.data();
+
+            const gender =
+              String(
+                userData.gender || ""
+              ).trim();
+
+            if (!gender) {
+              return;
+            }
+
+            /*
+             * Support both name and username
+             * because existing RideMate accounts
+             * may use either field.
+             */
+
+            if (
+              userData.name
+            ) {
+              genderMap[
+                String(
+                  userData.name
+                )
+                  .trim()
+                  .toLowerCase()
+              ] = gender;
+            }
+
+            if (
+              userData.username
+            ) {
+              genderMap[
+                String(
+                  userData.username
+                )
+                  .trim()
+                  .toLowerCase()
+              ] = gender;
+            }
+          }
+        );
+
         const loadedTrips: any[] =
           [];
 
         querySnapshot.forEach(
           (tripDoc) => {
+            const tripData =
+              tripDoc.data();
+
+            const hostName =
+              String(
+                tripData.userName ||
+                  ""
+              )
+                .trim()
+                .toLowerCase();
+
             loadedTrips.push({
               id: tripDoc.id,
-              ...tripDoc.data(),
+              ...tripData,
+
+              /*
+               * Add gender only to the local
+               * trip object. Firestore is not changed.
+               */
+              hostGender:
+                genderMap[
+                  hostName
+                ] || "",
             });
           }
         );
@@ -325,7 +489,9 @@ function FeedContent() {
               )
           );
 
-        setAllTrips(uniqueTrips);
+        setAllTrips(
+          uniqueTrips
+        );
 
         /* =====================================================
            APPLY INITIAL URL FILTER
@@ -490,15 +656,22 @@ function FeedContent() {
               ...otherTrips,
             ];
 
-            setTrips(finalTrips);
+            setTrips(
+              finalTrips
+            );
+
             setExpandedTrip(
               sharedTrip.id
             );
           } else {
-            setTrips(filteredTrips);
+            setTrips(
+              filteredTrips
+            );
           }
         } else {
-          setTrips(filteredTrips);
+          setTrips(
+            filteredTrips
+          );
         }
       } catch (error) {
         console.error(
@@ -546,6 +719,28 @@ function FeedContent() {
       ...allTrips,
     ];
 
+    /* =======================================================
+       FEMALE RIDERS FILTER
+    ======================================================= */
+
+    if (
+      femaleOnly &&
+      currentUserGender ===
+        "Female"
+    ) {
+      filtered =
+        filtered.filter(
+          (trip) =>
+            String(
+              trip.hostGender ||
+                ""
+            )
+              .trim()
+              .toLowerCase() ===
+            "female"
+        );
+    }
+
     const normalizedStart =
       normalizeLocation(
         startFilter
@@ -577,7 +772,8 @@ function FeedContent() {
         );
 
       if (
-        exactStartTrips.length > 0
+        exactStartTrips.length >
+        0
       ) {
         filtered =
           exactStartTrips;
@@ -702,19 +898,37 @@ function FeedContent() {
         );
 
       if (sharedTrip) {
-        const otherTrips =
-          filtered.filter(
-            (trip) =>
-              trip.id !==
-              sharedTripId
-          );
+        /*
+         * When Female Riders is active,
+         * do not bypass the female filter
+         * for a shared trip.
+         */
+        if (
+          !femaleOnly ||
+          currentUserGender !==
+            "Female" ||
+          String(
+            sharedTrip.hostGender ||
+              ""
+          )
+            .trim()
+            .toLowerCase() ===
+            "female"
+        ) {
+          const otherTrips =
+            filtered.filter(
+              (trip) =>
+                trip.id !==
+                sharedTripId
+            );
 
-        setTrips([
-          sharedTrip,
-          ...otherTrips,
-        ]);
+          setTrips([
+            sharedTrip,
+            ...otherTrips,
+          ]);
 
-        return;
+          return;
+        }
       }
     }
 
@@ -726,6 +940,8 @@ function FeedContent() {
     dateFilter,
     sharedTripId,
     loading,
+    femaleOnly,
+    currentUserGender,
   ]);
 
   /* =========================================================
@@ -736,6 +952,8 @@ function FeedContent() {
     setStartFilter("");
     setDestinationFilter("");
     setDateFilter("");
+    setFemaleOnly(false);
+
     setFilterFallbackNotice(
       false
     );
@@ -745,7 +963,8 @@ function FeedContent() {
     Boolean(
       startFilter ||
         destinationFilter ||
-        dateFilter
+        dateFilter ||
+        femaleOnly
     );
 
   /* =========================================================
@@ -1449,6 +1668,15 @@ function FeedContent() {
   }
 
   /* =========================================================
+     FEMALE THEME
+  ========================================================= */
+
+  const femaleTheme =
+    femaleOnly &&
+    currentUserGender ===
+      "Female";
+
+  /* =========================================================
      RENDER
   ========================================================= */
 
@@ -1500,12 +1728,16 @@ function FeedContent() {
       ===================================================== */}
 
       <div
-        className="
+        className={`
           fixed
           inset-0
           pointer-events-none
-          bg-[radial-gradient(circle_at_15%_10%,rgba(249,115,22,0.10),transparent_30%),radial-gradient(circle_at_85%_80%,rgba(255,255,255,0.04),transparent_30%)]
-        "
+          ${
+            femaleTheme
+              ? "bg-[radial-gradient(circle_at_15%_10%,rgba(244,114,182,0.10),transparent_30%),radial-gradient(circle_at_85%_80%,rgba(255,255,255,0.04),transparent_30%)]"
+              : "bg-[radial-gradient(circle_at_15%_10%,rgba(249,115,22,0.10),transparent_30%),radial-gradient(circle_at_85%_80%,rgba(255,255,255,0.04),transparent_30%)]"
+          }
+        `}
       />
 
       <div
@@ -1532,14 +1764,18 @@ function FeedContent() {
           "
         >
           <div
-            className="
+            className={`
               rounded-2xl
               border
-              border-orange-500/30
               bg-white/[0.035]
               backdrop-blur-xl
               overflow-hidden
-            "
+              ${
+                femaleTheme
+                  ? "border-pink-300/30"
+                  : "border-orange-500/30"
+              }
+            `}
           >
             <button
               type="button"
@@ -1566,21 +1802,28 @@ function FeedContent() {
                 "
               >
                 <div
-                  className="
+                  className={`
                     w-8
                     h-8
                     rounded-lg
-                    bg-orange-500/10
                     border
-                    border-orange-500/20
                     flex
                     items-center
                     justify-center
-                  "
+                    ${
+                      femaleTheme
+                        ? "bg-pink-300/10 border-pink-300/20"
+                        : "bg-orange-500/10 border-orange-500/20"
+                    }
+                  `}
                 >
                   <SlidersHorizontal
                     size={16}
-                    className="text-orange-400"
+                    className={
+                      femaleTheme
+                        ? "text-pink-300"
+                        : "text-orange-400"
+                    }
                   />
                 </div>
 
@@ -1660,13 +1903,17 @@ function FeedContent() {
                     <div className="relative">
                       <MapPin
                         size={16}
-                        className="
+                        className={`
                           absolute
                           left-3
                           top-1/2
                           -translate-y-1/2
-                          text-orange-400
-                        "
+                          ${
+                            femaleTheme
+                              ? "text-pink-300"
+                              : "text-orange-400"
+                          }
+                        `}
                       />
 
                       <input
@@ -1678,7 +1925,7 @@ function FeedContent() {
                           )
                         }
                         placeholder="e.g. HSR Layout"
-                        className="
+                        className={`
                           w-full
                           h-11
                           pl-10
@@ -1691,9 +1938,13 @@ function FeedContent() {
                           text-sm
                           outline-none
                           placeholder:text-zinc-700
-                          focus:border-orange-500
                           transition
-                        "
+                          ${
+                            femaleTheme
+                              ? "focus:border-pink-300"
+                              : "focus:border-orange-500"
+                          }
+                        `}
                       />
                     </div>
                   </div>
@@ -1718,13 +1969,17 @@ function FeedContent() {
                     <div className="relative">
                       <Route
                         size={16}
-                        className="
+                        className={`
                           absolute
                           left-3
                           top-1/2
                           -translate-y-1/2
-                          text-orange-400
-                        "
+                          ${
+                            femaleTheme
+                              ? "text-pink-300"
+                              : "text-orange-400"
+                          }
+                        `}
                       />
 
                       <input
@@ -1738,7 +1993,7 @@ function FeedContent() {
                           )
                         }
                         placeholder="e.g. Kolli Hills"
-                        className="
+                        className={`
                           w-full
                           h-11
                           pl-10
@@ -1751,9 +2006,13 @@ function FeedContent() {
                           text-sm
                           outline-none
                           placeholder:text-zinc-700
-                          focus:border-orange-500
                           transition
-                        "
+                          ${
+                            femaleTheme
+                              ? "focus:border-pink-300"
+                              : "focus:border-orange-500"
+                          }
+                        `}
                       />
                     </div>
                   </div>
@@ -1778,14 +2037,18 @@ function FeedContent() {
                     <div className="relative">
                       <CalendarDays
                         size={16}
-                        className="
+                        className={`
                           absolute
                           left-3
                           top-1/2
                           -translate-y-1/2
-                          text-orange-400
                           pointer-events-none
-                        "
+                          ${
+                            femaleTheme
+                              ? "text-pink-300"
+                              : "text-orange-400"
+                          }
+                        `}
                       />
 
                       <input
@@ -1796,7 +2059,7 @@ function FeedContent() {
                             e.target.value
                           )
                         }
-                        className="
+                        className={`
                           w-full
                           h-11
                           pl-10
@@ -1808,13 +2071,71 @@ function FeedContent() {
                           text-white
                           text-sm
                           outline-none
-                          focus:border-orange-500
                           transition
-                        "
+                          ${
+                            femaleTheme
+                              ? "focus:border-pink-300"
+                              : "focus:border-orange-500"
+                          }
+                        `}
                       />
                     </div>
                   </div>
                 </div>
+
+                {/* =================================================
+                    FEMALE RIDER FILTER
+                ================================================= */}
+
+                {currentUserGender ===
+                  "Female" && (
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFemaleOnly(
+                          (prev) =>
+                            !prev
+                        )
+                      }
+                      className={`
+                        w-full
+                        sm:w-auto
+                        inline-flex
+                        items-center
+                        justify-center
+                        gap-2
+                        px-4
+                        py-2.5
+                        rounded-xl
+                        border
+                        text-xs
+                        font-black
+                        transition-all
+                        duration-300
+                        ${
+                          femaleOnly
+                            ? "bg-pink-300 text-black border-pink-200 shadow-[0_0_20px_rgba(244,114,182,0.25)]"
+                            : "bg-pink-300/10 text-pink-200 border-pink-300/30 hover:bg-pink-300/20 hover:border-pink-300/50"
+                        }
+                      `}
+                    >
+                      <span className="text-sm">
+                        🌸
+                      </span>
+
+                      <span>
+                        Find Female Riders
+                      </span>
+
+                      {femaleOnly && (
+                        <span className="text-[10px] ml-1">
+                          ✓
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                )}
 
                 {/* FILTER FOOTER */}
 
@@ -1843,20 +2164,21 @@ function FeedContent() {
 
                     {startFilter && (
                       <span
-                        className="
+                        className={`
                           inline-flex
                           items-center
                           gap-1
                           px-2.5
                           py-1
                           rounded-full
-                          bg-orange-500/10
-                          border
-                          border-orange-500/20
-                          text-orange-300
                           text-[10px]
                           font-bold
-                        "
+                          ${
+                            femaleTheme
+                              ? "bg-pink-300/10 border border-pink-300/20 text-pink-200"
+                              : "bg-orange-500/10 border border-orange-500/20 text-orange-300"
+                          }
+                        `}
                       >
                         From:{" "}
                         {startFilter}
@@ -1865,20 +2187,21 @@ function FeedContent() {
 
                     {destinationFilter && (
                       <span
-                        className="
+                        className={`
                           inline-flex
                           items-center
                           gap-1
                           px-2.5
                           py-1
                           rounded-full
-                          bg-orange-500/10
-                          border
-                          border-orange-500/20
-                          text-orange-300
                           text-[10px]
                           font-bold
-                        "
+                          ${
+                            femaleTheme
+                              ? "bg-pink-300/10 border border-pink-300/20 text-pink-200"
+                              : "bg-orange-500/10 border border-orange-500/20 text-orange-300"
+                          }
+                        `}
                       >
                         To:{" "}
                         {destinationFilter}
@@ -1887,20 +2210,21 @@ function FeedContent() {
 
                     {dateFilter && (
                       <span
-                        className="
+                        className={`
                           inline-flex
                           items-center
                           gap-1
                           px-2.5
                           py-1
                           rounded-full
-                          bg-orange-500/10
-                          border
-                          border-orange-500/20
-                          text-orange-300
                           text-[10px]
                           font-bold
-                        "
+                          ${
+                            femaleTheme
+                              ? "bg-pink-300/10 border border-pink-300/20 text-pink-200"
+                              : "bg-orange-500/10 border border-orange-500/20 text-orange-300"
+                          }
+                        `}
                       >
                         Date:{" "}
                         {new Date(
@@ -1913,6 +2237,27 @@ function FeedContent() {
                             year: "numeric",
                           }
                         )}
+                      </span>
+                    )}
+
+                    {femaleOnly && (
+                      <span
+                        className="
+                          inline-flex
+                          items-center
+                          gap-1
+                          px-2.5
+                          py-1
+                          rounded-full
+                          bg-pink-300/10
+                          border
+                          border-pink-300/30
+                          text-pink-200
+                          text-[10px]
+                          font-bold
+                        "
+                      >
+                        🌸 Female Riders
                       </span>
                     )}
                   </div>
@@ -1974,6 +2319,62 @@ function FeedContent() {
         </div>
 
         {/* =================================================
+            FEMALE MODE NOTICE
+        ================================================= */}
+
+        {femaleTheme && (
+          <div
+            className="
+              px-3
+              sm:px-4
+              md:px-6
+              mb-4
+            "
+          >
+            <div
+              className="
+                rounded-xl
+                border
+                border-pink-300/20
+                bg-pink-300/5
+                px-4
+                py-3
+                flex
+                items-center
+                gap-3
+              "
+            >
+              <div
+                className="
+                  w-8
+                  h-8
+                  rounded-full
+                  bg-pink-300/10
+                  border
+                  border-pink-300/20
+                  flex
+                  items-center
+                  justify-center
+                  flex-shrink-0
+                "
+              >
+                🌸
+              </div>
+
+              <div>
+                <p className="text-pink-200 text-xs font-black">
+                  Female Riders
+                </p>
+
+                <p className="text-zinc-500 text-[10px] mt-0.5">
+                  Showing rides hosted by female riders
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =================================================
             URL SEARCH RESULT INFO
         ================================================= */}
 
@@ -1993,15 +2394,33 @@ function FeedContent() {
             requestedDestination ? (
               <>
                 Showing rides from{" "}
-                <span className="text-orange-400 font-semibold">
+                <span
+                  className={
+                    femaleTheme
+                      ? "text-pink-300 font-semibold"
+                      : "text-orange-400 font-semibold"
+                  }
+                >
                   {requestedStartLocation}
                 </span>{" "}
                 in{" "}
-                <span className="text-orange-400 font-semibold">
+                <span
+                  className={
+                    femaleTheme
+                      ? "text-pink-300 font-semibold"
+                      : "text-orange-400 font-semibold"
+                  }
+                >
                   {requestedCity}
                 </span>{" "}
                 to{" "}
-                <span className="text-orange-400 font-semibold">
+                <span
+                  className={
+                    femaleTheme
+                      ? "text-pink-300 font-semibold"
+                      : "text-orange-400 font-semibold"
+                  }
+                >
                   {requestedDestination}
                 </span>
               </>
@@ -2009,18 +2428,36 @@ function FeedContent() {
               requestedDestination ? (
               <>
                 Showing{" "}
-                <span className="text-orange-400 font-semibold">
+                <span
+                  className={
+                    femaleTheme
+                      ? "text-pink-300 font-semibold"
+                      : "text-orange-400 font-semibold"
+                  }
+                >
                   {requestedCity}
                 </span>{" "}
                 rides to{" "}
-                <span className="text-orange-400 font-semibold">
+                <span
+                  className={
+                    femaleTheme
+                      ? "text-pink-300 font-semibold"
+                      : "text-orange-400 font-semibold"
+                  }
+                >
                   {requestedDestination}
                 </span>
               </>
             ) : requestedDestination ? (
               <>
                 Showing rides to{" "}
-                <span className="text-orange-400 font-semibold">
+                <span
+                  className={
+                    femaleTheme
+                      ? "text-pink-300 font-semibold"
+                      : "text-orange-400 font-semibold"
+                  }
+                >
                   {requestedDestination}
                 </span>
               </>
@@ -2066,31 +2503,43 @@ function FeedContent() {
                   overflow-hidden
                   rounded-2xl
                   border-2
-                  border-orange-500/80
                   transition-all
                   duration-500
-                  shadow-[0_0_18px_rgba(249,115,22,0.10)]
+
+                  ${
+                    femaleTheme
+                      ? "border-pink-300/80 shadow-[0_0_18px_rgba(244,114,182,0.12)]"
+                      : "border-orange-500/80 shadow-[0_0_18px_rgba(249,115,22,0.10)]"
+                  }
 
                   ${
                     isExpanded
-                      ? "bg-white/[0.07] shadow-[0_0_28px_rgba(249,115,22,0.18)]"
-                      : "bg-white/[0.035] hover:bg-white/[0.055] hover:border-orange-400"
+                      ? femaleTheme
+                        ? "bg-white/[0.07] shadow-[0_0_28px_rgba(244,114,182,0.20)]"
+                        : "bg-white/[0.07] shadow-[0_0_28px_rgba(249,115,22,0.18)]"
+                      : femaleTheme
+                        ? "bg-white/[0.035] hover:bg-white/[0.055] hover:border-pink-300"
+                        : "bg-white/[0.035] hover:bg-white/[0.055] hover:border-orange-400"
                   }
                 `}
               >
                 {/* CINEMATIC LIGHT */}
 
                 <div
-                  className="
+                  className={`
                     absolute
                     inset-0
                     pointer-events-none
                     bg-gradient-to-r
-                    from-orange-500/[0.08]
+                    ${
+                      femaleTheme
+                        ? "from-pink-300/[0.08]"
+                        : "from-orange-500/[0.08]"
+                    }
                     via-transparent
                     to-white/[0.03]
                     opacity-70
-                  "
+                  `}
                 />
 
                 {/* =================================================
@@ -2169,14 +2618,18 @@ function FeedContent() {
                     )}
 
                     <div
-                      className="
+                      className={`
                         absolute
                         inset-0
                         border-r
-                        border-orange-500/50
                         pointer-events-none
                         z-20
-                      "
+                        ${
+                          femaleTheme
+                            ? "border-pink-300/50"
+                            : "border-orange-500/50"
+                        }
+                      `}
                     />
                   </div>
 
@@ -2223,15 +2676,19 @@ function FeedContent() {
                     </div>
 
                     <div
-                      className="
+                      className={`
                         flex
                         items-center
                         justify-center
                         gap-1.5
                         md:gap-2
                         max-w-full
-                        text-orange-400
-                      "
+                        ${
+                          femaleTheme
+                            ? "text-pink-300"
+                            : "text-orange-400"
+                        }
+                      `}
                     >
                       <Bike
                         size={15}
@@ -2319,15 +2776,19 @@ function FeedContent() {
                     "
                   >
                     <p
-                      className="
+                      className={`
                         text-[8px]
                         sm:text-[9px]
                         md:text-xs
                         uppercase
                         tracking-[0.25em]
-                        text-orange-500
                         mb-1
-                      "
+                        ${
+                          femaleTheme
+                            ? "text-pink-300"
+                            : "text-orange-500"
+                        }
+                      `}
                     >
                       Destination
                     </p>
@@ -2355,7 +2816,7 @@ function FeedContent() {
                     </h2>
 
                     <div
-                      className="
+                      className={`
                         mt-2
                         w-7
                         h-7
@@ -2364,20 +2825,26 @@ function FeedContent() {
                         rounded-full
                         bg-black/60
                         border
-                        border-orange-500/50
                         flex
                         items-center
                         justify-center
                         transition-all
                         duration-300
-                        group-hover:border-orange-500
-                        group-hover:bg-orange-500/10
-                      "
+                        ${
+                          femaleTheme
+                            ? "border-pink-300/50 group-hover:border-pink-300 group-hover:bg-pink-300/10"
+                            : "border-orange-500/50 group-hover:border-orange-500 group-hover:bg-orange-500/10"
+                        }
+                      `}
                     >
                       {isExpanded ? (
                         <ChevronUp
                           size={14}
-                          className="text-orange-500"
+                          className={
+                            femaleTheme
+                              ? "text-pink-300"
+                              : "text-orange-500"
+                          }
                         />
                       ) : (
                         <ChevronDown
@@ -2450,28 +2917,36 @@ function FeedContent() {
                               trip.userImage
                             }
                             alt="Rider"
-                            className="
+                            className={`
                               w-10
                               h-10
                               rounded-full
                               object-cover
                               border
-                              border-orange-500
-                            "
+                              ${
+                                femaleTheme
+                                  ? "border-pink-300"
+                                  : "border-orange-500"
+                              }
+                            `}
                           />
                         ) : (
                           <div
-                            className="
+                            className={`
                               w-10
                               h-10
                               rounded-full
                               bg-zinc-900
                               border
-                              border-orange-500
                               flex
                               items-center
                               justify-center
-                            "
+                              ${
+                                femaleTheme
+                                  ? "border-pink-300"
+                                  : "border-orange-500"
+                              }
+                            `}
                           >
                             👤
                           </div>
@@ -2490,10 +2965,14 @@ function FeedContent() {
                           </p>
 
                           <p
-                            className="
+                            className={`
                               font-bold
-                              text-orange-400
-                            "
+                              ${
+                                femaleTheme
+                                  ? "text-pink-300"
+                                  : "text-orange-400"
+                              }
+                            `}
                           >
                             {trip.userName ||
                               "Rider"}
@@ -2572,13 +3051,17 @@ function FeedContent() {
                         "
                       >
                         <div
-                          className="
+                          className={`
                             flex
                             items-center
                             gap-1.5
-                            text-orange-400
                             mb-1.5
-                          "
+                            ${
+                              femaleTheme
+                                ? "text-pink-300"
+                                : "text-orange-400"
+                            }
+                          `}
                         >
                           <MapPin size={14} />
 
@@ -2619,13 +3102,17 @@ function FeedContent() {
                         "
                       >
                         <div
-                          className="
+                          className={`
                             flex
                             items-center
                             gap-1.5
-                            text-orange-400
                             mb-1.5
-                          "
+                            ${
+                              femaleTheme
+                                ? "text-pink-300"
+                                : "text-orange-400"
+                            }
+                          `}
                         >
                           <Route size={14} />
 
@@ -2667,13 +3154,17 @@ function FeedContent() {
                         "
                       >
                         <div
-                          className="
+                          className={`
                             flex
                             items-center
                             gap-1.5
-                            text-orange-400
                             mb-1.5
-                          "
+                            ${
+                              femaleTheme
+                                ? "text-pink-300"
+                                : "text-orange-400"
+                            }
+                          `}
                         >
                           <CalendarDays
                             size={14}
@@ -2718,13 +3209,17 @@ function FeedContent() {
                       {/* PRICE */}
 
                       <div
-                        className="
-                          bg-orange-500
+                        className={`
                           text-black
                           rounded-xl
                           p-3
                           min-w-0
-                        "
+                          ${
+                            femaleTheme
+                              ? "bg-pink-300"
+                              : "bg-orange-500"
+                          }
+                        `}
                       >
                         <div
                           className="
@@ -2777,13 +3272,17 @@ function FeedContent() {
                       "
                     >
                       <div
-                        className="
+                        className={`
                           flex
                           items-center
                           gap-2
-                          text-orange-400
                           mb-1
-                        "
+                          ${
+                            femaleTheme
+                              ? "text-pink-300"
+                              : "text-orange-400"
+                          }
+                        `}
                       >
                         <Bike size={15} />
 
@@ -2823,14 +3322,18 @@ function FeedContent() {
                         "
                       >
                         <p
-                          className="
-                            text-orange-400
+                          className={`
                             text-xs
                             font-bold
                             mb-2
                             uppercase
                             tracking-wider
-                          "
+                            ${
+                              femaleTheme
+                                ? "text-pink-300"
+                                : "text-orange-400"
+                            }
+                          `}
                         >
                           Ride Story
                         </p>
@@ -2862,14 +3365,18 @@ function FeedContent() {
                         "
                       >
                         <p
-                          className="
-                            text-orange-400
+                          className={`
                             text-xs
                             font-bold
                             mb-2
                             uppercase
                             tracking-wider
-                          "
+                            ${
+                              femaleTheme
+                                ? "text-pink-300"
+                                : "text-orange-400"
+                            }
+                          `}
                         >
                           🗺️ Itinerary
                         </p>
@@ -2963,7 +3470,7 @@ function FeedContent() {
                             trip.id
                           );
                         }}
-                        className="
+                        className={`
                           flex
                           items-center
                           gap-2
@@ -2973,9 +3480,13 @@ function FeedContent() {
                           px-4
                           py-3
                           rounded-full
-                          hover:border-orange-500/50
                           transition
-                        "
+                          ${
+                            femaleTheme
+                              ? "hover:border-pink-300/50"
+                              : "hover:border-orange-500/50"
+                          }
+                        `}
                       >
                         <MessageCircle
                           size={18}
@@ -3080,7 +3591,9 @@ function FeedContent() {
                           ${
                             isAdminView
                               ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                              : "bg-orange-500 hover:bg-orange-400 text-black shadow-lg shadow-orange-500/20 hover:scale-105"
+                              : femaleTheme
+                                ? "bg-pink-300 hover:bg-pink-200 text-black shadow-lg shadow-pink-300/20 hover:scale-105"
+                                : "bg-orange-500 hover:bg-orange-400 text-black shadow-lg shadow-orange-500/20 hover:scale-105"
                           }
                         `}
                       >
@@ -3144,7 +3657,7 @@ function FeedContent() {
                           <input
                             type="text"
                             placeholder="Write a comment and press Enter..."
-                            className="
+                            className={`
                               w-full
                               p-4
                               rounded-xl
@@ -3153,8 +3666,12 @@ function FeedContent() {
                               border-zinc-700
                               text-white
                               outline-none
-                              focus:border-orange-500
-                            "
+                              ${
+                                femaleTheme
+                                  ? "focus:border-pink-300"
+                                  : "focus:border-orange-500"
+                              }
+                            `}
                             onKeyDown={(e) => {
                               if (
                                 e.key ===
@@ -3300,7 +3817,9 @@ function FeedContent() {
                     mb-5
                   "
                 >
-                  🏍️
+                  {femaleTheme
+                    ? "🌸"
+                    : "🏍️"}
                 </div>
 
                 <h2
@@ -3309,7 +3828,9 @@ function FeedContent() {
                     font-black
                   "
                 >
-                  No matching rides
+                  {femaleTheme
+                    ? "No female rider trips"
+                    : "No matching rides"}
                 </h2>
 
                 <p
@@ -3320,9 +3841,9 @@ function FeedContent() {
                     mx-auto
                   "
                 >
-                  We couldn't find a ride
-                  matching your selected
-                  filters.
+                  {femaleTheme
+                    ? "We couldn't find any rides hosted by female riders matching your selected filters."
+                    : "We couldn't find a ride matching your selected filters."}
                 </p>
 
                 {hasActiveFilters && (
@@ -3331,7 +3852,7 @@ function FeedContent() {
                     onClick={
                       clearFilters
                     }
-                    className="
+                    className={`
                       mt-5
                       inline-flex
                       items-center
@@ -3339,12 +3860,15 @@ function FeedContent() {
                       px-5
                       py-3
                       rounded-full
-                      bg-orange-500
                       text-black
                       font-black
-                      hover:bg-orange-400
                       transition
-                    "
+                      ${
+                        femaleTheme
+                          ? "bg-pink-300 hover:bg-pink-200"
+                          : "bg-orange-500 hover:bg-orange-400"
+                      }
+                    `}
                   >
                     <X size={16} />
                     Clear Filters
