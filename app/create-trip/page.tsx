@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PageBackground from "../components/PageBackground";
 
 import {
@@ -248,104 +248,1269 @@ const INDIAN_CITIES = [
 
 /*
 =========================================================
-DESTINATION VERIFICATION RADIUS
+CONSTANTS
 =========================================================
 */
 
 const DESTINATION_RADIUS_KM = 20;
 
+const BENGALURU = {
+  lat: 12.9716,
+  lng: 77.5946,
+};
+
 /*
 =========================================================
-GEOCODE DESTINATION
+GOOGLE MAPS LOADER
 =========================================================
 */
 
-async function geocodeDestination(
-  destinationName: string
-): Promise<{
-  latitude: number;
-  longitude: number;
-  formattedAddress: string;
-} | null> {
-  try {
-    const response = await fetch(
-      "/api/geocode",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type":
-            "application/json",
-        },
-        body: JSON.stringify({
-          address:
-            destinationName,
-        }),
-      }
+let googleMapsPromise: Promise<void> | null = null;
+
+function loadGoogleMaps(): Promise<void> {
+  if (typeof window === "undefined") {
+    return Promise.reject(
+      new Error(
+        "Google Maps can only load in the browser."
+      )
     );
-
-    const data =
-      await response.json();
-
-    if (
-      !response.ok ||
-      !data.success ||
-      typeof data.latitude !==
-        "number" ||
-      typeof data.longitude !==
-        "number"
-    ) {
-      console.error(
-        "Geocoding failed:",
-        data
-      );
-
-      return null;
-    }
-
-    return {
-      latitude:
-        data.latitude,
-      longitude:
-        data.longitude,
-      formattedAddress:
-        data.formattedAddress ||
-        destinationName,
-    };
-  } catch (error) {
-    console.error(
-      "Geocoding request failed:",
-      error
-    );
-
-    return null;
   }
+
+  if (
+    (window as any).google?.maps?.importLibrary
+  ) {
+    return Promise.resolve();
+  }
+
+  if (googleMapsPromise) {
+    return googleMapsPromise;
+  }
+
+  googleMapsPromise = new Promise<void>(
+    (resolve, reject) => {
+      const apiKey =
+        process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+      if (!apiKey) {
+        reject(
+          new Error(
+            "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is missing. Check your .env.local file."
+          )
+        );
+
+        return;
+      }
+
+      const callbackName =
+        "ridemateGoogleMapsCallback";
+
+      (
+        window as any
+      )[callbackName] = () => {
+        console.log(
+          "✅ Google Maps JavaScript API loaded."
+        );
+
+        if (
+          (window as any).google?.maps?.importLibrary
+        ) {
+          resolve();
+        } else {
+          reject(
+            new Error(
+              "Google Maps callback fired, but the Maps API is unavailable."
+            )
+          );
+        }
+      };
+
+      const oldScript =
+        document.querySelector(
+          'script[data-ridemate-google-maps="true"]'
+        );
+
+      if (oldScript) {
+        oldScript.remove();
+      }
+
+      const script =
+        document.createElement("script");
+
+      script.src =
+        `https://maps.googleapis.com/maps/api/js` +
+        `?key=${encodeURIComponent(apiKey)}` +
+        `&v=weekly` +
+        `&loading=async` +
+        `&callback=${callbackName}`;
+
+      script.async = true;
+      script.defer = true;
+
+      script.dataset.ridemateGoogleMaps =
+        "true";
+
+      script.onerror = () => {
+        console.error(
+          "❌ Google Maps script failed to load."
+        );
+
+        reject(
+          new Error(
+            "Google Maps failed to load. Check your API key, website restrictions, billing, and enabled APIs."
+          )
+        );
+      };
+
+      document.head.appendChild(script);
+    }
+  );
+
+  return googleMapsPromise;
 }
 
 /*
 =========================================================
-CREATE TRIP
+LOCATION TYPE
+=========================================================
+*/
+
+type LocationData = {
+  address: string;
+  latitude: number;
+  longitude: number;
+  placeId?: string;
+};
+
+/*
+=========================================================
+LOCATION PICKER PROPS
+=========================================================
+*/
+
+type LocationPickerProps = {
+  open: boolean;
+  title: string;
+  initialLocation: LocationData | null;
+  onClose: () => void;
+  onConfirm: (
+    location: LocationData
+  ) => void;
+};
+
+/*
+=========================================================
+LOCATION PICKER
+=========================================================
+*/
+
+function LocationPicker({
+  open,
+  title,
+  initialLocation,
+  onClose,
+  onConfirm,
+}: LocationPickerProps) {
+  const mapContainerRef =
+    useRef<HTMLDivElement | null>(null);
+
+  const autocompleteContainerRef =
+    useRef<HTMLDivElement | null>(null);
+
+  const mapRef =
+    useRef<any>(null);
+
+  const markerRef =
+    useRef<any>(null);
+
+  const geocoderRef =
+    useRef<any>(null);
+
+  const autocompleteRef =
+    useRef<any>(null);
+
+  const [
+    selectedLocation,
+    setSelectedLocation,
+  ] = useState<LocationData | null>(
+    initialLocation
+  );
+
+  const [
+    loadingMap,
+    setLoadingMap,
+  ] = useState(false);
+
+  const [
+    mapError,
+    setMapError,
+  ] = useState("");
+
+  const [
+    reverseGeocoding,
+    setReverseGeocoding,
+  ] = useState(false);
+
+  /*
+  =========================================================
+  RESET WHEN OPENED
+  =========================================================
+  */
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setSelectedLocation(
+      initialLocation
+    );
+
+    setMapError("");
+  }, [
+    open,
+    initialLocation,
+  ]);
+
+  /*
+  =========================================================
+  INITIALIZE MAP
+  =========================================================
+  */
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const initializeMap =
+      async () => {
+        try {
+          setLoadingMap(true);
+          setMapError("");
+
+          await loadGoogleMaps();
+
+          if (cancelled) {
+            return;
+          }
+
+          const google =
+            (window as any).google;
+
+          if (
+            !google?.maps?.importLibrary
+          ) {
+            throw new Error(
+              "Google Maps is not available."
+            );
+          }
+
+          /*
+          =================================================
+          LOAD LIBRARIES
+          =================================================
+          */
+
+          const [
+            mapsLibrary,
+            placesLibrary,
+            markerLibrary,
+            geocodingLibrary,
+          ] =
+            await Promise.all([
+              google.maps.importLibrary(
+                "maps"
+              ),
+              google.maps.importLibrary(
+                "places"
+              ),
+              google.maps.importLibrary(
+                "marker"
+              ),
+              google.maps.importLibrary(
+                "geocoding"
+              ),
+            ]);
+
+          if (cancelled) {
+            return;
+          }
+
+          const Map =
+            mapsLibrary.Map;
+
+          const PlaceAutocompleteElement =
+            placesLibrary.PlaceAutocompleteElement;
+
+          const AdvancedMarkerElement =
+            markerLibrary.AdvancedMarkerElement;
+
+          const Geocoder =
+            geocodingLibrary.Geocoder;
+
+          if (
+            !mapContainerRef.current ||
+            !autocompleteContainerRef.current
+          ) {
+            return;
+          }
+
+          /*
+          =================================================
+          INITIAL POSITION
+          =================================================
+          */
+
+          const startingPosition =
+            initialLocation
+              ? {
+                  lat:
+                    initialLocation.latitude,
+                  lng:
+                    initialLocation.longitude,
+                }
+              : BENGALURU;
+
+          /*
+          =================================================
+          CREATE MAP
+          =================================================
+          */
+
+          const map =
+            new Map(
+              mapContainerRef.current,
+              {
+                center:
+                  startingPosition,
+
+                zoom:
+                  initialLocation
+                    ? 15
+                    : 11,
+
+                mapId:
+                  "DEMO_MAP_ID",
+
+                mapTypeControl:
+                  false,
+
+                streetViewControl:
+                  false,
+
+                fullscreenControl:
+                  true,
+
+                gestureHandling:
+                  "greedy",
+              }
+            );
+
+          mapRef.current =
+            map;
+
+          /*
+          =================================================
+          GEOCODER
+          =================================================
+          */
+
+          const geocoder =
+            new Geocoder();
+
+          geocoderRef.current =
+            geocoder;
+
+          /*
+          =================================================
+          MARKER
+          =================================================
+          */
+
+          const marker =
+            new AdvancedMarkerElement(
+              {
+                map,
+
+                position:
+                  startingPosition,
+
+                gmpDraggable:
+                  true,
+
+                title:
+                  "RideMate location",
+              }
+            );
+
+          markerRef.current =
+            marker;
+
+          /*
+          =================================================
+          UPDATE LOCATION
+          =================================================
+          */
+
+          const updateLocation =
+            ({
+              latitude,
+              longitude,
+              address,
+              placeId,
+            }: LocationData) => {
+              const location = {
+                lat: latitude,
+                lng: longitude,
+              };
+
+              marker.position =
+                location;
+
+              map.setCenter(
+                location
+              );
+
+              map.setZoom(16);
+
+              setSelectedLocation({
+                latitude,
+                longitude,
+                address,
+                placeId,
+              });
+            };
+
+          /*
+          =================================================
+          REVERSE GEOCODING
+          =================================================
+          */
+
+          const reverseGeocode =
+            async (
+              latitude: number,
+              longitude: number
+            ) => {
+              try {
+                setReverseGeocoding(
+                  true
+                );
+
+                setMapError("");
+
+                const response =
+                  await geocoder.geocode(
+                    {
+                      location: {
+                        lat: latitude,
+                        lng: longitude,
+                      },
+                    }
+                  );
+
+                const result =
+                  response.results?.[0];
+
+                if (!result) {
+                  throw new Error(
+                    "No address found."
+                  );
+                }
+
+                updateLocation({
+                  latitude,
+                  longitude,
+                  address:
+                    result.formatted_address ||
+                    `${latitude.toFixed(
+                      6
+                    )}, ${longitude.toFixed(
+                      6
+                    )}`,
+                  placeId:
+                    result.place_id ||
+                    "",
+                });
+              } catch (error) {
+                console.error(
+                  "Reverse geocoding failed:",
+                  error
+                );
+
+                setMapError(
+                  "Could not identify this location. Try moving the pin slightly."
+                );
+              } finally {
+                setReverseGeocoding(
+                  false
+                );
+              }
+            };
+
+          /*
+          =================================================
+          MAP CLICK
+          =================================================
+          */
+
+          map.addListener(
+            "click",
+            (event: any) => {
+              if (
+                event.latLng
+              ) {
+                void reverseGeocode(
+                  event.latLng.lat(),
+                  event.latLng.lng()
+                );
+              }
+            }
+          );
+
+          /*
+          =================================================
+          MARKER DRAG
+          =================================================
+          */
+
+          marker.addListener(
+            "dragend",
+            async () => {
+              const position =
+                marker.position;
+
+              if (!position) {
+                return;
+              }
+
+              const latitude =
+                typeof position.lat ===
+                "function"
+                  ? position.lat()
+                  : position.lat;
+
+              const longitude =
+                typeof position.lng ===
+                "function"
+                  ? position.lng()
+                  : position.lng;
+
+              if (
+                typeof latitude !==
+                  "number" ||
+                typeof longitude !==
+                  "number"
+              ) {
+                return;
+              }
+
+              await reverseGeocode(
+                latitude,
+                longitude
+              );
+            }
+          );
+
+          /*
+          =================================================
+          GOOGLE PLACES AUTOCOMPLETE
+          =================================================
+          */
+
+          autocompleteContainerRef.current.innerHTML =
+            "";
+
+          const autocomplete =
+            new PlaceAutocompleteElement();
+
+          autocompleteRef.current =
+            autocomplete;
+
+          (
+            autocomplete as any
+          ).includedRegionCodes = [
+            "in",
+          ];
+
+          (
+            autocomplete as any
+          ).placeholder =
+            "Search a place, road, area or landmark...";
+
+          /*
+          =================================================
+          KEEP SEARCH ABOVE MAP
+          =================================================
+          */
+
+          const autocompleteElement =
+            autocomplete as HTMLElement;
+
+          autocompleteElement.style.width =
+            "100%";
+
+          autocompleteElement.style.position =
+            "relative";
+
+          autocompleteElement.style.zIndex =
+            "9999";
+
+          autocompleteElement.style.display =
+            "block";
+
+          autocompleteContainerRef.current.appendChild(
+            autocomplete
+          );
+
+          /*
+          =================================================
+          PLACE SELECT
+          =================================================
+          */
+
+          autocomplete.addEventListener(
+            "gmp-select",
+            async (
+              event: any
+            ) => {
+              try {
+                setMapError("");
+
+                const placePrediction =
+                  event.placePrediction;
+
+                if (
+                  !placePrediction
+                ) {
+                  return;
+                }
+
+                const place =
+                  placePrediction.toPlace();
+
+                await place.fetchFields({
+                  fields: [
+                    "displayName",
+                    "formattedAddress",
+                    "location",
+                  ],
+                });
+
+                if (
+                  !place.location
+                ) {
+                  setMapError(
+                    "Google could not find exact coordinates for this place."
+                  );
+
+                  return;
+                }
+
+                const latitude =
+                  place.location.lat();
+
+                const longitude =
+                  place.location.lng();
+
+                const address =
+                  place.formattedAddress ||
+                  place.displayName ||
+                  "Selected location";
+
+                updateLocation({
+                  latitude,
+                  longitude,
+                  address,
+                  placeId:
+                    place.id ||
+                    "",
+                });
+
+                /*
+                =================================================
+                FIT MAP TO PLACE
+                =================================================
+                */
+
+                if (
+                  place.viewport
+                ) {
+                  map.fitBounds(
+                    place.viewport
+                  );
+                }
+              } catch (error) {
+                console.error(
+                  "Place selection failed:",
+                  error
+                );
+
+                setMapError(
+                  "Could not select this place. Please try again."
+                );
+              }
+            }
+          );
+
+          /*
+          =================================================
+          DONE
+          =================================================
+          */
+
+          setLoadingMap(false);
+        } catch (error) {
+          console.error(
+            "Google Maps initialization failed:",
+            error
+          );
+
+          setMapError(
+            error instanceof Error
+              ? error.message
+              : "Google Maps could not be loaded."
+          );
+
+          setLoadingMap(false);
+        }
+      };
+
+    void initializeMap();
+
+    return () => {
+      cancelled = true;
+
+      if (
+        autocompleteContainerRef.current
+      ) {
+        autocompleteContainerRef.current.innerHTML =
+          "";
+      }
+
+      mapRef.current =
+        null;
+
+      markerRef.current =
+        null;
+
+      geocoderRef.current =
+        null;
+
+      autocompleteRef.current =
+        null;
+    };
+  }, [open]);
+
+  /*
+  =========================================================
+  DON'T RENDER
+  =========================================================
+  */
+
+  if (!open) {
+    return null;
+  }
+
+  /*
+  =========================================================
+  MODAL
+  =========================================================
+  */
+
+  return (
+    <div
+      className="
+        fixed
+        inset-0
+        z-[100]
+        bg-black/80
+        backdrop-blur-sm
+        flex
+        items-center
+        justify-center
+        p-3
+        sm:p-5
+      "
+    >
+      <div
+        className="
+          relative
+          w-full
+          max-w-5xl
+          bg-zinc-950
+          border
+          border-zinc-800
+          rounded-3xl
+          overflow-visible
+          shadow-2xl
+          z-[100]
+        "
+      >
+        {/* HEADER */}
+
+        <div
+          className="
+            flex
+            items-center
+            justify-between
+            gap-4
+            p-4
+            sm:p-5
+            border-b
+            border-zinc-800
+          "
+        >
+          <div>
+            <h2
+              className="
+                text-xl
+                sm:text-2xl
+                font-black
+                text-white
+              "
+            >
+              📍 {title}
+            </h2>
+
+            <p
+              className="
+                text-zinc-500
+                text-xs
+                sm:text-sm
+                mt-1
+              "
+            >
+              Search for a place or tap the map.
+              You can also drag the pin.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="
+              w-10
+              h-10
+              rounded-full
+              bg-zinc-800
+              hover:bg-zinc-700
+              text-white
+              text-xl
+              flex
+              items-center
+              justify-center
+              shrink-0
+            "
+          >
+            ×
+          </button>
+        </div>
+
+        {/* SEARCH */}
+
+        <div
+          className="
+            relative
+            z-[1000]
+            p-4
+            sm:p-5
+            pb-3
+          "
+        >
+          <div
+            className="
+              relative
+              z-[1000]
+              bg-white
+              rounded-2xl
+              overflow-visible
+            "
+          >
+            <div
+              ref={
+                autocompleteContainerRef
+              }
+              className="
+                relative
+                z-[1000]
+                w-full
+                overflow-visible
+              "
+            />
+          </div>
+        </div>
+
+        {/* MAP */}
+
+        <div
+          className="
+            relative
+            z-0
+            px-4
+            sm:px-5
+          "
+        >
+          <div
+            className="
+              relative
+              w-full
+              h-[360px]
+              sm:h-[450px]
+              rounded-2xl
+              overflow-hidden
+              border
+              border-zinc-800
+            "
+          >
+            <div
+              ref={
+                mapContainerRef
+              }
+              className="
+                absolute
+                inset-0
+              "
+            />
+
+            {loadingMap && (
+              <div
+                className="
+                  absolute
+                  inset-0
+                  bg-zinc-950/80
+                  flex
+                  items-center
+                  justify-center
+                  z-10
+                "
+              >
+                <div
+                  className="
+                    text-center
+                    text-white
+                  "
+                >
+                  <div
+                    className="
+                      text-3xl
+                      mb-2
+                    "
+                  >
+                    🗺️
+                  </div>
+
+                  <p className="font-bold">
+                    Loading Google Maps...
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* SELECTED LOCATION */}
+
+        <div
+          className="
+            p-4
+            sm:p-5
+          "
+        >
+          {mapError && (
+            <div
+              className="
+                bg-red-500/10
+                border
+                border-red-500/30
+                text-red-300
+                rounded-xl
+                p-3
+                text-sm
+                mb-3
+              "
+            >
+              ⚠️ {mapError}
+            </div>
+          )}
+
+          {reverseGeocoding && (
+            <div
+              className="
+                bg-orange-500/10
+                border
+                border-orange-500/20
+                text-orange-300
+                rounded-xl
+                p-3
+                text-sm
+                mb-3
+              "
+            >
+              📍 Identifying selected location...
+            </div>
+          )}
+
+          {selectedLocation ? (
+            <div
+              className="
+                bg-orange-500/10
+                border
+                border-orange-500/30
+                rounded-2xl
+                p-4
+                mb-4
+              "
+            >
+              <p
+                className="
+                  text-orange-400
+                  text-[10px]
+                  uppercase
+                  tracking-widest
+                  font-black
+                  mb-1
+                "
+              >
+                Selected Location
+              </p>
+
+              <p
+                className="
+                  text-white
+                  font-bold
+                  text-sm
+                  sm:text-base
+                "
+              >
+                📍 {selectedLocation.address}
+              </p>
+
+              <p
+                className="
+                  text-zinc-500
+                  text-xs
+                  mt-2
+                "
+              >
+                {selectedLocation.latitude.toFixed(
+                  6
+                )}
+                ,{" "}
+                {selectedLocation.longitude.toFixed(
+                  6
+                )}
+              </p>
+            </div>
+          ) : (
+            <div
+              className="
+                bg-zinc-900
+                border
+                border-zinc-800
+                rounded-2xl
+                p-4
+                mb-4
+                text-zinc-400
+                text-sm
+              "
+            >
+              Search for a place or tap the map
+              to select a location.
+            </div>
+          )}
+
+          {/* ACTIONS */}
+
+          <div
+            className="
+              flex
+              flex-col-reverse
+              sm:flex-row
+              gap-3
+            "
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              className="
+                flex-1
+                py-3.5
+                rounded-2xl
+                bg-zinc-800
+                hover:bg-zinc-700
+                text-white
+                font-bold
+              "
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              disabled={
+                !selectedLocation ||
+                reverseGeocoding
+              }
+              onClick={() => {
+                if (
+                  selectedLocation
+                ) {
+                  onConfirm(
+                    selectedLocation
+                  );
+                }
+              }}
+              className="
+                flex-1
+                py-3.5
+                rounded-2xl
+                bg-orange-500
+                hover:bg-orange-400
+                disabled:opacity-40
+                disabled:cursor-not-allowed
+                text-black
+                font-black
+              "
+            >
+              ✅ Confirm Location
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/*
+=========================================================
+CREATE TRIP PAGE
 =========================================================
 */
 
 function CreateTripContent() {
-  const router = useRouter();
+  const router =
+    useRouter();
 
-  const [editId, setEditId] =
-    useState<string | null>(null);
+  const [
+    editId,
+    setEditId,
+  ] = useState<string | null>(null);
 
-  const [rideType, setRideType] =
-    useState<
-      "individual" | "group"
-    >("individual");
+  const isEditing =
+    !!editId;
+
+  const [
+    rideType,
+    setRideType,
+  ] = useState<
+    "individual" | "group"
+  >("individual");
+
+  const [
+    tripImage,
+    setTripImage,
+  ] = useState("");
+
+  const [
+    destination,
+    setDestination,
+  ] = useState("");
+
+  const [
+    startLocation,
+    setStartLocation,
+  ] = useState("");
+
+  const [
+    startCity,
+    setStartCity,
+  ] = useState("");
+
+  const [
+    bike,
+    setBike,
+  ] = useState("");
+
+  const [
+    caption,
+    setCaption,
+  ] = useState("");
+
+  const [
+    distance,
+    setDistance,
+  ] = useState("");
+
+  const [
+    distanceKm,
+    setDistanceKm,
+  ] = useState<number | null>(null);
+
+  const [
+    tripDate,
+    setTripDate,
+  ] = useState("");
+
+  const [
+    itinerary,
+    setItinerary,
+  ] = useState("");
+
+  const [
+    tripPrice,
+    setTripPrice,
+  ] = useState("");
+
+  const [
+    startLocationData,
+    setStartLocationData,
+  ] = useState<LocationData | null>(
+    null
+  );
+
+  const [
+    destinationLocationData,
+    setDestinationLocationData,
+  ] =
+    useState<LocationData | null>(
+      null
+    );
+
+  const [
+    locationPickerOpen,
+    setLocationPickerOpen,
+  ] = useState(false);
+
+  const [
+    locationPickerType,
+    setLocationPickerType,
+  ] = useState<
+    "start" | "destination"
+  >("start");
+
+  const [
+    savingTrip,
+    setSavingTrip,
+  ] = useState(false);
+
+  const [
+    deletingTrip,
+    setDeletingTrip,
+  ] = useState(false);
+
+  const [
+    calculatingDistance,
+    setCalculatingDistance,
+  ] = useState(false);
 
   /*
   =========================================================
-  PROFILE IMAGE
+  LOAD PROFILE IMAGE
   =========================================================
   */
-
-  const [tripImage, setTripImage] =
-    useState("");
 
   useEffect(() => {
     const savedUser =
@@ -353,15 +1518,26 @@ function CreateTripContent() {
         "ridemateUser"
       );
 
-    if (savedUser) {
+    if (!savedUser) {
+      return;
+    }
+
+    try {
       const user =
-        JSON.parse(savedUser);
+        JSON.parse(
+          savedUser
+        );
 
       if (user.image) {
         setTripImage(
           user.image
         );
       }
+    } catch (error) {
+      console.error(
+        "Could not load saved user:",
+        error
+      );
     }
   }, []);
 
@@ -382,70 +1558,204 @@ function CreateTripContent() {
     );
   }, []);
 
-  const isEditing =
-    !!editId;
-
   /*
   =========================================================
-  FORM STATES
+  CALCULATE MOTORCYCLE ROAD DISTANCE
   =========================================================
   */
 
-  const [destination, setDestination] =
-    useState("");
+  const calculateRoadDistance =
+    async (
+      start: LocationData,
+      destination: LocationData
+    ) => {
+      try {
+        setCalculatingDistance(
+          true
+        );
 
-  const [startLocation, setStartLocation] =
-    useState("");
+        await loadGoogleMaps();
 
-  const [startCity, setStartCity] =
-    useState("");
+        const google =
+          (window as any).google;
 
-  const [bike, setBike] =
-    useState("");
+        if (
+          !google?.maps?.importLibrary
+        ) {
+          throw new Error(
+            "Google Maps is not available."
+          );
+        }
 
-  const [caption, setCaption] =
-    useState("");
+        /*
+        =====================================================
+        LOAD ROUTES LIBRARY
+        =====================================================
+        */
 
-  const [distance, setDistance] =
-    useState("");
+        const routesLibrary =
+          await google.maps.importLibrary(
+            "routes"
+          );
 
-  const [tripDate, setTripDate] =
-    useState("");
+        const Route =
+          routesLibrary.Route;
 
-  const [itinerary, setItinerary] =
-    useState("");
+        if (
+          !Route?.computeRoutes
+        ) {
+          throw new Error(
+            "Google Routes API is unavailable."
+          );
+        }
 
-  const [tripPrice, setTripPrice] =
-    useState("");
+        /*
+        =====================================================
+        MOTORCYCLE ROUTE
+        =====================================================
+        */
+
+        const result =
+          await Route.computeRoutes({
+            origin: {
+              lat:
+                start.latitude,
+              lng:
+                start.longitude,
+            },
+
+            destination: {
+              lat:
+                destination.latitude,
+              lng:
+                destination.longitude,
+            },
+
+            /*
+            IMPORTANT:
+            TWO_WHEELER keeps this as
+            motorcycle routing.
+            */
+
+            travelMode:
+              "TWO_WHEELER",
+
+            routingPreference:
+              "TRAFFIC_UNAWARE",
+
+            /*
+            IMPORTANT:
+            No "units" property here.
+            Google returns distanceMeters.
+            */
+
+            fields: [
+              "distanceMeters",
+              "durationMillis",
+            ],
+          });
+
+        /*
+        =====================================================
+        GET ROUTE
+        =====================================================
+        */
+
+        const route =
+          result?.routes?.[0];
+
+        if (
+          !route ||
+          typeof route.distanceMeters !==
+            "number"
+        ) {
+          throw new Error(
+            "No motorcycle route was found between these locations."
+          );
+        }
+
+        /*
+        =====================================================
+        METERS → KILOMETERS
+        =====================================================
+        */
+
+        const km =
+          route.distanceMeters /
+          1000;
+
+        const roundedKm =
+          Number(
+            km.toFixed(1)
+          );
+
+        setDistanceKm(
+          roundedKm
+        );
+
+        setDistance(
+          `${roundedKm} km`
+        );
+
+        console.log(
+          "🏍️ Motorcycle road distance:",
+          roundedKm,
+          "km"
+        );
+
+        return roundedKm;
+      } catch (error) {
+        console.error(
+          "Route calculation failed:",
+          error
+        );
+
+        setDistance("");
+        setDistanceKm(null);
+
+        throw error;
+      } finally {
+        setCalculatingDistance(
+          false
+        );
+      }
+    };
 
   /*
   =========================================================
-  DELETE STATE
+  RECALCULATE WHEN LOCATIONS CHANGE
   =========================================================
   */
 
-  const [deletingTrip, setDeletingTrip] =
-    useState(false);
+  useEffect(() => {
+    if (
+      !startLocationData ||
+      !destinationLocationData
+    ) {
+      return;
+    }
+
+    void calculateRoadDistance(
+      startLocationData,
+      destinationLocationData
+    );
+  }, [
+    startLocationData,
+    destinationLocationData,
+  ]);
 
   /*
   =========================================================
-  GEOCODING STATE
-  =========================================================
-  */
-
-  const [savingTrip, setSavingTrip] =
-    useState(false);
-
-  /*
-  =========================================================
-  LOAD EXISTING TRIP WHEN EDITING
+  LOAD EXISTING TRIP
   =========================================================
   */
 
   useEffect(() => {
     const loadTrip =
       async () => {
-        if (!editId) return;
+        if (!editId) {
+          return;
+        }
 
         try {
           const snap =
@@ -502,6 +1812,15 @@ function CreateTripContent() {
               ""
           );
 
+          if (
+            typeof trip.distanceKm ===
+            "number"
+          ) {
+            setDistanceKm(
+              trip.distanceKm
+            );
+          }
+
           setTripDate(
             trip.tripDate ||
               ""
@@ -521,6 +1840,66 @@ function CreateTripContent() {
             trip.rideType ||
               "individual"
           );
+
+          /*
+          ===================================================
+          LOAD START LOCATION
+          ===================================================
+          */
+
+          if (
+            typeof trip.startLat ===
+              "number" &&
+            typeof trip.startLng ===
+              "number"
+          ) {
+            setStartLocationData({
+              latitude:
+                trip.startLat,
+
+              longitude:
+                trip.startLng,
+
+              address:
+                trip.startFormattedAddress ||
+                trip.startLocation ||
+                "",
+
+              placeId:
+                trip.startPlaceId ||
+                "",
+            });
+          }
+
+          /*
+          ===================================================
+          LOAD DESTINATION
+          ===================================================
+          */
+
+          if (
+            typeof trip.destinationLat ===
+              "number" &&
+            typeof trip.destinationLng ===
+              "number"
+          ) {
+            setDestinationLocationData({
+              latitude:
+                trip.destinationLat,
+
+              longitude:
+                trip.destinationLng,
+
+              address:
+                trip.destinationFormattedAddress ||
+                trip.destination ||
+                "",
+
+              placeId:
+                trip.destinationPlaceId ||
+                "",
+            });
+          }
         } catch (error) {
           console.error(
             "Failed to load trip:",
@@ -529,8 +1908,68 @@ function CreateTripContent() {
         }
       };
 
-    loadTrip();
-  }, [editId, router]);
+    void loadTrip();
+  }, [
+    editId,
+    router,
+  ]);
+
+  /*
+  =========================================================
+  OPEN LOCATION PICKER
+  =========================================================
+  */
+
+  const openLocationPicker =
+    (
+      type:
+        | "start"
+        | "destination"
+    ) => {
+      setLocationPickerType(
+        type
+      );
+
+      setLocationPickerOpen(
+        true
+      );
+    };
+
+  /*
+  =========================================================
+  CONFIRM LOCATION
+  =========================================================
+  */
+
+  const handleLocationConfirm =
+    (
+      location: LocationData
+    ) => {
+      if (
+        locationPickerType ===
+        "start"
+      ) {
+        setStartLocationData(
+          location
+        );
+
+        setStartLocation(
+          location.address
+        );
+      } else {
+        setDestinationLocationData(
+          location
+        );
+
+        setDestination(
+          location.address
+        );
+      }
+
+      setLocationPickerOpen(
+        false
+      );
+    };
 
   /*
   =========================================================
@@ -545,11 +1984,14 @@ function CreateTripContent() {
       }
 
       try {
+        const savedUser =
+          localStorage.getItem(
+            "ridemateUser"
+          );
+
         const user =
           JSON.parse(
-            localStorage.getItem(
-              "ridemateUser"
-            ) || "{}"
+            savedUser || "{}"
           );
 
         if (!user.name) {
@@ -562,11 +2004,13 @@ function CreateTripContent() {
 
         /*
         =====================================================
-        MAKE SURE CITY IS SELECTED
+        START CITY
         =====================================================
         */
 
-        if (!startCity.trim()) {
+        if (
+          !startCity.trim()
+        ) {
           alert(
             "Please select your starting city."
           );
@@ -574,51 +2018,186 @@ function CreateTripContent() {
           return;
         }
 
-        if (!startLocation.trim()) {
-          alert(
-            "Please enter your starting location."
-          );
-
-          return;
-        }
-
-        if (!destination.trim()) {
-          alert(
-            "Please enter your destination."
-          );
-
-          return;
-        }
-
-        setSavingTrip(true);
-
         /*
         =====================================================
-        GEOCODE DESTINATION
+        START LOCATION
         =====================================================
         */
 
-        const geocodedDestination =
-          await geocodeDestination(
-            destination.trim()
-          );
-
-        if (!geocodedDestination) {
+        if (
+          !startLocationData
+        ) {
           alert(
-            "❌ We could not verify this destination.\n\nPlease enter a more specific destination, for example:\n\nBisle Ghat, Karnataka\nNandi Hills, Karnataka\nCoorg, Karnataka"
+            "📍 Please select your exact starting location using the map."
           );
-
-          setSavingTrip(false);
 
           return;
         }
 
-        console.log(
-          "Destination geocoded:",
-          geocodedDestination
+        /*
+        =====================================================
+        DESTINATION
+        =====================================================
+        */
+
+        if (
+          !destinationLocationData
+        ) {
+          alert(
+            "📍 Please select your destination using the map."
+          );
+
+          return;
+        }
+
+        /*
+        =====================================================
+        BIKE
+        =====================================================
+        */
+
+        if (
+          !bike.trim()
+        ) {
+          alert(
+            "Please enter your bike name."
+          );
+
+          return;
+        }
+
+        /*
+        =====================================================
+        DATE
+        =====================================================
+        */
+
+        if (!tripDate) {
+          alert(
+            "Please select your trip date and time."
+          );
+
+          return;
+        }
+
+        setSavingTrip(
+          true
         );
 
-        let tripData: any;
+        /*
+        =====================================================
+        FINAL DISTANCE CALCULATION
+        =====================================================
+        */
+
+        const finalDistanceKm =
+          await calculateRoadDistance(
+            startLocationData,
+            destinationLocationData
+          );
+
+        if (
+          typeof finalDistanceKm !==
+            "number" ||
+          finalDistanceKm <=
+            0
+        ) {
+          throw new Error(
+            "Could not calculate route distance."
+          );
+        }
+
+        /*
+        =====================================================
+        TRIP DATA
+        =====================================================
+        */
+
+        const tripData: any = {
+          status:
+            "upcoming",
+
+          rideType,
+
+          /*
+          DESTINATION
+          */
+
+          destination:
+            destinationLocationData.address,
+
+          destinationLat:
+            destinationLocationData.latitude,
+
+          destinationLng:
+            destinationLocationData.longitude,
+
+          destinationRadiusKm:
+            DESTINATION_RADIUS_KM,
+
+          destinationFormattedAddress:
+            destinationLocationData.address,
+
+          destinationPlaceId:
+            destinationLocationData.placeId ||
+            "",
+
+          /*
+          START
+          */
+
+          startCity,
+
+          startLocation:
+            startLocationData.address,
+
+          startLat:
+            startLocationData.latitude,
+
+          startLng:
+            startLocationData.longitude,
+
+          startFormattedAddress:
+            startLocationData.address,
+
+          startPlaceId:
+            startLocationData.placeId ||
+            "",
+
+          /*
+          DISTANCE
+          */
+
+          distance:
+            `${finalDistanceKm} km`,
+
+          distanceKm:
+            finalDistanceKm,
+
+          /*
+          OTHER TRIP DATA
+          */
+
+          bike,
+
+          tripDate,
+
+          itinerary:
+            itinerary.trim(),
+
+          tripPrice,
+
+          caption,
+
+          image:
+            tripImage,
+
+          userName:
+            user.name,
+
+          userImage:
+            user.image || "",
+        };
 
         /*
         =====================================================
@@ -639,7 +2218,9 @@ function CreateTripContent() {
               )
             );
 
-          if (!existingTripSnap.exists()) {
+          if (
+            !existingTripSnap.exists()
+          ) {
             alert(
               "This trip no longer exists."
             );
@@ -676,140 +2257,22 @@ function CreateTripContent() {
             return;
           }
 
-          tripData = {
-            ...existingTrip,
+          /*
+          ===================================================
+          PRESERVE EXISTING DATA
+          ===================================================
+          */
 
-            status:
-              "upcoming",
-
-            rideType,
-
-            destination,
-
-            /*
-            =================================================
-            DESTINATION VERIFICATION DATA
-            =================================================
-            */
-
-            destinationLat:
-              geocodedDestination.latitude,
-
-            destinationLng:
-              geocodedDestination.longitude,
-
-            destinationRadiusKm:
-              DESTINATION_RADIUS_KM,
-
-            destinationFormattedAddress:
-              geocodedDestination.formattedAddress,
-
-            startCity,
-
-            startLocation,
-
-            distance,
-
-            bike,
-
-            tripDate,
-
-            itinerary:
-              itinerary.trim(),
-
-            tripPrice,
-
-            caption,
-
-            image:
-              tripImage,
-
-            userName:
-              user.name,
-
-            userImage:
-              user.image || "",
-          };
-        }
-
-        /*
-        =====================================================
-        CREATE NEW TRIP
-        =====================================================
-        */
-
-        else {
-          tripData = {
-            status:
-              "upcoming",
-
-            rideType,
-
-            destination,
-
-            /*
-            =================================================
-            DESTINATION VERIFICATION DATA
-            =================================================
-            */
-
-            destinationLat:
-              geocodedDestination.latitude,
-
-            destinationLng:
-              geocodedDestination.longitude,
-
-            destinationRadiusKm:
-              DESTINATION_RADIUS_KM,
-
-            destinationFormattedAddress:
-              geocodedDestination.formattedAddress,
-
-            startCity,
-
-            startLocation,
-
-            distance,
-
-            bike,
-
-            tripDate,
-
-            itinerary:
-              itinerary.trim(),
-
-            tripPrice,
-
-            caption,
-
-            image:
-              tripImage,
-
-            userName:
-              user.name,
-
-            userImage:
-              user.image || "",
-          };
-        }
-
-        /*
-        =====================================================
-        UPDATE EXISTING TRIP
-        =====================================================
-        */
-
-        if (
-          isEditing &&
-          editId
-        ) {
           await updateDoc(
             doc(
               db,
               "trips",
               editId
             ),
-            tripData
+            {
+              ...existingTrip,
+              ...tripData,
+            }
           );
 
           alert(
@@ -854,7 +2317,7 @@ function CreateTripContent() {
 
         /*
         =====================================================
-        RESET FORM
+        RESET
         =====================================================
         */
 
@@ -862,6 +2325,16 @@ function CreateTripContent() {
         setStartLocation("");
         setStartCity("");
         setDistance("");
+        setDistanceKm(null);
+
+        setStartLocationData(
+          null
+        );
+
+        setDestinationLocationData(
+          null
+        );
+
         setBike("");
         setCaption("");
         setTripDate("");
@@ -874,10 +2347,14 @@ function CreateTripContent() {
         );
 
         alert(
-          "Failed to save trip"
+          error instanceof Error
+            ? error.message
+            : "Failed to save trip."
         );
       } finally {
-        setSavingTrip(false);
+        setSavingTrip(
+          false
+        );
       }
     };
 
@@ -898,17 +2375,14 @@ function CreateTripContent() {
       }
 
       try {
-        /*
-        =====================================================
-        GET CURRENT USER
-        =====================================================
-        */
+        const savedUser =
+          localStorage.getItem(
+            "ridemateUser"
+          );
 
         const user =
           JSON.parse(
-            localStorage.getItem(
-              "ridemateUser"
-            ) || "{}"
+            savedUser || "{}"
           );
 
         if (!user.name) {
@@ -918,12 +2392,6 @@ function CreateTripContent() {
 
           return;
         }
-
-        /*
-        =====================================================
-        GET TRIP
-        =====================================================
-        */
 
         const tripRef =
           doc(
@@ -937,7 +2405,9 @@ function CreateTripContent() {
             tripRef
           );
 
-        if (!tripSnap.exists()) {
+        if (
+          !tripSnap.exists()
+        ) {
           alert(
             "This trip has already been deleted."
           );
@@ -971,22 +2441,24 @@ function CreateTripContent() {
 
         /*
         =====================================================
-        CONFIRMATION
+        CONFIRM
         =====================================================
         */
 
         const confirmed =
           window.confirm(
             "⚠️ Delete this trip?\n\n" +
-            "This action cannot be undone.\n\n" +
-            "Any pending or approved ride requests for this trip will also be removed."
+              "This action cannot be undone.\n\n" +
+              "Any pending or approved ride requests for this trip will also be removed."
           );
 
         if (!confirmed) {
           return;
         }
 
-        setDeletingTrip(true);
+        setDeletingTrip(
+          true
+        );
 
         /*
         =====================================================
@@ -1024,13 +2496,9 @@ function CreateTripContent() {
               }
             )
           );
-        } catch (requestError) {
-          /*
-          We still continue with deleting
-          the trip if there is a problem
-          loading/deleting old requests.
-          */
-
+        } catch (
+          requestError
+        ) {
           console.warn(
             "Could not delete related ride requests:",
             requestError
@@ -1051,12 +2519,6 @@ function CreateTripContent() {
           "🗑️ Trip deleted successfully!"
         );
 
-        /*
-        =====================================================
-        RETURN TO MY RIDES
-        =====================================================
-        */
-
         router.push(
           "/my-rides"
         );
@@ -1070,9 +2532,29 @@ function CreateTripContent() {
           "Failed to delete trip. Please try again."
         );
 
-        setDeletingTrip(false);
+        setDeletingTrip(
+          false
+        );
       }
     };
+
+  /*
+  =========================================================
+  LOCATION PICKER DATA
+  =========================================================
+  */
+
+  const pickerInitialLocation =
+    locationPickerType ===
+    "start"
+      ? startLocationData
+      : destinationLocationData;
+
+  const pickerTitle =
+    locationPickerType ===
+    "start"
+      ? "Select Starting Location"
+      : "Select Destination";
 
   /*
   =========================================================
@@ -1082,6 +2564,25 @@ function CreateTripContent() {
 
   return (
     <PageBackground>
+      <LocationPicker
+        open={
+          locationPickerOpen
+        }
+        title={
+          pickerTitle
+        }
+        initialLocation={
+          pickerInitialLocation
+        }
+        onClose={() =>
+          setLocationPickerOpen(
+            false
+          )
+        }
+        onConfirm={
+          handleLocationConfirm
+        }
+      />
 
       <div
         className="
@@ -1099,10 +2600,7 @@ function CreateTripContent() {
           mb-8
         "
       >
-
-        {/* =====================================================
-            PROFILE IMAGE
-        ===================================================== */}
+        {/* PROFILE IMAGE */}
 
         {tripImage && (
           <div
@@ -1112,7 +2610,6 @@ function CreateTripContent() {
               mb-6
             "
           >
-
             <img
               src={tripImage}
               alt="Profile"
@@ -1126,7 +2623,6 @@ function CreateTripContent() {
                 shadow-xl
               "
             />
-
           </div>
         )}
 
@@ -1136,17 +2632,13 @@ function CreateTripContent() {
             mt-8
           "
         >
-
-          {/* ===================================================
-              RIDE TYPE
-          =================================================== */}
+          {/* RIDE TYPE */}
 
           <div
             className="
               space-y-2
             "
           >
-
             <label
               className="
                 font-bold
@@ -1157,7 +2649,9 @@ function CreateTripContent() {
             </label>
 
             <select
-              value={rideType}
+              value={
+                rideType
+              }
               onChange={(e) =>
                 setRideType(
                   e.target.value as
@@ -1175,7 +2669,6 @@ function CreateTripContent() {
                 text-white
               "
             >
-
               <option value="individual">
                 👤 Individual Ride (Need Pillion)
               </option>
@@ -1183,40 +2676,136 @@ function CreateTripContent() {
               <option value="group">
                 👥 Group Ride (Bring Your Own Bike)
               </option>
-
             </select>
-
           </div>
 
-          {/* ===================================================
-              DESTINATION
-          =================================================== */}
+          {/* DESTINATION */}
 
-          <input
-            type="text"
-            placeholder="Destination"
-            value={destination}
-            onChange={(e) =>
-              setDestination(
-                e.target.value
-              )
-            }
+          <div
             className="
-              w-full
-              p-4
-              rounded-2xl
               bg-black
               border
               border-zinc-700
-              text-white
-              outline-none
-              focus:border-orange-500
+              rounded-2xl
+              p-4
             "
-          />
+          >
+            <div
+              className="
+                flex
+                items-center
+                justify-between
+                gap-3
+                mb-3
+              "
+            >
+              <div>
+                <label
+                  className="
+                    block
+                    text-orange-400
+                    font-bold
+                  "
+                >
+                  🏁 Destination
+                </label>
 
-          {/* ===================================================
-              STARTING LOCATION CARD
-          =================================================== */}
+                <p
+                  className="
+                    text-zinc-500
+                    text-xs
+                    mt-1
+                  "
+                >
+                  Choose the exact destination on Google Maps.
+                </p>
+              </div>
+            </div>
+
+            {destinationLocationData ? (
+              <div
+                className="
+                  bg-orange-500/10
+                  border
+                  border-orange-500/20
+                  rounded-xl
+                  p-3
+                  mb-3
+                "
+              >
+                <p
+                  className="
+                    text-white
+                    font-bold
+                    text-sm
+                  "
+                >
+                  📍{" "}
+                  {
+                    destinationLocationData.address
+                  }
+                </p>
+
+                <p
+                  className="
+                    text-zinc-500
+                    text-xs
+                    mt-1
+                  "
+                >
+                  Coordinates:{" "}
+                  {destinationLocationData.latitude.toFixed(
+                    6
+                  )}
+                  ,{" "}
+                  {destinationLocationData.longitude.toFixed(
+                    6
+                  )}
+                </p>
+              </div>
+            ) : (
+              <div
+                className="
+                  bg-zinc-950
+                  border
+                  border-zinc-800
+                  rounded-xl
+                  p-3
+                  mb-3
+                  text-zinc-500
+                  text-sm
+                "
+              >
+                No destination selected yet.
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() =>
+                openLocationPicker(
+                  "destination"
+                )
+              }
+              className="
+                w-full
+                p-4
+                rounded-2xl
+                bg-orange-500
+                hover:bg-orange-400
+                text-black
+                font-black
+                transition
+              "
+            >
+              📍{" "}
+              {destinationLocationData
+                ? "Change Destination"
+                : "Select Destination on Map"}
+            </button>
+          </div>
+
+          {/* STARTING LOCATION */}
 
           <div
             className="
@@ -1228,9 +2817,7 @@ function CreateTripContent() {
               space-y-4
             "
           >
-
             <div>
-
               <label
                 className="
                   block
@@ -1246,21 +2833,16 @@ function CreateTripContent() {
                 className="
                   text-zinc-500
                   text-xs
-                  mb-3
                 "
               >
-                Select your city first, then enter
-                the exact starting point.
+                Select your starting city and then
+                choose the exact starting point on Google Maps.
               </p>
-
             </div>
 
-            {/* =================================================
-                STARTING CITY
-            ================================================= */}
+            {/* STARTING CITY */}
 
             <div>
-
               <label
                 className="
                   block
@@ -1277,7 +2859,9 @@ function CreateTripContent() {
                 type="text"
                 list="indian-cities"
                 placeholder="Search your city..."
-                value={startCity}
+                value={
+                  startCity
+                }
                 onChange={(e) =>
                   setStartCity(
                     e.target.value
@@ -1297,7 +2881,6 @@ function CreateTripContent() {
               />
 
               <datalist id="indian-cities">
-
                 {INDIAN_CITIES.map(
                   (city) => (
                     <option
@@ -1306,60 +2889,99 @@ function CreateTripContent() {
                     />
                   )
                 )}
-
               </datalist>
-
             </div>
 
-            {/* =================================================
-                EXACT STARTING LOCATION
-            ================================================= */}
+            {/* EXACT START */}
 
             <div>
+              {startLocationData ? (
+                <div
+                  className="
+                    bg-orange-500/10
+                    border
+                    border-orange-500/20
+                    rounded-xl
+                    p-3
+                    mb-3
+                  "
+                >
+                  <p
+                    className="
+                      text-white
+                      font-bold
+                      text-sm
+                    "
+                  >
+                    📍{" "}
+                    {
+                      startLocationData.address
+                    }
+                  </p>
 
-              <label
-                className="
-                  block
-                  text-zinc-300
-                  text-sm
-                  font-semibold
-                  mb-2
-                "
-              >
-                Exact Starting Point
-              </label>
+                  <p
+                    className="
+                      text-zinc-500
+                      text-xs
+                      mt-1
+                    "
+                  >
+                    Coordinates:{" "}
+                    {startLocationData.latitude.toFixed(
+                      6
+                    )}
+                    ,{" "}
+                    {startLocationData.longitude.toFixed(
+                      6
+                    )}
+                  </p>
+                </div>
+              ) : (
+                <div
+                  className="
+                    bg-zinc-950
+                    border
+                    border-zinc-800
+                    rounded-xl
+                    p-3
+                    mb-3
+                    text-zinc-500
+                    text-sm
+                  "
+                >
+                  No exact starting point selected yet.
+                </div>
+              )}
 
-              <input
-                type="text"
-                placeholder="Example: HSR Layout"
-                value={startLocation}
-                onChange={(e) =>
-                  setStartLocation(
-                    e.target.value
+              <button
+                type="button"
+                onClick={() =>
+                  openLocationPicker(
+                    "start"
                   )
                 }
                 className="
                   w-full
                   p-4
                   rounded-2xl
-                  bg-zinc-950
-                  border
-                  border-zinc-700
-                  text-white
-                  outline-none
-                  focus:border-orange-500
+                  bg-orange-500
+                  hover:bg-orange-400
+                  text-black
+                  font-black
+                  transition
                 "
-              />
-
+              >
+                📍{" "}
+                {startLocationData
+                  ? "Change Starting Location"
+                  : "Select Starting Location on Map"}
+              </button>
             </div>
 
-            {/* =================================================
-                PREVIEW
-            ================================================= */}
+            {/* PREVIEW */}
 
-            {(startLocation ||
+            {(startLocationData ||
               startCity) && (
-
               <div
                 className="
                   bg-orange-500/10
@@ -1369,7 +2991,6 @@ function CreateTripContent() {
                   p-3
                 "
               >
-
                 <p
                   className="
                     text-[10px]
@@ -1390,7 +3011,8 @@ function CreateTripContent() {
                   "
                 >
                   📍{" "}
-                  {startLocation ||
+                  {startLocationData
+                    ?.address ||
                     "Starting point"}
 
                   {startCity && (
@@ -1398,48 +3020,121 @@ function CreateTripContent() {
                       , {startCity}
                     </>
                   )}
-
                 </p>
-
               </div>
-
             )}
-
           </div>
 
-          {/* ===================================================
-              DISTANCE
-          =================================================== */}
+          {/* DISTANCE */}
 
-          <input
-            type="number"
-            placeholder="Distance (KM)"
-            value={distance}
-            onChange={(e) =>
-              setDistance(
-                e.target.value
-              )
-            }
+          <div
             className="
-              w-full
-              p-4
-              rounded-2xl
               bg-black
               border
               border-zinc-700
-              text-white
-              outline-none
-              focus:border-orange-500
+              rounded-2xl
+              p-4
             "
-          />
+          >
+            <div
+              className="
+                flex
+                items-center
+                justify-between
+                gap-3
+              "
+            >
+              <div>
+                <p
+                  className="
+                    text-orange-400
+                    font-bold
+                  "
+                >
+                  🛣️ Motorcycle Road Distance
+                </p>
 
-          {/* ===================================================
-              DATE & TIME
-          =================================================== */}
+                <p
+                  className="
+                    text-zinc-500
+                    text-xs
+                    mt-1
+                  "
+                >
+                  Automatically calculated between your selected locations.
+                </p>
+              </div>
+
+              <div
+                className="
+                  text-right
+                  min-w-[100px]
+                "
+              >
+                {calculatingDistance ? (
+                  <p
+                    className="
+                      text-orange-400
+                      font-black
+                      text-sm
+                    "
+                  >
+                    Calculating...
+                  </p>
+                ) : distance ? (
+                  <p
+                    className="
+                      text-white
+                      font-black
+                      text-xl
+                    "
+                  >
+                    {distance}
+                  </p>
+                ) : (
+                  <p
+                    className="
+                      text-zinc-600
+                      font-bold
+                      text-sm
+                    "
+                  >
+                    Select locations
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div
+              className="
+                mt-3
+                bg-yellow-500/10
+                border
+                border-yellow-500/20
+                rounded-xl
+                p-3
+              "
+            >
+              <p
+                className="
+                  text-yellow-300
+                  text-xs
+                "
+              >
+                ⚠️ Motorcycle road distance is an
+                estimate based on Google's two-wheeler
+                routing data.
+              </p>
+            </div>
+          </div>
+
+          {/* DATE & TIME */}
 
           <input
             type="datetime-local"
-            value={tripDate}
+            value={
+              tripDate
+            }
             onChange={(e) =>
               setTripDate(
                 e.target.value
@@ -1453,19 +3148,17 @@ function CreateTripContent() {
               border
               border-zinc-700
               text-white
-              outline-none
-              focus:border-orange-500
             "
           />
 
-          {/* ===================================================
-              TRIP PRICE
-          =================================================== */}
+          {/* TRIP PRICE */}
 
           <input
             type="number"
             placeholder="Trip Price (₹)"
-            value={tripPrice}
+            value={
+              tripPrice
+            }
             onChange={(e) =>
               setTripPrice(
                 e.target.value
@@ -1484,14 +3177,14 @@ function CreateTripContent() {
             "
           />
 
-          {/* ===================================================
-              BIKE
-          =================================================== */}
+          {/* BIKE */}
 
           <input
             type="text"
             placeholder="Bike Name"
-            value={bike}
+            value={
+              bike
+            }
             onChange={(e) =>
               setBike(
                 e.target.value
@@ -1510,9 +3203,7 @@ function CreateTripContent() {
             "
           />
 
-          {/* ===================================================
-              STORY + ITINERARY
-              =================================================== */}
+          {/* STORY + ITINERARY */}
 
           <div
             className="
@@ -1524,11 +3215,7 @@ function CreateTripContent() {
               space-y-4
             "
           >
-
-            {/* RIDE STORY */}
-
             <div>
-
               <label
                 className="
                   block
@@ -1542,7 +3229,9 @@ function CreateTripContent() {
 
               <textarea
                 placeholder="Tell riders about your trip..."
-                value={caption}
+                value={
+                  caption
+                }
                 onChange={(e) =>
                   setCaption(
                     e.target.value
@@ -1557,10 +3246,7 @@ function CreateTripContent() {
                   text-white
                 "
               />
-
             </div>
-
-            {/* ITINERARY */}
 
             <div
               className="
@@ -1569,7 +3255,6 @@ function CreateTripContent() {
                 pt-4
               "
             >
-
               <label
                 className="
                   block
@@ -1582,7 +3267,9 @@ function CreateTripContent() {
               </label>
 
               <textarea
-                value={itinerary}
+                value={
+                  itinerary
+                }
                 onChange={(e) =>
                   setItinerary(
                     e.target.value
@@ -1602,20 +3289,19 @@ function CreateTripContent() {
                   text-white
                 "
               />
-
             </div>
-
           </div>
 
-          {/* ===================================================
-              SAVE CHANGES / POST TRIP
-          =================================================== */}
+          {/* SAVE / POST */}
 
           <button
-            onClick={postTrip}
+            onClick={
+              postTrip
+            }
             disabled={
               deletingTrip ||
-              savingTrip
+              savingTrip ||
+              calculatingDistance
             }
             className="
               w-full
@@ -1632,19 +3318,16 @@ function CreateTripContent() {
               disabled:hover:scale-100
             "
           >
-
             {savingTrip
-              ? "📍 Verifying Destination..."
+              ? "📍 Saving Trip..."
+              : calculatingDistance
+              ? "🛣️ Calculating Distance..."
               : isEditing
               ? "Save Changes"
               : "Post Trip"}
-
           </button>
 
-          {/* ===================================================
-              DELETE TRIP
-              ONLY SHOWN WHILE EDITING
-          =================================================== */}
+          {/* DELETE */}
 
           {isEditing && (
             <div
@@ -1652,9 +3335,10 @@ function CreateTripContent() {
                 pt-2
               "
             >
-
               <button
-                onClick={deleteTrip}
+                onClick={
+                  deleteTrip
+                }
                 disabled={
                   deletingTrip ||
                   savingTrip
@@ -1676,20 +3360,14 @@ function CreateTripContent() {
                   disabled:cursor-not-allowed
                 "
               >
-
                 {deletingTrip
                   ? "Deleting Trip..."
                   : "🗑️ Delete Trip"}
-
               </button>
-
             </div>
           )}
-
         </div>
-
       </div>
-
     </PageBackground>
   );
 }

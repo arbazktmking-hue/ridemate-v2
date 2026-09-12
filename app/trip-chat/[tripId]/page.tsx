@@ -11,6 +11,8 @@ import {
   addDoc,
   updateDoc,
   arrayUnion,
+  query,
+  where,
 } from "firebase/firestore";
 
 import { db } from "../../firebase";
@@ -20,6 +22,8 @@ import {
   Send,
   MapPin,
   Loader2,
+  CheckCircle2,
+  Clock3,
 } from "lucide-react";
 
 /* =========================================================
@@ -42,10 +46,21 @@ type GPSLocation = {
 };
 
 /* =========================================================
-   DEFAULT DESTINATION RADIUS
+   COMPLETION SETTINGS
 ========================================================= */
 
 const DEFAULT_DESTINATION_RADIUS_KM = 20;
+
+/*
+ * Rider and pillion must be within 50 metres
+ * of each other when the pillion confirms.
+ */
+const MAX_RIDER_PILLION_DISTANCE_METERS = 50;
+
+/*
+ * We don't accept extremely poor GPS readings.
+ */
+const MAX_ACCEPTABLE_GPS_ACCURACY_METERS = 1000;
 
 /* =========================================================
    DISTANCE CALCULATOR
@@ -184,6 +199,49 @@ export default function TripChatPage() {
   const [completingTrip, setCompletingTrip] =
     useState(false);
 
+  /*
+   * Host has requested completion.
+   */
+  const [
+    completionRequested,
+    setCompletionRequested,
+  ] = useState(false);
+
+  /*
+   * Whether current user is the pillion
+   * expected to confirm.
+   */
+  const [
+    isCompletionPillion,
+    setIsCompletionPillion,
+  ] = useState(false);
+
+  /*
+   * Name of the pillion who must confirm.
+   */
+  const [
+    completionPillionName,
+    setCompletionPillionName,
+  ] = useState("");
+
+  /*
+   * Whether current user's completion
+   * confirmation is being processed.
+   */
+  const [
+    confirmingCompletion,
+    setConfirmingCompletion,
+  ] = useState(false);
+
+  /*
+   * Used when no approved pillion could
+   * be identified.
+   */
+  const [
+    completionError,
+    setCompletionError,
+  ] = useState("");
+
   /* =========================================================
      ADMIN INVESTIGATION MODE
   ========================================================= */
@@ -267,7 +325,7 @@ export default function TripChatPage() {
       return;
     }
 
-    loadChat();
+    void loadChat();
   }, [tripId]);
 
   async function loadChat() {
@@ -308,11 +366,13 @@ export default function TripChatPage() {
       return;
     }
 
-    loadMessages();
+    void loadMessages();
 
     const interval =
       setInterval(
-        loadMessages,
+        () => {
+          void loadMessages();
+        },
         1000
       );
 
@@ -383,7 +443,7 @@ export default function TripChatPage() {
       chat &&
       currentUser?.name
     ) {
-      checkExistingReview();
+      void checkExistingReview();
     }
   }, [
     chat,
@@ -438,13 +498,268 @@ export default function TripChatPage() {
   }
 
   /* =========================================================
-     COMPLETE TRIP
+     FIND PILLION FOR THIS TRIP
   ========================================================= */
 
-  async function completeTrip() {
+  async function findPillionForTrip(
+    tripData: any
+  ): Promise<string | null> {
     /*
-     * ADMIN INVESTIGATION MODE
-     * IS READ ONLY.
+     * First check common participant fields
+     * that may already exist on tripChats.
+     */
+
+    const directCandidates = [
+      chat?.pillionName,
+      chat?.pillion,
+      chat?.passengerName,
+      chat?.passenger,
+      chat?.riderName,
+      chat?.rider,
+      chat?.requesterName,
+      chat?.requester,
+      chat?.memberName,
+    ];
+
+    for (
+      const candidate of directCandidates
+    ) {
+      if (
+        typeof candidate ===
+          "string" &&
+        candidate.trim() &&
+        candidate.trim() !==
+          chat?.owner &&
+        candidate.trim() !==
+          currentUser?.name
+      ) {
+        return candidate.trim();
+      }
+    }
+
+    /*
+     * Check members arrays if present.
+     */
+
+    const memberArrays = [
+      chat?.members,
+      chat?.participants,
+      chat?.users,
+    ];
+
+    for (
+      const members of memberArrays
+    ) {
+      if (
+        Array.isArray(members)
+      ) {
+        for (
+          const member of members
+        ) {
+          const candidate =
+            typeof member ===
+            "string"
+              ? member
+              : member?.name ||
+                member?.userName ||
+                member?.username;
+
+          if (
+            typeof candidate ===
+              "string" &&
+            candidate.trim() &&
+            candidate.trim() !==
+              chat?.owner &&
+            candidate.trim() !==
+              currentUser?.name
+          ) {
+            return candidate.trim();
+          }
+        }
+      }
+    }
+
+    /*
+     * Finally check approved ride requests.
+     */
+
+    try {
+      const requestsQuery =
+        query(
+          collection(
+            db,
+            "rideRequests"
+          ),
+          where(
+            "tripId",
+            "==",
+            tripId
+          )
+        );
+
+      const requestsSnapshot =
+        await getDocs(
+          requestsQuery
+        );
+
+      for (
+        const requestDoc of
+          requestsSnapshot.docs
+      ) {
+        const request =
+          requestDoc.data();
+
+        /*
+         * Accept common approval values.
+         */
+        const requestStatus =
+          String(
+            request.status ||
+              request.requestStatus ||
+              ""
+          ).toLowerCase();
+
+        const isApproved =
+          requestStatus ===
+            "approved" ||
+          requestStatus ===
+            "accepted" ||
+          requestStatus ===
+            "confirmed" ||
+          request.approved ===
+            true ||
+          request.accepted ===
+            true;
+
+        if (
+          !isApproved
+        ) {
+          continue;
+        }
+
+        const candidate =
+          request.userName ||
+          request.username ||
+          request.name ||
+          request.requesterName ||
+          request.riderName ||
+          request.passengerName;
+
+        if (
+          typeof candidate ===
+            "string" &&
+          candidate.trim() &&
+          candidate.trim() !==
+            tripData.userName &&
+          candidate.trim() !==
+            currentUser?.name
+        ) {
+          return candidate.trim();
+        }
+      }
+    } catch (error) {
+      console.error(
+        "Failed to find approved pillion:",
+        error
+      );
+    }
+
+    return null;
+  }
+
+  /* =========================================================
+     REFRESH COMPLETION STATE
+  ========================================================= */
+
+  async function refreshCompletionState() {
+    if (
+      !chat ||
+      !currentUser?.name
+    ) {
+      return;
+    }
+
+    /*
+     * Trip already completed.
+     */
+
+    if (
+      chat.completed ===
+      true
+    ) {
+      setCompletionRequested(
+        false
+      );
+
+      setIsCompletionPillion(
+        false
+      );
+
+      return;
+    }
+
+    /*
+     * No completion request.
+     */
+
+    if (
+      chat.completionRequested !==
+      true
+    ) {
+      setCompletionRequested(
+        false
+      );
+
+      setIsCompletionPillion(
+        false
+      );
+
+      setCompletionPillionName(
+        ""
+      );
+
+      return;
+    }
+
+    setCompletionRequested(
+      true
+    );
+
+    const expectedPillion =
+      chat.completionPillionName ||
+      "";
+
+    setCompletionPillionName(
+      expectedPillion
+    );
+
+    /*
+     * Only the named pillion can confirm.
+     */
+
+    setIsCompletionPillion(
+      Boolean(
+        expectedPillion &&
+          currentUser.name ===
+            expectedPillion
+      )
+    );
+  }
+
+  useEffect(() => {
+    void refreshCompletionState();
+  }, [
+    chat,
+    currentUser,
+  ]);
+
+  /* =========================================================
+     HOST REQUESTS TRIP COMPLETION
+  ========================================================= */
+
+  async function requestTripCompletion() {
+    /*
+     * Admin investigation mode is read only.
      */
 
     if (isAdminView) {
@@ -463,30 +778,74 @@ export default function TripChatPage() {
       return;
     }
 
-    /*
-    =========================================================
-    GET TRIP ID
-    =========================================================
-    */
-
-    const actualTripId =
-      chat?.tripId || tripId;
-
-    if (!actualTripId) {
+    if (
+      !currentUser?.name
+    ) {
       alert(
-        "Unable to identify this trip."
+        "Please login first."
       );
 
       return;
     }
 
     /*
-    =========================================================
-    GET TRIP DATA
-    =========================================================
+     * Only host can initiate.
+     */
+
+    if (
+      chat?.owner &&
+      currentUser.name !==
+        chat.owner
+    ) {
+      alert(
+        "Only the trip host can request trip completion."
+      );
+
+      return;
+    }
+
+    /*
+     * Already requested.
+     */
+
+    if (
+      chat?.completionRequested ===
+      true
+    ) {
+      alert(
+        "Trip completion has already been requested. Waiting for the pillion to confirm."
+      );
+
+      return;
+    }
+
+    /*
+     * Trip already completed.
+     */
+
+    if (
+      chat?.completed ===
+      true
+    ) {
+      alert(
+        "This trip has already been completed."
+      );
+
+      return;
+    }
+
+    /*
+     =========================================================
+     GET ACTUAL TRIP
+     =========================================================
     */
 
-    let tripData: any = null;
+    const actualTripId =
+      chat?.tripId ||
+      tripId;
+
+    let tripData: any =
+      null;
 
     try {
       const tripSnap =
@@ -522,28 +881,9 @@ export default function TripChatPage() {
     }
 
     /*
-    =========================================================
-    OWNER PROTECTION
-    =========================================================
-    */
-
-    if (
-      tripData.userName &&
-      currentUser?.name &&
-      tripData.userName !==
-        currentUser.name
-    ) {
-      alert(
-        "Only the trip host can complete this trip."
-      );
-
-      return;
-    }
-
-    /*
-    =========================================================
-    CHECK DESTINATION COORDINATES
-    =========================================================
+     =========================================================
+     DESTINATION COORDINATES
+     =========================================================
     */
 
     const destinationLat =
@@ -578,17 +918,61 @@ export default function TripChatPage() {
     }
 
     /*
-    =========================================================
-    CONFIRMATION
-    =========================================================
+     =========================================================
+     FIND APPROVED PILLION
+     =========================================================
+    */
+
+    setCompletionError("");
+
+    let pillionName =
+      await findPillionForTrip(
+        tripData
+      );
+
+    /*
+     * If an existing completion request already
+     * contains the pillion, preserve it.
+     */
+
+    if (
+      !pillionName &&
+      chat?.completionPillionName
+    ) {
+      pillionName =
+        chat.completionPillionName;
+    }
+
+    if (!pillionName) {
+      setCompletionError(
+        "No approved pillion could be identified for this trip."
+      );
+
+      alert(
+        "❌ RideMate could not identify the approved pillion for this trip.\n\nPlease make sure a pillion has been approved before requesting trip completion."
+      );
+
+      return;
+    }
+
+    /*
+     =========================================================
+     CONFIRMATION
+     =========================================================
     */
 
     const confirmed =
-      confirm(
-        `RideMate will check your current GPS location to verify that you are within ${destinationRadiusKm} km of the trip destination.\n\nDestination: ${
-          tripData.destination ||
-          "Trip destination"
-        }\n\nDo you want to continue?`
+      window.confirm(
+        `RideMate will check your current GPS location.\n\n` +
+          `You must be within ${destinationRadiusKm} km of:\n` +
+          `${
+            tripData.destination ||
+            "the destination"
+          }\n\n` +
+          `After verification, ${
+            pillionName
+          } will need to confirm the trip from their own location.\n\n` +
+          `Continue?`
       );
 
     if (!confirmed) {
@@ -601,9 +985,9 @@ export default function TripChatPage() {
       );
 
       /*
-      =======================================================
-      GET CURRENT GPS
-      =======================================================
+       =======================================================
+       GET HOST GPS
+       =======================================================
       */
 
       let currentLocation:
@@ -655,9 +1039,33 @@ export default function TripChatPage() {
       }
 
       /*
-      =======================================================
-      CALCULATE DISTANCE
-      =======================================================
+       =======================================================
+       GPS ACCURACY
+       =======================================================
+      */
+
+      if (
+        currentLocation.accuracy >
+        MAX_ACCEPTABLE_GPS_ACCURACY_METERS
+      ) {
+        const retry =
+          confirm(
+            `⚠️ Your GPS accuracy is currently about ${Math.round(
+              currentLocation.accuracy
+            )} meters.\n\nRideMate may not be able to reliably verify your destination.\n\nWould you like to try again?`
+          );
+
+        if (retry) {
+          return requestTripCompletion();
+        }
+
+        return;
+      }
+
+      /*
+       =======================================================
+       DISTANCE FROM DESTINATION
+       =======================================================
       */
 
       const distanceFromDestination =
@@ -667,6 +1075,11 @@ export default function TripChatPage() {
           destinationLat,
           destinationLng
         );
+
+      console.log(
+        "Host GPS:",
+        currentLocation
+      );
 
       console.log(
         "Destination:",
@@ -679,44 +1092,15 @@ export default function TripChatPage() {
       );
 
       console.log(
-        "Current GPS:",
-        currentLocation
-      );
-
-      console.log(
-        "Distance from destination:",
+        "Host distance from destination:",
         distanceFromDestination,
         "km"
       );
 
       /*
-      =======================================================
-      GPS ACCURACY WARNING
-      =======================================================
-      */
-
-      if (
-        currentLocation.accuracy >
-        1000
-      ) {
-        const retry =
-          confirm(
-            `⚠️ Your GPS accuracy is currently about ${Math.round(
-              currentLocation.accuracy
-            )} meters.\n\nRideMate may not be able to reliably verify your destination.\n\nWould you like to try again?`
-          );
-
-        if (retry) {
-          return completeTrip();
-        }
-
-        return;
-      }
-
-      /*
-      =======================================================
-      DESTINATION CHECK
-      =======================================================
+       =======================================================
+       DESTINATION CHECK
+       =======================================================
       */
 
       if (
@@ -724,43 +1108,23 @@ export default function TripChatPage() {
         destinationRadiusKm
       ) {
         alert(
-          `❌ Destination verification failed.\n\nYou are approximately ${distanceFromDestination.toFixed(
-            1
-          )} km from the saved destination.\n\nYou must be within ${destinationRadiusKm} km of ${
-            tripData.destination ||
-            "the destination"
-          } to complete this trip.`
+          `❌ Destination verification failed.\n\n` +
+            `You are approximately ${distanceFromDestination.toFixed(
+              1
+            )} km from the saved destination.\n\n` +
+            `You must be within ${destinationRadiusKm} km of ${
+              tripData.destination ||
+              "the destination"
+            } to request trip completion.`
         );
 
         return;
       }
 
       /*
-      =======================================================
-      SUCCESS
-      =======================================================
-      */
-
-      const locationMessage =
-        `Current GPS is ${distanceFromDestination.toFixed(
-          1
-        )} km from the destination.`;
-
-      const finalConfirmed =
-        confirm(
-          `✅ Destination verified!\n\n${locationMessage}\n\nGPS accuracy: approximately ${Math.round(
-            currentLocation.accuracy
-          )} m\n\nMark this trip as completed?`
-        );
-
-      if (!finalConfirmed) {
-        return;
-      }
-
-      /*
-      =======================================================
-      MARK CHAT AS COMPLETED
-      =======================================================
+       =======================================================
+       SAVE COMPLETION REQUEST
+       =======================================================
       */
 
       await updateDoc(
@@ -770,26 +1134,39 @@ export default function TripChatPage() {
           tripId
         ),
         {
-          completed: true,
-          reviewedUsers: [],
-          completionVerified: true,
-          completionLatitude:
+          completionRequested:
+            true,
+
+          completionRequestedBy:
+            currentUser.name,
+
+          completionPillionName:
+            pillionName,
+
+          completionHostLatitude:
             currentLocation.latitude,
-          completionLongitude:
+
+          completionHostLongitude:
             currentLocation.longitude,
-          completionAccuracy:
+
+          completionHostAccuracy:
             currentLocation.accuracy,
-          completionDistanceKm:
+
+          completionHostDistanceKm:
             distanceFromDestination,
-          completionVerifiedAt:
+
+          completionRequestedAt:
             Date.now(),
+
+          completionPillionConfirmed:
+            false,
         }
       );
 
       /*
-      =======================================================
-      MARK TRIP AS COMPLETED
-      =======================================================
+       =======================================================
+       ALSO STORE REQUEST ON TRIP
+       =======================================================
       */
 
       await updateDoc(
@@ -799,22 +1176,598 @@ export default function TripChatPage() {
           actualTripId
         ),
         {
-          status: "completed",
+          completionRequested:
+            true,
+
+          completionRequestedBy:
+            currentUser.name,
+
+          completionPillionName:
+            pillionName,
+
+          completionHostLatitude:
+            currentLocation.latitude,
+
+          completionHostLongitude:
+            currentLocation.longitude,
+
+          completionHostAccuracy:
+            currentLocation.accuracy,
+
+          completionHostDistanceKm:
+            distanceFromDestination,
+
+          completionRequestedAt:
+            Date.now(),
+
+          completionPillionConfirmed:
+            false,
+        }
+      );
+
+      await loadChat();
+
+      alert(
+        `📍 Your location has been verified!\n\n` +
+          `Distance from destination: ${distanceFromDestination.toFixed(
+            1
+          )} km\n` +
+          `GPS accuracy: approximately ${Math.round(
+            currentLocation.accuracy
+          )} m\n\n` +
+          `${pillionName} must now confirm the trip from their own phone.`
+      );
+    } catch (error) {
+      console.error(
+        "Failed to request trip completion:",
+        error
+      );
+
+      alert(
+        "Failed to request trip completion. Please try again."
+      );
+    } finally {
+      setCompletingTrip(
+        false
+      );
+    }
+  }
+
+  /* =========================================================
+     PILLION CONFIRMS TRIP COMPLETION
+  ========================================================= */
+
+  async function confirmTripCompletion() {
+    /*
+     * Admin investigation mode is read only.
+     */
+
+    if (isAdminView) {
+      alert(
+        "Trip completion is disabled while using Admin Investigation Mode."
+      );
+
+      return;
+    }
+
+    if (!tripId) {
+      return;
+    }
+
+    if (
+      confirmingCompletion
+    ) {
+      return;
+    }
+
+    if (
+      !currentUser?.name
+    ) {
+      alert(
+        "Please login first."
+      );
+
+      return;
+    }
+
+    /*
+     * Must have an active completion request.
+     */
+
+    if (
+      chat?.completionRequested !==
+      true
+    ) {
+      alert(
+        "There is no trip completion request waiting for confirmation."
+      );
+
+      return;
+    }
+
+    /*
+     * Only the specifically selected pillion
+     * can confirm.
+     */
+
+    if (
+      chat?.completionPillionName &&
+      currentUser.name !==
+        chat.completionPillionName
+    ) {
+      alert(
+        "Only the approved pillion for this trip can confirm completion."
+      );
+
+      return;
+    }
+
+    /*
+     * Already completed.
+     */
+
+    if (
+      chat?.completed ===
+      true
+    ) {
+      alert(
+        "This trip has already been completed."
+      );
+
+      return;
+    }
+
+    /*
+     =========================================================
+     GET TRIP DATA
+     =========================================================
+    */
+
+    const actualTripId =
+      chat?.tripId ||
+      tripId;
+
+    let tripData: any =
+      null;
+
+    try {
+      const tripSnap =
+        await getDoc(
+          doc(
+            db,
+            "trips",
+            actualTripId
+          )
+        );
+
+      if (!tripSnap.exists()) {
+        alert(
+          "This trip could not be found."
+        );
+
+        return;
+      }
+
+      tripData =
+        tripSnap.data();
+    } catch (error) {
+      console.error(
+        "Failed to load trip:",
+        error
+      );
+
+      alert(
+        "Unable to verify the trip. Please try again."
+      );
+
+      return;
+    }
+
+    /*
+     =========================================================
+     GET DESTINATION
+     =========================================================
+    */
+
+    const destinationLat =
+      Number(
+        tripData.destinationLat
+      );
+
+    const destinationLng =
+      Number(
+        tripData.destinationLng
+      );
+
+    const destinationRadiusKm =
+      Number(
+        tripData.destinationRadiusKm ||
+          DEFAULT_DESTINATION_RADIUS_KM
+      );
+
+    if (
+      !Number.isFinite(
+        destinationLat
+      ) ||
+      !Number.isFinite(
+        destinationLng
+      )
+    ) {
+      alert(
+        "❌ This trip does not have a verified destination location."
+      );
+
+      return;
+    }
+
+    /*
+     =========================================================
+     GET HOST'S SAVED GPS
+     =========================================================
+    */
+
+    const hostLatitude =
+      Number(
+        chat.completionHostLatitude
+      );
+
+    const hostLongitude =
+      Number(
+        chat.completionHostLongitude
+      );
+
+    const hostAccuracy =
+      Number(
+        chat.completionHostAccuracy
+      );
+
+    const hostDistanceFromDestination =
+      Number(
+        chat.completionHostDistanceKm
+      );
+
+    if (
+      !Number.isFinite(
+        hostLatitude
+      ) ||
+      !Number.isFinite(
+        hostLongitude
+      )
+    ) {
+      alert(
+        "❌ The rider's completion location could not be found.\n\nPlease ask the rider to request completion again."
+      );
+
+      return;
+    }
+
+    /*
+     =========================================================
+     CONFIRMATION DIALOG
+     =========================================================
+    */
+
+    const confirmed =
+      window.confirm(
+        `You are confirming that the trip has been completed.\n\n` +
+          `Destination: ${
+            tripData.destination ||
+            "Trip destination"
+          }\n\n` +
+          `RideMate will now check your GPS and verify that:\n\n` +
+          `• You are within ${destinationRadiusKm} km of the destination\n` +
+          `• You are within 50 metres of the rider\n\n` +
+          `Continue?`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setConfirmingCompletion(
+        true
+      );
+
+      /*
+       =======================================================
+       GET PILLION GPS
+       =======================================================
+      */
+
+      let pillionLocation:
+        | GPSLocation
+        | null = null;
+
+      try {
+        pillionLocation =
+          await getCurrentGPSLocation();
+      } catch (gpsError: any) {
+        console.error(
+          "Pillion GPS error:",
+          gpsError
+        );
+
+        if (
+          gpsError?.code === 1
+        ) {
+          alert(
+            "📍 Location permission was denied.\n\nPlease allow location access for RideMate and try again."
+          );
+        } else if (
+          gpsError?.code === 2
+        ) {
+          alert(
+            "📍 Your current location could not be determined.\n\nPlease make sure your device location/GPS is turned on and try again."
+          );
+        } else if (
+          gpsError?.code === 3
+        ) {
+          alert(
+            "📍 Location request timed out.\n\nPlease move to an area with better GPS signal and try again."
+          );
+        } else {
+          alert(
+            "📍 Unable to get your current location.\n\nPlease make sure location access is enabled and try again."
+          );
+        }
+
+        return;
+      }
+
+      if (!pillionLocation) {
+        alert(
+          "Unable to determine your current location."
+        );
+
+        return;
+      }
+
+      /*
+       =======================================================
+       GPS ACCURACY CHECK
+       =======================================================
+      */
+
+      if (
+        pillionLocation.accuracy >
+        MAX_ACCEPTABLE_GPS_ACCURACY_METERS
+      ) {
+        const retry =
+          confirm(
+            `⚠️ Your GPS accuracy is currently about ${Math.round(
+              pillionLocation.accuracy
+            )} meters.\n\nRideMate may not be able to reliably verify your location.\n\nWould you like to try again?`
+          );
+
+        if (retry) {
+          return confirmTripCompletion();
+        }
+
+        return;
+      }
+
+      /*
+       =======================================================
+       PILLION → DESTINATION
+       =======================================================
+      */
+
+      const pillionDistanceFromDestination =
+        calculateDistanceKm(
+          pillionLocation.latitude,
+          pillionLocation.longitude,
+          destinationLat,
+          destinationLng
+        );
+
+      console.log(
+        "Pillion GPS:",
+        pillionLocation
+      );
+
+      console.log(
+        "Pillion distance from destination:",
+        pillionDistanceFromDestination,
+        "km"
+      );
+
+      /*
+       =======================================================
+       CHECK PILLION DESTINATION RADIUS
+       =======================================================
+      */
+
+      if (
+        pillionDistanceFromDestination >
+        destinationRadiusKm
+      ) {
+        alert(
+          `❌ Destination verification failed.\n\n` +
+            `You are approximately ${pillionDistanceFromDestination.toFixed(
+              1
+            )} km from the saved destination.\n\n` +
+            `You must be within ${destinationRadiusKm} km of ${
+              tripData.destination ||
+              "the destination"
+            } to confirm the trip.`
+        );
+
+        return;
+      }
+
+      /*
+       =======================================================
+       RIDER ↔ PILLION DISTANCE
+       =======================================================
+      */
+
+      const riderPillionDistanceKm =
+        calculateDistanceKm(
+          hostLatitude,
+          hostLongitude,
+          pillionLocation.latitude,
+          pillionLocation.longitude
+        );
+
+      const riderPillionDistanceMeters =
+        riderPillionDistanceKm *
+        1000;
+
+      console.log(
+        "Rider ↔ Pillion distance:",
+        riderPillionDistanceMeters,
+        "meters"
+      );
+
+      /*
+       =======================================================
+       50 METRE CHECK
+       =======================================================
+      */
+
+      if (
+        riderPillionDistanceMeters >
+        MAX_RIDER_PILLION_DISTANCE_METERS
+      ) {
+        alert(
+          `❌ Rider and pillion are too far apart.\n\n` +
+            `Current distance between you: ${Math.round(
+              riderPillionDistanceMeters
+            )} metres.\n\n` +
+            `You must be within ${MAX_RIDER_PILLION_DISTANCE_METERS} metres of the rider to complete this trip.\n\n` +
+            `Please meet the rider and try again.`
+        );
+
+        return;
+      }
+
+      /*
+       =======================================================
+       FINAL CONFIRMATION
+       =======================================================
+      */
+
+      const finalConfirmed =
+        window.confirm(
+          `✅ All location checks passed!\n\n` +
+            `🏁 Destination: verified\n` +
+            `📍 Rider distance from destination: ${hostDistanceFromDestination.toFixed(
+              1
+            )} km\n` +
+            `📍 Your distance from destination: ${pillionDistanceFromDestination.toFixed(
+              1
+            )} km\n` +
+            `🤝 Rider ↔ Pillion: ${Math.round(
+              riderPillionDistanceMeters
+            )} metres\n\n` +
+            `GPS accuracy:\n` +
+            `Rider: approximately ${Math.round(
+              hostAccuracy || 0
+            )} m\n` +
+            `You: approximately ${Math.round(
+              pillionLocation.accuracy
+            )} m\n\n` +
+            `Confirm that this trip has been completed?`
+        );
+
+      if (!finalConfirmed) {
+        return;
+      }
+
+      /*
+       =======================================================
+       MARK TRIP CHAT COMPLETED
+       =======================================================
+      */
+
+      await updateDoc(
+        doc(
+          db,
+          "tripChats",
+          tripId
+        ),
+        {
+          completed:
+            true,
+
+          completionRequested:
+            false,
+
+          completionPillionConfirmed:
+            true,
+
+          completionPillionName:
+            currentUser.name,
+
+          completionPillionLatitude:
+            pillionLocation.latitude,
+
+          completionPillionLongitude:
+            pillionLocation.longitude,
+
+          completionPillionAccuracy:
+            pillionLocation.accuracy,
+
+          completionPillionDistanceKm:
+            pillionDistanceFromDestination,
+
+          completionRiderPillionDistanceMeters:
+            riderPillionDistanceMeters,
 
           completionVerified:
             true,
 
-          completionLatitude:
-            currentLocation.latitude,
+          completionVerifiedAt:
+            Date.now(),
 
-          completionLongitude:
-            currentLocation.longitude,
+          reviewedUsers:
+            [],
+        }
+      );
 
-          completionAccuracy:
-            currentLocation.accuracy,
+      /*
+       =======================================================
+       MARK ACTUAL TRIP COMPLETED
+       =======================================================
+      */
 
-          completionDistanceKm:
-            distanceFromDestination,
+      await updateDoc(
+        doc(
+          db,
+          "trips",
+          actualTripId
+        ),
+        {
+          status:
+            "completed",
+
+          completionRequested:
+            false,
+
+          completionPillionConfirmed:
+            true,
+
+          completionPillionName:
+            currentUser.name,
+
+          completionPillionLatitude:
+            pillionLocation.latitude,
+
+          completionPillionLongitude:
+            pillionLocation.longitude,
+
+          completionPillionAccuracy:
+            pillionLocation.accuracy,
+
+          completionPillionDistanceKm:
+            pillionDistanceFromDestination,
+
+          completionRiderPillionDistanceMeters:
+            riderPillionDistanceMeters,
+
+          completionVerified:
+            true,
 
           completionVerifiedAt:
             Date.now(),
@@ -824,13 +1777,16 @@ export default function TripChatPage() {
       await loadChat();
 
       alert(
-        `🏁 Trip marked as completed!\n\n📍 Destination verified\n📏 Distance: ${distanceFromDestination.toFixed(
-          1
-        )} km`
+        `🏁 Trip completed successfully!\n\n` +
+          `📍 Destination verified for both riders\n` +
+          `🤝 Rider & pillion distance: ${Math.round(
+            riderPillionDistanceMeters
+          )} m\n\n` +
+          `RideMate has marked this trip as completed.`
       );
     } catch (error) {
       console.error(
-        "Failed to complete trip:",
+        "Failed to confirm trip completion:",
         error
       );
 
@@ -838,7 +1794,7 @@ export default function TripChatPage() {
         "Failed to complete the trip. Please try again."
       );
     } finally {
-      setCompletingTrip(
+      setConfirmingCompletion(
         false
       );
     }
@@ -1254,10 +2210,25 @@ export default function TripChatPage() {
                   font-bold
                 "
               >
-                🏁 This trip has been completed.
+                <div
+                  className="
+                    flex
+                    items-center
+                    justify-center
+                    gap-2
+                  "
+                >
+                  <CheckCircle2
+                    size={20}
+                  />
+
+                  <span>
+                    🏁 This trip has been completed.
+                  </span>
+                </div>
 
                 {/* =========================================
-                    ADMIN MODE — REVIEW READ ONLY
+                    ADMIN MODE
                 ========================================= */}
 
                 {isAdminView && (
@@ -1407,6 +2378,172 @@ export default function TripChatPage() {
 
               <>
                 {/* =============================================
+                    COMPLETION REQUEST WAITING
+                ============================================= */}
+
+                {!isAdminView &&
+                  completionRequested && (
+                    <div
+                      className="
+                        bg-yellow-500/10
+                        border
+                        border-yellow-500/30
+                        rounded-2xl
+                        p-4
+                      "
+                    >
+                      <div
+                        className="
+                          flex
+                          items-start
+                          gap-3
+                        "
+                      >
+                        <Clock3
+                          size={22}
+                          className="
+                            text-yellow-400
+                            flex-shrink-0
+                            mt-0.5
+                          "
+                        />
+
+                        <div
+                          className="
+                            flex-1
+                          "
+                        >
+                          {isCompletionPillion ? (
+                            <>
+                              <p
+                                className="
+                                  text-yellow-300
+                                  font-black
+                                  text-sm
+                                "
+                              >
+                                🏁 Trip Completion Requested
+                              </p>
+
+                              <p
+                                className="
+                                  text-zinc-300
+                                  text-sm
+                                  mt-1
+                                "
+                              >
+                                The rider has reached the
+                                destination zone and requested
+                                trip completion.
+                              </p>
+
+                              <p
+                                className="
+                                  text-zinc-500
+                                  text-xs
+                                  mt-2
+                                "
+                              >
+                                Your GPS will be checked to
+                                confirm that you are also
+                                within 20 km of the destination
+                                and within 50 metres of the rider.
+                              </p>
+
+                              <button
+                                onClick={
+                                  confirmTripCompletion
+                                }
+                                disabled={
+                                  confirmingCompletion
+                                }
+                                className="
+                                  w-full
+                                  mt-4
+                                  bg-green-600
+                                  hover:bg-green-500
+                                  text-white
+                                  py-3
+                                  rounded-xl
+                                  font-black
+                                  transition
+                                  disabled:opacity-60
+                                  disabled:cursor-not-allowed
+                                  flex
+                                  items-center
+                                  justify-center
+                                  gap-2
+                                "
+                              >
+                                {confirmingCompletion ? (
+                                  <>
+                                    <Loader2
+                                      size={18}
+                                      className="animate-spin"
+                                    />
+
+                                    Verifying Your GPS...
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle2
+                                      size={18}
+                                    />
+
+                                    ✅ Confirm Trip Completion
+                                  </>
+                                )}
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <p
+                                className="
+                                  text-yellow-300
+                                  font-black
+                                  text-sm
+                                "
+                              >
+                                ⏳ Waiting for Pillion Confirmation
+                              </p>
+
+                              <p
+                                className="
+                                  text-zinc-300
+                                  text-sm
+                                  mt-1
+                                "
+                              >
+                                Your location has been verified.
+                              </p>
+
+                              <p
+                                className="
+                                  text-zinc-500
+                                  text-xs
+                                  mt-2
+                                "
+                              >
+                                Waiting for{" "}
+                                <span
+                                  className="
+                                    text-white
+                                    font-bold
+                                  "
+                                >
+                                  {completionPillionName ||
+                                    "the pillion"}
+                                </span>{" "}
+                                to confirm from their own phone.
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                {/* =============================================
                     ADMIN MODE — NO MESSAGE INPUT
                 ============================================= */}
 
@@ -1438,8 +2575,9 @@ export default function TripChatPage() {
                         mt-1
                       "
                     >
-                      Sending messages is disabled while
-                      investigating this trip chat.
+                      Sending messages and trip completion
+                      actions are disabled while investigating
+                      this trip chat.
                     </p>
                   </div>
                 ) : (
@@ -1465,7 +2603,7 @@ export default function TripChatPage() {
                           e.key ===
                           "Enter"
                         ) {
-                          sendMessage();
+                          void sendMessage();
                         }
                       }}
                       placeholder="Type message..."
@@ -1482,8 +2620,8 @@ export default function TripChatPage() {
                     />
 
                     <button
-                      onClick={
-                        sendMessage
+                      onClick={() =>
+                        void sendMessage()
                       }
                       className="
                         bg-orange-500
@@ -1511,15 +2649,16 @@ export default function TripChatPage() {
                 )}
 
                 {/* =============================================
-                    COMPLETE TRIP BUTTON
+                    HOST — REQUEST COMPLETION
                 ============================================= */}
 
                 {!isAdminView &&
                   currentUser.name ===
-                    chat.owner && (
+                    chat.owner &&
+                  !completionRequested && (
                     <button
-                      onClick={
-                        completeTrip
+                      onClick={() =>
+                        void requestTripCompletion()
                       }
                       disabled={
                         completingTrip
@@ -1558,12 +2697,62 @@ export default function TripChatPage() {
                           />
 
                           <span>
-                            🏁 Trip Completed
+                            🏁 Request Trip Completion
                           </span>
                         </>
                       )}
                     </button>
                   )}
+
+                {/* =============================================
+                    PILLION — CONFIRM BUTTON
+                ============================================= */}
+
+                {!isAdminView &&
+                  isCompletionPillion &&
+                  completionRequested && (
+                    <div
+                      className="
+                        bg-green-500/10
+                        border
+                        border-green-500/20
+                        rounded-xl
+                        p-3
+                        text-center
+                      "
+                    >
+                      <p
+                        className="
+                          text-green-400
+                          text-xs
+                          font-bold
+                        "
+                      >
+                        Your confirmation is required
+                        to complete this trip.
+                      </p>
+                    </div>
+                  )}
+
+                {/* =============================================
+                    COMPLETION ERROR
+                ============================================= */}
+
+                {completionError && (
+                  <div
+                    className="
+                      bg-red-500/10
+                      border
+                      border-red-500/20
+                      rounded-xl
+                      p-3
+                      text-red-300
+                      text-xs
+                    "
+                  >
+                    ⚠️ {completionError}
+                  </div>
+                )}
               </>
             )}
           </div>
