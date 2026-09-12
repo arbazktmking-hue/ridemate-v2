@@ -18,8 +18,9 @@ import { db } from "../../firebase";
 import {
   ShieldCheck,
   Send,
+  MapPin,
+  Loader2,
 } from "lucide-react";
-
 
 /* =========================================================
    TYPES
@@ -34,14 +35,120 @@ type AdminView = {
   startedAt?: number;
 };
 
+type GPSLocation = {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+};
+
+/* =========================================================
+   DEFAULT DESTINATION RADIUS
+========================================================= */
+
+const DEFAULT_DESTINATION_RADIUS_KM = 20;
+
+/* =========================================================
+   DISTANCE CALCULATOR
+   Haversine formula
+========================================================= */
+
+function calculateDistanceKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+) {
+  const earthRadiusKm = 6371;
+
+  const dLat =
+    ((lat2 - lat1) * Math.PI) / 180;
+
+  const dLon =
+    ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(dLat / 2) *
+      Math.sin(dLat / 2) +
+    Math.cos(
+      (lat1 * Math.PI) / 180
+    ) *
+      Math.cos(
+        (lat2 * Math.PI) / 180
+      ) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+
+  const c =
+    2 *
+    Math.atan2(
+      Math.sqrt(a),
+      Math.sqrt(1 - a)
+    );
+
+  return earthRadiusKm * c;
+}
+
+/* =========================================================
+   GET CURRENT GPS LOCATION
+========================================================= */
+
+function getCurrentGPSLocation(): Promise<GPSLocation> {
+  return new Promise(
+    (resolve, reject) => {
+      if (
+        typeof navigator ===
+          "undefined" ||
+        !navigator.geolocation
+      ) {
+        reject(
+          new Error(
+            "Geolocation is not supported by this device/browser."
+          )
+        );
+
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            latitude:
+              position.coords
+                .latitude,
+
+            longitude:
+              position.coords
+                .longitude,
+
+            accuracy:
+              position.coords
+                .accuracy,
+          });
+        },
+
+        (error) => {
+          reject(error);
+        },
+
+        {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 15000,
+        }
+      );
+    }
+  );
+}
+
+/* =========================================================
+   PAGE
+========================================================= */
 
 export default function TripChatPage() {
-
   const params = useParams();
 
   const tripId =
     params.tripId as string;
-
 
   /* =========================================================
      STATE
@@ -74,6 +181,8 @@ export default function TripChatPage() {
   const [loading, setLoading] =
     useState(true);
 
+  const [completingTrip, setCompletingTrip] =
+    useState(false);
 
   /* =========================================================
      ADMIN INVESTIGATION MODE
@@ -82,57 +191,35 @@ export default function TripChatPage() {
   const isAdminView =
     Boolean(
       adminView?.active &&
-      adminView?.userName
+        adminView?.userName
     );
-
 
   /* =========================================================
      LOAD USER / ADMIN VIEW
   ========================================================= */
 
   useEffect(() => {
-
     try {
-
-      /* =====================================================
-         CHECK ADMIN INVESTIGATION MODE FIRST
-      ===================================================== */
-
       const savedAdminView =
         localStorage.getItem(
           "ridemateAdminView"
         );
 
-
       if (savedAdminView) {
-
         const parsedAdminView =
           JSON.parse(
             savedAdminView
           );
 
-
         if (
           parsedAdminView?.active &&
           parsedAdminView?.userName
         ) {
-
           setAdminView(
             parsedAdminView
           );
 
-
-          /*
-           * IMPORTANT:
-           *
-           * This does NOT change Firebase Auth.
-           *
-           * It only tells this page whose
-           * trip-chat information should be read.
-           */
-
           setCurrentUser({
-
             uid:
               parsedAdminView.userId ||
               "",
@@ -147,85 +234,47 @@ export default function TripChatPage() {
             image:
               parsedAdminView.userImage ||
               "",
-
           });
 
-
           return;
-
         }
-
       }
-
-
-      /* =====================================================
-         NORMAL USER
-      ===================================================== */
 
       const savedUser =
         localStorage.getItem(
           "ridemateUser"
         );
 
-
       if (savedUser) {
-
         setCurrentUser(
-          JSON.parse(
-            savedUser
-          )
+          JSON.parse(savedUser)
         );
-
       }
-
     } catch (error) {
-
       console.error(
         "Failed to load user:",
         error
       );
-
     }
-
   }, []);
-
 
   /* =========================================================
      LOAD CHAT
   ========================================================= */
 
   useEffect(() => {
-
     if (!tripId) {
       return;
     }
 
-
     loadChat();
-
   }, [tripId]);
 
-
   async function loadChat() {
-
     try {
-
-      console.log(
-        "Route tripId:",
-        tripId
-      );
-
-
       if (!tripId) {
-
-        console.log(
-          "tripId is undefined"
-        );
-
         return;
-
       }
-
 
       const chatRef =
         doc(
@@ -234,65 +283,32 @@ export default function TripChatPage() {
           tripId
         );
 
-
       const snap =
-        await getDoc(
-          chatRef
-        );
-
-
-      console.log(
-        "Document exists:",
-        snap.exists()
-      );
-
+        await getDoc(chatRef);
 
       if (snap.exists()) {
-
-        console.log(
-          "Chat Data:",
-          snap.data()
-        );
-
-
         setChat(
           snap.data()
         );
-
-      } else {
-
-        console.log(
-          "No tripChat document found with ID:",
-          tripId
-        );
-
       }
-
     } catch (error) {
-
       console.error(
         "Failed to load trip chat:",
         error
       );
-
     }
-
   }
-
 
   /* =========================================================
      LOAD MESSAGES
   ========================================================= */
 
   useEffect(() => {
-
     if (!tripId) {
       return;
     }
 
-
     loadMessages();
-
 
     const interval =
       setInterval(
@@ -300,23 +316,17 @@ export default function TripChatPage() {
         1000
       );
 
-
     return () =>
       clearInterval(
         interval
       );
-
   }, [tripId]);
 
-
   async function loadMessages() {
-
     try {
-
       if (!tripId) {
         return;
       }
-
 
       const snapshot =
         await getDocs(
@@ -326,32 +336,22 @@ export default function TripChatPage() {
           )
         );
 
-
       const msgs: any[] =
         [];
 
-
       snapshot.forEach(
         (messageDoc) => {
-
           const data =
             messageDoc.data();
-
 
           if (
             data.tripId ===
             tripId
           ) {
-
-            msgs.push(
-              data
-            );
-
+            msgs.push(data);
           }
-
         }
       );
-
 
       msgs.sort(
         (a, b) =>
@@ -359,62 +359,47 @@ export default function TripChatPage() {
           (b.createdAt || 0)
       );
 
-
       setMessages(
         msgs
       );
 
       setLoading(false);
-
     } catch (error) {
-
       console.error(
         "Failed to load trip chat messages:",
         error
       );
 
       setLoading(false);
-
     }
-
   }
-
 
   /* =========================================================
      CHECK EXISTING REVIEW
   ========================================================= */
 
   useEffect(() => {
-
     if (
       chat &&
       currentUser?.name
     ) {
-
       checkExistingReview();
-
     }
-
   }, [
     chat,
     currentUser,
   ]);
 
-
   async function checkExistingReview() {
-
     if (!tripId) {
       return;
     }
-
 
     if (!currentUser?.name) {
       return;
     }
 
-
     try {
-
       const snapshot =
         await getDocs(
           collection(
@@ -423,92 +408,360 @@ export default function TripChatPage() {
           )
         );
 
-
       let found = false;
-
 
       snapshot.forEach(
         (reviewDoc) => {
-
           const data =
             reviewDoc.data();
-
 
           if (
             data.tripId ===
               tripId &&
-
             data.reviewer ===
               currentUser.name
           ) {
-
             found = true;
-
           }
-
         }
       );
-
 
       setAlreadyReviewed(
         found
       );
-
     } catch (error) {
-
       console.error(
         "Failed to check review:",
         error
       );
-
     }
-
   }
-
 
   /* =========================================================
      COMPLETE TRIP
   ========================================================= */
 
   async function completeTrip() {
-
     /*
      * ADMIN INVESTIGATION MODE
      * IS READ ONLY.
      */
 
     if (isAdminView) {
-
       alert(
         "Trip completion is disabled while using Admin Investigation Mode."
       );
 
       return;
-
     }
-
 
     if (!tripId) {
       return;
     }
 
+    if (completingTrip) {
+      return;
+    }
+
+    /*
+    =========================================================
+    GET TRIP ID
+    =========================================================
+    */
+
+    const actualTripId =
+      chat?.tripId || tripId;
+
+    if (!actualTripId) {
+      alert(
+        "Unable to identify this trip."
+      );
+
+      return;
+    }
+
+    /*
+    =========================================================
+    GET TRIP DATA
+    =========================================================
+    */
+
+    let tripData: any = null;
+
+    try {
+      const tripSnap =
+        await getDoc(
+          doc(
+            db,
+            "trips",
+            actualTripId
+          )
+        );
+
+      if (!tripSnap.exists()) {
+        alert(
+          "This trip could not be found."
+        );
+
+        return;
+      }
+
+      tripData =
+        tripSnap.data();
+    } catch (error) {
+      console.error(
+        "Failed to load trip:",
+        error
+      );
+
+      alert(
+        "Unable to verify the trip. Please try again."
+      );
+
+      return;
+    }
+
+    /*
+    =========================================================
+    OWNER PROTECTION
+    =========================================================
+    */
+
+    if (
+      tripData.userName &&
+      currentUser?.name &&
+      tripData.userName !==
+        currentUser.name
+    ) {
+      alert(
+        "Only the trip host can complete this trip."
+      );
+
+      return;
+    }
+
+    /*
+    =========================================================
+    CHECK DESTINATION COORDINATES
+    =========================================================
+    */
+
+    const destinationLat =
+      Number(
+        tripData.destinationLat
+      );
+
+    const destinationLng =
+      Number(
+        tripData.destinationLng
+      );
+
+    const destinationRadiusKm =
+      Number(
+        tripData.destinationRadiusKm ||
+          DEFAULT_DESTINATION_RADIUS_KM
+      );
+
+    if (
+      !Number.isFinite(
+        destinationLat
+      ) ||
+      !Number.isFinite(
+        destinationLng
+      )
+    ) {
+      alert(
+        "❌ This trip does not have a verified destination location.\n\nPlease edit the trip and save it again so RideMate can verify the destination."
+      );
+
+      return;
+    }
+
+    /*
+    =========================================================
+    CONFIRMATION
+    =========================================================
+    */
 
     const confirmed =
       confirm(
-        "Are you sure you want to mark this trip as completed?"
+        `RideMate will check your current GPS location to verify that you are within ${destinationRadiusKm} km of the trip destination.\n\nDestination: ${
+          tripData.destination ||
+          "Trip destination"
+        }\n\nDo you want to continue?`
       );
-
 
     if (!confirmed) {
       return;
     }
 
-
     try {
+      setCompletingTrip(
+        true
+      );
 
-      /* =====================================================
-         MARK CHAT AS COMPLETED
-      ===================================================== */
+      /*
+      =======================================================
+      GET CURRENT GPS
+      =======================================================
+      */
+
+      let currentLocation:
+        | GPSLocation
+        | null = null;
+
+      try {
+        currentLocation =
+          await getCurrentGPSLocation();
+      } catch (gpsError: any) {
+        console.error(
+          "GPS error:",
+          gpsError
+        );
+
+        if (
+          gpsError?.code === 1
+        ) {
+          alert(
+            "📍 Location permission was denied.\n\nPlease allow location access for RideMate and try again."
+          );
+        } else if (
+          gpsError?.code === 2
+        ) {
+          alert(
+            "📍 Your current location could not be determined.\n\nPlease make sure your device location/GPS is turned on and try again."
+          );
+        } else if (
+          gpsError?.code === 3
+        ) {
+          alert(
+            "📍 Location request timed out.\n\nPlease move to an area with better GPS signal and try again."
+          );
+        } else {
+          alert(
+            "📍 Unable to get your current location.\n\nPlease make sure location access is enabled and try again."
+          );
+        }
+
+        return;
+      }
+
+      if (!currentLocation) {
+        alert(
+          "Unable to determine your current location."
+        );
+
+        return;
+      }
+
+      /*
+      =======================================================
+      CALCULATE DISTANCE
+      =======================================================
+      */
+
+      const distanceFromDestination =
+        calculateDistanceKm(
+          currentLocation.latitude,
+          currentLocation.longitude,
+          destinationLat,
+          destinationLng
+        );
+
+      console.log(
+        "Destination:",
+        {
+          latitude:
+            destinationLat,
+          longitude:
+            destinationLng,
+        }
+      );
+
+      console.log(
+        "Current GPS:",
+        currentLocation
+      );
+
+      console.log(
+        "Distance from destination:",
+        distanceFromDestination,
+        "km"
+      );
+
+      /*
+      =======================================================
+      GPS ACCURACY WARNING
+      =======================================================
+      */
+
+      if (
+        currentLocation.accuracy >
+        1000
+      ) {
+        const retry =
+          confirm(
+            `⚠️ Your GPS accuracy is currently about ${Math.round(
+              currentLocation.accuracy
+            )} meters.\n\nRideMate may not be able to reliably verify your destination.\n\nWould you like to try again?`
+          );
+
+        if (retry) {
+          return completeTrip();
+        }
+
+        return;
+      }
+
+      /*
+      =======================================================
+      DESTINATION CHECK
+      =======================================================
+      */
+
+      if (
+        distanceFromDestination >
+        destinationRadiusKm
+      ) {
+        alert(
+          `❌ Destination verification failed.\n\nYou are approximately ${distanceFromDestination.toFixed(
+            1
+          )} km from the saved destination.\n\nYou must be within ${destinationRadiusKm} km of ${
+            tripData.destination ||
+            "the destination"
+          } to complete this trip.`
+        );
+
+        return;
+      }
+
+      /*
+      =======================================================
+      SUCCESS
+      =======================================================
+      */
+
+      const locationMessage =
+        `Current GPS is ${distanceFromDestination.toFixed(
+          1
+        )} km from the destination.`;
+
+      const finalConfirmed =
+        confirm(
+          `✅ Destination verified!\n\n${locationMessage}\n\nGPS accuracy: approximately ${Math.round(
+            currentLocation.accuracy
+          )} m\n\nMark this trip as completed?`
+        );
+
+      if (!finalConfirmed) {
+        return;
+      }
+
+      /*
+      =======================================================
+      MARK CHAT AS COMPLETED
+      =======================================================
+      */
 
       await updateDoc(
         doc(
@@ -519,39 +772,63 @@ export default function TripChatPage() {
         {
           completed: true,
           reviewedUsers: [],
+          completionVerified: true,
+          completionLatitude:
+            currentLocation.latitude,
+          completionLongitude:
+            currentLocation.longitude,
+          completionAccuracy:
+            currentLocation.accuracy,
+          completionDistanceKm:
+            distanceFromDestination,
+          completionVerifiedAt:
+            Date.now(),
         }
       );
 
+      /*
+      =======================================================
+      MARK TRIP AS COMPLETED
+      =======================================================
+      */
 
-      /* =====================================================
-         MARK TRIP AS COMPLETED
-      ===================================================== */
+      await updateDoc(
+        doc(
+          db,
+          "trips",
+          actualTripId
+        ),
+        {
+          status: "completed",
 
-      if (chat?.tripId) {
+          completionVerified:
+            true,
 
-        await updateDoc(
-          doc(
-            db,
-            "trips",
-            chat.tripId
-          ),
-          {
-            status: "completed",
-          }
-        );
+          completionLatitude:
+            currentLocation.latitude,
 
-      }
+          completionLongitude:
+            currentLocation.longitude,
 
+          completionAccuracy:
+            currentLocation.accuracy,
+
+          completionDistanceKm:
+            distanceFromDestination,
+
+          completionVerifiedAt:
+            Date.now(),
+        }
+      );
 
       await loadChat();
 
-
       alert(
-        "🏁 Trip marked as completed!"
+        `🏁 Trip marked as completed!\n\n📍 Destination verified\n📏 Distance: ${distanceFromDestination.toFixed(
+          1
+        )} km`
       );
-
     } catch (error) {
-
       console.error(
         "Failed to complete trip:",
         error
@@ -560,53 +837,41 @@ export default function TripChatPage() {
       alert(
         "Failed to complete the trip. Please try again."
       );
-
+    } finally {
+      setCompletingTrip(
+        false
+      );
     }
-
   }
-
 
   /* =========================================================
      SEND MESSAGE
   ========================================================= */
 
   async function sendMessage() {
-
-    /*
-     * ADMIN INVESTIGATION MODE
-     * IS READ ONLY.
-     */
-
     if (isAdminView) {
-
       alert(
         "Messaging is disabled while using Admin Investigation Mode."
       );
 
       return;
-
     }
-
 
     if (!currentUser?.name) {
       return;
     }
 
-
     if (!message.trim()) {
       return;
     }
 
-
     try {
-
       await addDoc(
         collection(
           db,
           "tripChatMessages"
         ),
         {
-
           tripId,
 
           sender:
@@ -617,18 +882,13 @@ export default function TripChatPage() {
 
           createdAt:
             Date.now(),
-
         }
       );
 
-
       setMessage("");
 
-
       await loadMessages();
-
     } catch (error) {
-
       console.error(
         "Failed to send message:",
         error
@@ -637,68 +897,45 @@ export default function TripChatPage() {
       alert(
         "Failed to send message. Please try again."
       );
-
     }
-
   }
-
 
   /* =========================================================
      SUBMIT REVIEW
   ========================================================= */
 
   async function submitReview() {
-
-    /*
-     * ADMIN INVESTIGATION MODE
-     * IS READ ONLY.
-     */
-
     if (isAdminView) {
-
       alert(
         "Review submission is disabled while using Admin Investigation Mode."
       );
 
       return;
-
     }
 
-
     if (alreadyReviewed) {
-
       alert(
         "You have already reviewed this ride."
       );
 
       return;
-
     }
-
 
     if (!chat || !tripId) {
       return;
     }
 
-
     if (!currentUser?.name) {
       return;
     }
 
-
     try {
-
-      /* =====================================================
-         ADD REVIEW
-      ===================================================== */
-
       await addDoc(
         collection(
           db,
           "rideReviews"
         ),
         {
-
           tripId,
 
           rider:
@@ -714,14 +951,8 @@ export default function TripChatPage() {
 
           createdAt:
             Date.now(),
-
         }
       );
-
-
-      /* =====================================================
-         MARK USER AS REVIEWED
-      ===================================================== */
 
       await updateDoc(
         doc(
@@ -737,18 +968,14 @@ export default function TripChatPage() {
         }
       );
 
-
       setAlreadyReviewed(
         true
       );
 
-
       alert(
         "⭐ Review submitted successfully!"
       );
-
     } catch (error) {
-
       console.error(
         "Failed to submit review:",
         error
@@ -757,11 +984,8 @@ export default function TripChatPage() {
       alert(
         "Failed to submit review. Please try again."
       );
-
     }
-
   }
-
 
   /* =========================================================
      LOADING STATE
@@ -771,9 +995,7 @@ export default function TripChatPage() {
     !chat ||
     !currentUser?.name
   ) {
-
     return (
-
       <main
         className="
           min-h-screen
@@ -785,22 +1007,16 @@ export default function TripChatPage() {
           p-6
         "
       >
-
         Loading...
-
       </main>
-
     );
-
   }
-
 
   /* =========================================================
      RENDER
   ========================================================= */
 
   return (
-
     <main
       className="
         min-h-screen
@@ -810,7 +1026,6 @@ export default function TripChatPage() {
         sm:p-6
       "
     >
-
       <div
         className="
           max-w-4xl
@@ -825,7 +1040,6 @@ export default function TripChatPage() {
         ================================================= */}
 
         {isAdminView && (
-
           <div
             className="
               mb-6
@@ -840,7 +1054,6 @@ export default function TripChatPage() {
               gap-3
             "
           >
-
             <ShieldCheck
               size={22}
               className="
@@ -850,9 +1063,7 @@ export default function TripChatPage() {
               "
             />
 
-
             <div>
-
               <p
                 className="
                   text-orange-400
@@ -862,7 +1073,6 @@ export default function TripChatPage() {
               >
                 🛡️ INVESTIGATION MODE
               </p>
-
 
               <p
                 className="
@@ -883,7 +1093,6 @@ export default function TripChatPage() {
                 's Live Trip Chat.
               </p>
 
-
               <p
                 className="
                   text-zinc-500
@@ -894,13 +1103,9 @@ export default function TripChatPage() {
                 Read-only investigation mode. Messages,
                 trip completion, and reviews cannot be changed.
               </p>
-
             </div>
-
           </div>
-
         )}
-
 
         {/* =================================================
             TRIP HEADER
@@ -917,7 +1122,6 @@ export default function TripChatPage() {
           🏍 {chat.destination}
         </h1>
 
-
         <p
           className="
             text-zinc-400
@@ -926,7 +1130,6 @@ export default function TripChatPage() {
         >
           Live Trip Chat
         </p>
-
 
         {/* =================================================
             CHAT CONTAINER
@@ -959,9 +1162,7 @@ export default function TripChatPage() {
               pr-1
             "
           >
-
             {loading && (
-
               <div
                 className="
                   h-full
@@ -973,13 +1174,10 @@ export default function TripChatPage() {
               >
                 Loading messages...
               </div>
-
             )}
-
 
             {!loading &&
               messages.length === 0 && (
-
                 <div
                   className="
                     h-full
@@ -993,14 +1191,11 @@ export default function TripChatPage() {
                 >
                   No messages in this trip chat yet.
                 </div>
-
               )}
-
 
             {!loading &&
               messages.map(
                 (msg, index) => (
-
                   <div
                     key={index}
                     className={`
@@ -1015,7 +1210,6 @@ export default function TripChatPage() {
                       }
                     `}
                   >
-
                     <div
                       className="
                         text-xs
@@ -1026,18 +1220,13 @@ export default function TripChatPage() {
                       {msg.sender}
                     </div>
 
-
                     <div>
                       {msg.text}
                     </div>
-
                   </div>
-
                 )
               )}
-
           </div>
-
 
           {/* =================================================
               BOTTOM ACTION AREA
@@ -1055,7 +1244,6 @@ export default function TripChatPage() {
             ================================================= */}
 
             {chat.completed ? (
-
               <div
                 className="
                   bg-green-900
@@ -1066,16 +1254,13 @@ export default function TripChatPage() {
                   font-bold
                 "
               >
-
                 🏁 This trip has been completed.
-
 
                 {/* =========================================
                     ADMIN MODE — REVIEW READ ONLY
                 ========================================= */}
 
                 {isAdminView && (
-
                   <div
                     className="
                       mt-4
@@ -1088,14 +1273,10 @@ export default function TripChatPage() {
                       text-sm
                     "
                   >
-
                     🛡️ Review submission is disabled in
                     Investigation Mode.
-
                   </div>
-
                 )}
-
 
                 {/* =========================================
                     NORMAL PASSENGER REVIEW
@@ -1105,7 +1286,6 @@ export default function TripChatPage() {
                   currentUser.name !==
                     chat.owner &&
                   !alreadyReviewed && (
-
                     <div
                       className="
                         mt-4
@@ -1116,7 +1296,6 @@ export default function TripChatPage() {
                         text-left
                       "
                     >
-
                       <h2
                         className="
                           font-bold
@@ -1125,7 +1304,6 @@ export default function TripChatPage() {
                       >
                         ⭐ Rate Your Rider
                       </h2>
-
 
                       <select
                         value={rating}
@@ -1143,7 +1321,6 @@ export default function TripChatPage() {
                           bg-black
                         "
                       >
-
                         <option value={5}>
                           ⭐⭐⭐⭐⭐
                         </option>
@@ -1163,9 +1340,7 @@ export default function TripChatPage() {
                         <option value={1}>
                           ⭐
                         </option>
-
                       </select>
-
 
                       <textarea
                         value={review}
@@ -1182,7 +1357,6 @@ export default function TripChatPage() {
                           bg-black
                         "
                       />
-
 
                       <button
                         onClick={
@@ -1201,11 +1375,8 @@ export default function TripChatPage() {
                       >
                         Submit Review
                       </button>
-
                     </div>
-
                   )}
-
 
                 {/* =========================================
                     ALREADY REVIEWED
@@ -1215,7 +1386,6 @@ export default function TripChatPage() {
                   currentUser.name !==
                     chat.owner &&
                   alreadyReviewed && (
-
                     <div
                       className="
                         mt-4
@@ -1228,25 +1398,19 @@ export default function TripChatPage() {
                     >
                       ⭐ You have already reviewed this ride.
                     </div>
-
                   )}
-
               </div>
-
             ) : (
-
               /* =================================================
                  ACTIVE TRIP
               ================================================= */
 
               <>
-
                 {/* =============================================
                     ADMIN MODE — NO MESSAGE INPUT
                 ============================================= */}
 
                 {isAdminView ? (
-
                   <div
                     className="
                       bg-orange-500/5
@@ -1257,7 +1421,6 @@ export default function TripChatPage() {
                       text-center
                     "
                   >
-
                     <p
                       className="
                         text-orange-400
@@ -1267,7 +1430,6 @@ export default function TripChatPage() {
                     >
                       🛡️ Read-only investigation
                     </p>
-
 
                     <p
                       className="
@@ -1279,11 +1441,8 @@ export default function TripChatPage() {
                       Sending messages is disabled while
                       investigating this trip chat.
                     </p>
-
                   </div>
-
                 ) : (
-
                   /* =========================================
                      NORMAL MESSAGE INPUT
                   ========================================= */
@@ -1294,7 +1453,6 @@ export default function TripChatPage() {
                       gap-3
                     "
                   >
-
                     <input
                       value={message}
                       onChange={(e) =>
@@ -1303,16 +1461,12 @@ export default function TripChatPage() {
                         )
                       }
                       onKeyDown={(e) => {
-
                         if (
                           e.key ===
                           "Enter"
                         ) {
-
                           sendMessage();
-
                         }
-
                       }}
                       placeholder="Type message..."
                       className="
@@ -1326,7 +1480,6 @@ export default function TripChatPage() {
                         focus:border-orange-500
                       "
                     />
-
 
                     <button
                       onClick={
@@ -1346,7 +1499,6 @@ export default function TripChatPage() {
                         transition
                       "
                     >
-
                       <Send
                         size={18}
                       />
@@ -1354,13 +1506,9 @@ export default function TripChatPage() {
                       <span>
                         Send
                       </span>
-
                     </button>
-
                   </div>
-
                 )}
-
 
                 {/* =============================================
                     COMPLETE TRIP BUTTON
@@ -1369,10 +1517,12 @@ export default function TripChatPage() {
                 {!isAdminView &&
                   currentUser.name ===
                     chat.owner && (
-
                     <button
                       onClick={
                         completeTrip
+                      }
+                      disabled={
+                        completingTrip
                       }
                       className="
                         w-full
@@ -1382,25 +1532,43 @@ export default function TripChatPage() {
                         rounded-xl
                         font-bold
                         transition
+                        disabled:opacity-60
+                        disabled:cursor-not-allowed
+                        flex
+                        items-center
+                        justify-center
+                        gap-2
                       "
                     >
-                      🏁 Trip Completed
+                      {completingTrip ? (
+                        <>
+                          <Loader2
+                            size={18}
+                            className="animate-spin"
+                          />
+
+                          <span>
+                            Verifying GPS Location...
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <MapPin
+                            size={18}
+                          />
+
+                          <span>
+                            🏁 Trip Completed
+                          </span>
+                        </>
+                      )}
                     </button>
-
                   )}
-
               </>
-
             )}
-
           </div>
-
         </div>
-
       </div>
-
     </main>
-
   );
-
 }

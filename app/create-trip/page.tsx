@@ -248,6 +248,81 @@ const INDIAN_CITIES = [
 
 /*
 =========================================================
+DESTINATION VERIFICATION RADIUS
+=========================================================
+*/
+
+const DESTINATION_RADIUS_KM = 20;
+
+/*
+=========================================================
+GEOCODE DESTINATION
+=========================================================
+*/
+
+async function geocodeDestination(
+  destinationName: string
+): Promise<{
+  latitude: number;
+  longitude: number;
+  formattedAddress: string;
+} | null> {
+  try {
+    const response = await fetch(
+      "/api/geocode",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify({
+          address:
+            destinationName,
+        }),
+      }
+    );
+
+    const data =
+      await response.json();
+
+    if (
+      !response.ok ||
+      !data.success ||
+      typeof data.latitude !==
+        "number" ||
+      typeof data.longitude !==
+        "number"
+    ) {
+      console.error(
+        "Geocoding failed:",
+        data
+      );
+
+      return null;
+    }
+
+    return {
+      latitude:
+        data.latitude,
+      longitude:
+        data.longitude,
+      formattedAddress:
+        data.formattedAddress ||
+        destinationName,
+    };
+  } catch (error) {
+    console.error(
+      "Geocoding request failed:",
+      error
+    );
+
+    return null;
+  }
+}
+
+/*
+=========================================================
 CREATE TRIP
 =========================================================
 */
@@ -259,9 +334,9 @@ function CreateTripContent() {
     useState<string | null>(null);
 
   const [rideType, setRideType] =
-    useState<"individual" | "group">(
-      "individual"
-    );
+    useState<
+      "individual" | "group"
+    >("individual");
 
   /*
   =========================================================
@@ -283,7 +358,9 @@ function CreateTripContent() {
         JSON.parse(savedUser);
 
       if (user.image) {
-        setTripImage(user.image);
+        setTripImage(
+          user.image
+        );
       }
     }
   }, []);
@@ -348,6 +425,15 @@ function CreateTripContent() {
   */
 
   const [deletingTrip, setDeletingTrip] =
+    useState(false);
+
+  /*
+  =========================================================
+  GEOCODING STATE
+  =========================================================
+  */
+
+  const [savingTrip, setSavingTrip] =
     useState(false);
 
   /*
@@ -454,6 +540,10 @@ function CreateTripContent() {
 
   const postTrip =
     async () => {
+      if (savingTrip) {
+        return;
+      }
+
       try {
         const user =
           JSON.parse(
@@ -471,7 +561,9 @@ function CreateTripContent() {
         }
 
         /*
+        =====================================================
         MAKE SURE CITY IS SELECTED
+        =====================================================
         */
 
         if (!startCity.trim()) {
@@ -489,6 +581,42 @@ function CreateTripContent() {
 
           return;
         }
+
+        if (!destination.trim()) {
+          alert(
+            "Please enter your destination."
+          );
+
+          return;
+        }
+
+        setSavingTrip(true);
+
+        /*
+        =====================================================
+        GEOCODE DESTINATION
+        =====================================================
+        */
+
+        const geocodedDestination =
+          await geocodeDestination(
+            destination.trim()
+          );
+
+        if (!geocodedDestination) {
+          alert(
+            "❌ We could not verify this destination.\n\nPlease enter a more specific destination, for example:\n\nBisle Ghat, Karnataka\nNandi Hills, Karnataka\nCoorg, Karnataka"
+          );
+
+          setSavingTrip(false);
+
+          return;
+        }
+
+        console.log(
+          "Destination geocoded:",
+          geocodedDestination
+        );
 
         let tripData: any;
 
@@ -558,6 +686,24 @@ function CreateTripContent() {
 
             destination,
 
+            /*
+            =================================================
+            DESTINATION VERIFICATION DATA
+            =================================================
+            */
+
+            destinationLat:
+              geocodedDestination.latitude,
+
+            destinationLng:
+              geocodedDestination.longitude,
+
+            destinationRadiusKm:
+              DESTINATION_RADIUS_KM,
+
+            destinationFormattedAddress:
+              geocodedDestination.formattedAddress,
+
             startCity,
 
             startLocation,
@@ -600,6 +746,24 @@ function CreateTripContent() {
             rideType,
 
             destination,
+
+            /*
+            =================================================
+            DESTINATION VERIFICATION DATA
+            =================================================
+            */
+
+            destinationLat:
+              geocodedDestination.latitude,
+
+            destinationLng:
+              geocodedDestination.longitude,
+
+            destinationRadiusKm:
+              DESTINATION_RADIUS_KM,
+
+            destinationFormattedAddress:
+              geocodedDestination.formattedAddress,
 
             startCity,
 
@@ -712,6 +876,8 @@ function CreateTripContent() {
         alert(
           "Failed to save trip"
         );
+      } finally {
+        setSavingTrip(false);
       }
     };
 
@@ -849,7 +1015,9 @@ function CreateTripContent() {
 
           await Promise.all(
             requestsSnapshot.docs.map(
-              async (requestDoc) => {
+              async (
+                requestDoc
+              ) => {
                 await deleteDoc(
                   requestDoc.ref
                 );
@@ -1344,7 +1512,7 @@ function CreateTripContent() {
 
           {/* ===================================================
               STORY + ITINERARY
-          =================================================== */}
+              =================================================== */}
 
           <div
             className="
@@ -1445,7 +1613,10 @@ function CreateTripContent() {
 
           <button
             onClick={postTrip}
-            disabled={deletingTrip}
+            disabled={
+              deletingTrip ||
+              savingTrip
+            }
             className="
               w-full
               bg-orange-500
@@ -1462,7 +1633,9 @@ function CreateTripContent() {
             "
           >
 
-            {isEditing
+            {savingTrip
+              ? "📍 Verifying Destination..."
+              : isEditing
               ? "Save Changes"
               : "Post Trip"}
 
@@ -1482,7 +1655,10 @@ function CreateTripContent() {
 
               <button
                 onClick={deleteTrip}
-                disabled={deletingTrip}
+                disabled={
+                  deletingTrip ||
+                  savingTrip
+                }
                 className="
                   w-full
                   bg-red-600/10
