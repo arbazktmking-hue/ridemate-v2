@@ -1,17 +1,8 @@
 "use client";
 
 import Link from "next/link";
-
-import {
-  useParams,
-  useRouter,
-} from "next/navigation";
-
-import {
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
 import {
   collection,
@@ -35,15 +26,9 @@ import {
   getStorage,
 } from "firebase/storage";
 
-import {
-  db,
-  auth,
-  app,
-} from "../../firebase";
+import { db, auth, app } from "../../firebase";
 
-import {
-  signOut,
-} from "firebase/auth";
+import { signOut } from "firebase/auth";
 
 
 /* =========================================================
@@ -71,191 +56,92 @@ const DEFAULT_PROFILE_IMAGE =
    PROFILE IMAGE COMPRESSION
 ========================================================= */
 
-/*
- * Large phone images can easily be 3–10 MB.
- * That makes profile loading slow.
- *
- * We resize the image before uploading:
- *
- * Maximum dimensions: 600 x 600
- * Output: JPEG
- * Quality: 0.82
- *
- * This keeps the image visually sharp while making
- * the downloaded profile image much smaller.
- */
-
 const compressProfileImage = (
   file: File
 ): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
 
-  return new Promise(
-    (resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
 
-      const image =
-        new Image();
+    image.onload = () => {
+      try {
+        const maxSize = 600;
 
-      const objectUrl =
-        URL.createObjectURL(file);
+        let width = image.naturalWidth;
+        let height = image.naturalHeight;
 
-      image.onload = () => {
-
-        try {
-
-          const maxSize = 600;
-
-          let width =
-            image.naturalWidth;
-
-          let height =
-            image.naturalHeight;
-
-
-          if (
-            width >
-              maxSize ||
-            height >
-              maxSize
-          ) {
-
-            const scale =
-              Math.min(
-                maxSize / width,
-                maxSize / height
-              );
-
-            width =
-              Math.round(
-                width * scale
-              );
-
-            height =
-              Math.round(
-                height * scale
-              );
-
-          }
-
-
-          const canvas =
-            document.createElement(
-              "canvas"
-            );
-
-          canvas.width =
-            width;
-
-          canvas.height =
-            height;
-
-
-          const context =
-            canvas.getContext(
-              "2d"
-            );
-
-
-          if (!context) {
-
-            URL.revokeObjectURL(
-              objectUrl
-            );
-
-            reject(
-              new Error(
-                "Could not create image canvas."
-              )
-            );
-
-            return;
-
-          }
-
-
-          /*
-           * Better image quality while resizing.
-           */
-
-          context.imageSmoothingEnabled =
-            true;
-
-          context.imageSmoothingQuality =
-            "high";
-
-
-          context.drawImage(
-            image,
-            0,
-            0,
-            width,
-            height
+        if (width > maxSize || height > maxSize) {
+          const scale = Math.min(
+            maxSize / width,
+            maxSize / height
           );
 
-
-          canvas.toBlob(
-            (blob) => {
-
-              URL.revokeObjectURL(
-                objectUrl
-              );
-
-
-              if (!blob) {
-
-                reject(
-                  new Error(
-                    "Could not compress image."
-                  )
-                );
-
-                return;
-
-              }
-
-
-              resolve(
-                blob
-              );
-
-            },
-            "image/jpeg",
-            0.82
-          );
-
-        } catch (error) {
-
-          URL.revokeObjectURL(
-            objectUrl
-          );
-
-          reject(error);
-
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
         }
 
-      };
+        const canvas = document.createElement("canvas");
 
+        canvas.width = width;
+        canvas.height = height;
 
-      image.onerror = () => {
+        const context = canvas.getContext("2d");
 
-        URL.revokeObjectURL(
-          objectUrl
+        if (!context) {
+          URL.revokeObjectURL(objectUrl);
+
+          reject(
+            new Error("Could not create image canvas.")
+          );
+
+          return;
+        }
+
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
+
+        context.drawImage(
+          image,
+          0,
+          0,
+          width,
+          height
         );
 
-        reject(
-          new Error(
-            "Could not read the selected image."
-          )
+        canvas.toBlob(
+          (blob) => {
+            URL.revokeObjectURL(objectUrl);
+
+            if (!blob) {
+              reject(
+                new Error("Could not compress image.")
+              );
+
+              return;
+            }
+
+            resolve(blob);
+          },
+          "image/jpeg",
+          0.82
         );
+      } catch (error) {
+        URL.revokeObjectURL(objectUrl);
+        reject(error);
+      }
+    };
 
-      };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
 
+      reject(
+        new Error("Could not read the selected image.")
+      );
+    };
 
-      image.src =
-        objectUrl;
-
-    }
-  );
-
+    image.src = objectUrl;
+  });
 };
 
 
@@ -264,16 +150,12 @@ const compressProfileImage = (
 ========================================================= */
 
 export default function RiderPage() {
-
   const params = useParams();
-
   const router = useRouter();
 
-
-  const riderName =
-    decodeURIComponent(
-      params.name as string
-    );
+  const riderName = decodeURIComponent(
+    params.name as string
+  );
 
 
   /* =========================================================
@@ -289,51 +171,28 @@ export default function RiderPage() {
   const [totalLikes, setTotalLikes] =
     useState(0);
 
-  /*
-   * IMPORTANT:
-   * Initialise the image directly from localStorage.
-   *
-   * This means the image can appear immediately on the
-   * first client render instead of waiting for Firestore.
-   */
-
   const [riderImage, setRiderImage] =
     useState(() => {
-
       try {
-
         const savedUser =
-          localStorage.getItem(
-            "ridemateUser"
-          );
+          localStorage.getItem("ridemateUser");
 
         if (!savedUser) {
           return "";
         }
 
-        const user =
-          JSON.parse(
-            savedUser
-          );
+        const user = JSON.parse(savedUser);
 
         if (
-          user?.name ===
-            riderName &&
+          user?.name === riderName &&
           user?.image
         ) {
-
           return user.image;
-
         }
-
-      } catch {
-        // Ignore localStorage errors
-      }
+      } catch {}
 
       return "";
-
     });
-
 
   const [isFollowing, setIsFollowing] =
     useState(false);
@@ -352,26 +211,17 @@ export default function RiderPage() {
 
   const [currentUser, setCurrentUser] =
     useState<any>(() => {
-
       try {
-
         const savedUser =
-          localStorage.getItem(
-            "ridemateUser"
-          );
+          localStorage.getItem("ridemateUser");
 
         return savedUser
           ? JSON.parse(savedUser)
           : null;
-
       } catch {
-
         return null;
-
       }
-
     });
-
 
   const [showBio, setShowBio] =
     useState(false);
@@ -454,86 +304,57 @@ export default function RiderPage() {
   ========================================================= */
 
   useEffect(() => {
-
     const loadAdminView = () => {
-
       try {
-
         const savedAdminView =
           localStorage.getItem(
             "ridemateAdminView"
           );
 
-
         if (savedAdminView) {
-
           const parsed =
-            JSON.parse(
-              savedAdminView
-            );
+            JSON.parse(savedAdminView);
 
-
-          if (
-            parsed?.active
-          ) {
-
-            setAdminView(
-              parsed
-            );
-
+          if (parsed?.active) {
+            setAdminView(parsed);
             return;
-
           }
-
         }
 
-
         setAdminView(null);
-
       } catch (error) {
-
         console.error(
           "Failed to load admin view:",
           error
         );
 
         setAdminView(null);
-
       }
-
     };
 
-
     loadAdminView();
-
 
     window.addEventListener(
       "storage",
       loadAdminView
     );
 
-
     window.addEventListener(
       "ridemateAdminViewChanged",
       loadAdminView
     );
 
-
     return () => {
-
       window.removeEventListener(
         "storage",
         loadAdminView
       );
 
-
       window.removeEventListener(
         "ridemateAdminViewChanged",
         loadAdminView
       );
-
     };
-
   }, []);
 
 
@@ -542,51 +363,30 @@ export default function RiderPage() {
   ========================================================= */
 
   useEffect(() => {
-
-    if (
-      !showProfileImage
-    ) {
-
+    if (!showProfileImage) {
       return;
-
     }
-
 
     const handleEscape = (
       event: KeyboardEvent
     ) => {
-
-      if (
-        event.key === "Escape"
-      ) {
-
-        setShowProfileImage(
-          false
-        );
-
+      if (event.key === "Escape") {
+        setShowProfileImage(false);
       }
-
     };
-
 
     window.addEventListener(
       "keydown",
       handleEscape
     );
 
-
     return () => {
-
       window.removeEventListener(
         "keydown",
         handleEscape
       );
-
     };
-
-  }, [
-    showProfileImage,
-  ]);
+  }, [showProfileImage]);
 
 
   /* =========================================================
@@ -594,30 +394,21 @@ export default function RiderPage() {
   ========================================================= */
 
   useEffect(() => {
-
     if (
       showProfileImage ||
       selectedPost
     ) {
-
       document.body.style.overflow =
         "hidden";
-
     } else {
-
       document.body.style.overflow =
         "";
-
     }
 
-
     return () => {
-
       document.body.style.overflow =
         "";
-
     };
-
   }, [
     showProfileImage,
     selectedPost,
@@ -631,21 +422,15 @@ export default function RiderPage() {
   const blockedAdminAction = (
     action: string
   ) => {
-
     if (!isAdminView) {
-
       return false;
-
     }
-
 
     alert(
       `Admin View Mode is read-only.\n\nYou cannot ${action} while investigating a user account.`
     );
 
-
     return true;
-
   };
 
 
@@ -654,46 +439,28 @@ export default function RiderPage() {
   ========================================================= */
 
   const logout = async () => {
-
     if (
       blockedAdminAction(
         "logout from the account"
       )
     ) {
-
       return;
-
     }
 
-
     try {
-
-      await signOut(
-        auth
-      );
-
+      await signOut(auth);
 
       localStorage.clear();
 
-
-      router.replace(
-        "/login"
-      );
-
+      router.replace("/login");
     } catch (error) {
-
       console.error(
         "Logout error:",
         error
       );
 
-
-      alert(
-        "Logout failed"
-      );
-
+      alert("Logout failed");
     }
-
   };
 
 
@@ -704,179 +471,74 @@ export default function RiderPage() {
   const changeProfilePicture = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-
     if (
       blockedAdminAction(
         "change the profile picture"
       )
     ) {
-
       return;
-
     }
-
 
     const file =
       event.target.files?.[0];
 
-
     if (!file) {
-
       return;
-
     }
 
-
     try {
-
-      /* =====================================================
-         FILE TYPE
-      ===================================================== */
-
       if (
         !file.type.startsWith(
           "image/"
         )
       ) {
-
         alert(
           "Please select an image file."
         );
 
         return;
-
       }
-
-
-      /* =====================================================
-         ORIGINAL FILE SIZE
-      ===================================================== */
 
       const maxSize =
         10 * 1024 * 1024;
 
-
-      if (
-        file.size >
-        maxSize
-      ) {
-
+      if (file.size > maxSize) {
         alert(
           "Profile picture must be smaller than 10 MB."
         );
 
         return;
-
       }
-
-
-      /* =====================================================
-         FIREBASE USER
-      ===================================================== */
 
       const firebaseUser =
         auth.currentUser;
 
-
       if (!firebaseUser) {
-
         alert(
           "Your login session has expired. Please login again."
         );
 
         return;
-
       }
 
-
-      /* =====================================================
-         START
-      ===================================================== */
-
-      setUploadingProfileImage(
-        true
-      );
-
-      setUploadProgress(
-        5
-      );
-
-
-      console.log(
-        "================================="
-      );
-
-      console.log(
-        "PROFILE IMAGE UPDATE STARTED"
-      );
-
-      console.log(
-        "Original file:",
-        file.name
-      );
-
-      console.log(
-        "Original size:",
-        file.size
-      );
-
-      console.log(
-        "================================="
-      );
-
-
-      /* =====================================================
-         COMPRESS IMAGE
-      ===================================================== */
-
-      setUploadProgress(
-        15
-      );
-
-
-      console.log(
-        "Compressing profile image..."
-      );
-
+      setUploadingProfileImage(true);
+      setUploadProgress(5);
 
       const compressedBlob =
         await compressProfileImage(
           file
         );
 
-
-      console.log(
-        "Compressed size:",
-        compressedBlob.size
-      );
-
-
-      setUploadProgress(
-        30
-      );
-
-
-      /* =====================================================
-         SAFE FILE NAME
-      ===================================================== */
+      setUploadProgress(30);
 
       const fileName =
         `${Date.now()}_profile.jpg`;
 
-
-      /* =====================================================
-         STORAGE
-      ===================================================== */
-
       const storage =
-        getStorage(
-          app
-        );
-
+        getStorage(app);
 
       const storagePath =
         `profilePictures/${firebaseUser.uid}/${fileName}`;
-
 
       const storageRef =
         ref(
@@ -884,21 +546,7 @@ export default function RiderPage() {
           storagePath
         );
 
-
-      console.log(
-        "Storage path:",
-        storagePath
-      );
-
-
-      /* =====================================================
-         UPLOAD COMPRESSED IMAGE
-      ===================================================== */
-
-      setUploadProgress(
-        40
-      );
-
+      setUploadProgress(40);
 
       await uploadBytes(
         storageRef,
@@ -907,45 +555,19 @@ export default function RiderPage() {
           contentType:
             "image/jpeg",
 
-          /*
-           * Since every upload receives a new filename,
-           * this can be cached aggressively.
-           */
-
           cacheControl:
             "public,max-age=31536000,immutable",
         }
       );
 
-
-      setUploadProgress(
-        70
-      );
-
-
-      console.log(
-        "Compressed image uploaded successfully."
-      );
-
-
-      /* =====================================================
-         DOWNLOAD URL
-      ===================================================== */
+      setUploadProgress(70);
 
       const downloadURL =
         await getDownloadURL(
           storageRef
         );
 
-
-      setUploadProgress(
-        80
-      );
-
-
-      /* =====================================================
-         SAVE FIRESTORE
-      ===================================================== */
+      setUploadProgress(80);
 
       await setDoc(
         doc(
@@ -965,36 +587,22 @@ export default function RiderPage() {
         }
       );
 
-
-      setUploadProgress(
-        90
-      );
-
-
-      /* =====================================================
-         UPDATE LOCAL STORAGE
-      ===================================================== */
+      setUploadProgress(90);
 
       let savedUser: any = {};
 
       try {
-
         savedUser =
           JSON.parse(
             localStorage.getItem(
               "ridemateUser"
             ) || "{}"
           );
-
       } catch {
-
         savedUser = {};
-
       }
 
-
       const updatedUser = {
-
         ...savedUser,
 
         uid:
@@ -1013,9 +621,7 @@ export default function RiderPage() {
 
         image:
           downloadURL,
-
       };
-
 
       localStorage.setItem(
         "ridemateUser",
@@ -1024,128 +630,86 @@ export default function RiderPage() {
         )
       );
 
-
-      /*
-       * Update UI immediately.
-       */
-
       setCurrentUser(
         updatedUser
       );
-
 
       setRiderImage(
         downloadURL
       );
 
-
-      setUploadProgress(
-        100
-      );
-
+      setUploadProgress(100);
 
       setShowProfileImage(
         false
       );
 
-
-      console.log(
-        "PROFILE IMAGE UPDATE COMPLETE"
-      );
-
-
       alert(
         "Profile picture updated successfully! 🔥"
       );
-
     } catch (error: any) {
-
       console.error(
         "PROFILE PICTURE UPLOAD ERROR:",
         error
       );
 
-
       let errorMessage =
         "Failed to update profile picture.";
-
 
       if (
         error?.code ===
         "storage/unauthorized"
       ) {
-
         errorMessage =
           "Firebase Storage permission denied.\n\nPlease check your Firebase Storage Rules.";
-
       } else if (
         error?.code ===
         "storage/unauthenticated"
       ) {
-
         errorMessage =
           "Firebase authentication expired.\n\nPlease logout and login again.";
-
       } else if (
         error?.code ===
         "storage/quota-exceeded"
       ) {
-
         errorMessage =
           "Firebase Storage quota has been exceeded.";
-
       } else if (
         error?.code ===
         "storage/canceled"
       ) {
-
         errorMessage =
           "The upload was cancelled.";
-
       } else if (
         error?.code ===
         "storage/retry-limit-exceeded"
       ) {
-
         errorMessage =
           "Firebase could not complete the upload.\n\nPlease check your internet connection and try again.";
-
       } else if (
         error?.message
       ) {
-
         errorMessage =
           `Upload failed.\n\n${error.message}`;
-
       }
-
 
       alert(
         errorMessage
       );
-
     } finally {
-
       setUploadingProfileImage(
         false
       );
 
-      setUploadProgress(
-        0
-      );
-
+      setUploadProgress(0);
 
       if (
         profileInputRef.current
       ) {
-
         profileInputRef.current.value =
           "";
-
       }
-
     }
-
   };
 
 
@@ -1156,26 +720,17 @@ export default function RiderPage() {
   const openPost = async (
     post: any
   ) => {
+    setSelectedPost(post);
 
-    setSelectedPost(
-      post
-    );
-
-    setEditingPost(
-      false
-    );
+    setEditingPost(false);
 
     setEditedCaption(
       post.caption || ""
     );
 
-    setNewComment(
-      ""
-    );
-
+    setNewComment("");
 
     try {
-
       const q =
         query(
           collection(
@@ -1193,45 +748,30 @@ export default function RiderPage() {
           )
         );
 
-
       const snapshot =
-        await getDocs(
-          q
-        );
-
+        await getDocs(q);
 
       const comments =
         snapshot.docs.map(
-          (
-            commentDoc
-          ) => ({
-
+          (commentDoc) => ({
             id:
               commentDoc.id,
 
             ...commentDoc.data(),
-
           })
         );
-
 
       setPostComments(
         comments
       );
-
     } catch (error) {
-
       console.error(
         "Failed to load comments:",
         error
       );
 
-      setPostComments(
-        []
-      );
-
+      setPostComments([]);
     }
-
   };
 
 
@@ -1240,45 +780,27 @@ export default function RiderPage() {
   ========================================================= */
 
   const startEditingPost = () => {
-
     if (
       blockedAdminAction(
         "edit posts"
       )
     ) {
-
       return;
-
     }
 
-
-    if (
-      !selectedPost
-    ) {
-
+    if (!selectedPost) {
       return;
-
     }
 
-
-    if (
-      !isOwnProfile
-    ) {
-
+    if (!isOwnProfile) {
       return;
-
     }
-
 
     setEditedCaption(
       selectedPost.caption || ""
     );
 
-
-    setEditingPost(
-      true
-    );
-
+    setEditingPost(true);
   };
 
 
@@ -1288,50 +810,31 @@ export default function RiderPage() {
 
   const saveEditedCaption =
     async () => {
-
       if (
         blockedAdminAction(
           "edit posts"
         )
       ) {
-
         return;
-
       }
 
-
-      if (
-        !selectedPost
-      ) {
-
+      if (!selectedPost) {
         return;
-
       }
 
-
-      if (
-        !isOwnProfile
-      ) {
-
+      if (!isOwnProfile) {
         alert(
           "You can only edit your own posts."
         );
 
         return;
-
       }
 
-
       try {
-
-        setSavingCaption(
-          true
-        );
-
+        setSavingCaption(true);
 
         const updatedCaption =
           editedCaption.trim();
-
 
         await updateDoc(
           doc(
@@ -1345,26 +848,21 @@ export default function RiderPage() {
           }
         );
 
-
         const updatedPost = {
-
           ...selectedPost,
 
           caption:
             updatedCaption,
-
         };
-
 
         setSelectedPost(
           updatedPost
         );
 
-
         setRiderPosts(
-          prev =>
+          (prev) =>
             prev.map(
-              post =>
+              (post) =>
                 post.id ===
                 selectedPost.id
                   ? {
@@ -1376,36 +874,23 @@ export default function RiderPage() {
             )
         );
 
-
-        setEditingPost(
-          false
-        );
-
+        setEditingPost(false);
 
         alert(
           "Caption updated successfully! ✨"
         );
-
       } catch (error) {
-
         console.error(
           "Failed to update caption:",
           error
         );
 
-
         alert(
           "Failed to update caption. Please try again."
         );
-
       } finally {
-
-        setSavingCaption(
-          false
-        );
-
+        setSavingCaption(false);
       }
-
     };
 
 
@@ -1415,59 +900,37 @@ export default function RiderPage() {
 
   const removePost =
     async () => {
-
       if (
         blockedAdminAction(
           "remove posts"
         )
       ) {
-
         return;
-
       }
 
-
-      if (
-        !selectedPost
-      ) {
-
+      if (!selectedPost) {
         return;
-
       }
 
-
-      if (
-        !isOwnProfile
-      ) {
-
+      if (!isOwnProfile) {
         alert(
           "You can only remove your own posts."
         );
 
         return;
-
       }
-
 
       const confirmed =
         window.confirm(
           "Are you sure you want to remove this post?\n\nThis action cannot be undone."
         );
 
-
       if (!confirmed) {
-
         return;
-
       }
 
-
       try {
-
-        setDeletingPost(
-          true
-        );
-
+        setDeletingPost(true);
 
         await deleteDoc(
           doc(
@@ -1477,13 +940,7 @@ export default function RiderPage() {
           )
         );
 
-
-        /*
-         * Delete comments belonging to this post.
-         */
-
         try {
-
           const commentsQuery =
             query(
               collection(
@@ -1497,16 +954,14 @@ export default function RiderPage() {
               )
             );
 
-
           const commentsSnapshot =
             await getDocs(
               commentsQuery
             );
 
-
           await Promise.all(
             commentsSnapshot.docs.map(
-              commentDoc =>
+              (commentDoc) =>
                 deleteDoc(
                   doc(
                     db,
@@ -1516,73 +971,47 @@ export default function RiderPage() {
                 )
             )
           );
-
         } catch (
           commentDeleteError
         ) {
-
           console.error(
             "Post deleted, but some comments could not be removed:",
             commentDeleteError
           );
-
         }
 
-
         setRiderPosts(
-          prev =>
+          (prev) =>
             prev.filter(
-              post =>
+              (post) =>
                 post.id !==
                 selectedPost.id
             )
         );
 
+        setSelectedPost(null);
 
-        setSelectedPost(
-          null
-        );
+        setPostComments([]);
 
+        setNewComment("");
 
-        setPostComments(
-          []
-        );
-
-
-        setNewComment(
-          ""
-        );
-
-
-        setEditingPost(
-          false
-        );
-
+        setEditingPost(false);
 
         alert(
           "Post removed successfully. 🗑️"
         );
-
       } catch (error) {
-
         console.error(
           "Failed to remove post:",
           error
         );
 
-
         alert(
           "Failed to remove post. Please try again."
         );
-
       } finally {
-
-        setDeletingPost(
-          false
-        );
-
+        setDeletingPost(false);
       }
-
     };
 
 
@@ -1592,54 +1021,33 @@ export default function RiderPage() {
 
   const addCommentToPost =
     async () => {
-
       if (
         blockedAdminAction(
           "comment on posts"
         )
       ) {
-
         return;
-
       }
 
-
-      if (
-        !newComment.trim()
-      ) {
-
+      if (!newComment.trim()) {
         return;
-
       }
 
-
-      if (
-        !currentUser?.name
-      ) {
-
+      if (!currentUser?.name) {
         return;
-
       }
 
-
-      if (
-        !selectedPost
-      ) {
-
+      if (!selectedPost) {
         return;
-
       }
-
 
       try {
-
         await addDoc(
           collection(
             db,
             "comments"
           ),
           {
-
             postId:
               selectedPost.id,
 
@@ -1655,244 +1063,142 @@ export default function RiderPage() {
 
             createdAt:
               Date.now(),
-
           }
         );
 
-
-        setNewComment(
-          ""
-        );
-
+        setNewComment("");
 
         await openPost(
           selectedPost
         );
-
       } catch (error) {
-
         console.error(
           "Failed to add comment:",
           error
         );
-
       }
-
     };
 
 
   /* =========================================================
-     ACHIEVEMENTS
-  ========================================================= */
-
-  const achievements: string[] =
-    [];
-
-
-  if (
-    riderTrips.length >= 1
-  )
-    achievements.push(
-      "🏍 First Ride"
-    );
-
-
-  if (
-    riderTrips.length >= 5
-  )
-    achievements.push(
-      "🥈 Road Explorer"
-    );
-
-
-  if (
-    riderTrips.length >= 10
-  )
-    achievements.push(
-      "🥇 RideMate Legend"
-    );
-
-
-  if (
-    totalDistance >= 500
-  )
-    achievements.push(
-      "🔵 Explorer"
-    );
-
-
-  if (
-    totalDistance >= 2000
-  )
-    achievements.push(
-      "🟣 Road Warrior"
-    );
-
-
-  if (
-    totalDistance >= 5000
-  )
-    achievements.push(
-      "🟠 Adventure Master"
-    );
-
-
-  if (
-    totalDistance >= 10000
-  )
-    achievements.push(
-      "🔴 RideMate Legend"
-    );
-
-
-  if (
-    totalLikes >= 50
-  )
-    achievements.push(
-      "❤️ Popular Rider"
-    );
-
-
-  if (
-    totalLikes >= 100
-  )
-    achievements.push(
-      "🔥 Viral Rider"
-    );
-
-
-  if (
-    followers >= 10
-  )
-    achievements.push(
-      "👥 Community Star"
-    );
-
-
-  if (
-    followers >= 50
-  )
-    achievements.push(
-      "👑 RideMate Icon"
-    );
-
-
-  /* =========================================================
-     CURRENT USER + FOLLOW STATUS
-  ========================================================= */
+     CURRENT USER + FOLLOW STATUS + COUNTS
+     
+     IMPORTANT FIX:
+     Followers and Following counts are now loaded even
+     when viewing your own profile.
+========================================================= */
 
   useEffect(() => {
-
     const checkFollowStatus =
       async () => {
-
         try {
+          /* ==================================================
+             LOAD CURRENT USER
+          ================================================== */
 
-          let savedUser: any =
-            {};
+          let savedUser: any = {};
 
           try {
-
             savedUser =
               JSON.parse(
                 localStorage.getItem(
                   "ridemateUser"
                 ) || "{}"
               );
-
           } catch {
-
-            savedUser =
-              {};
-
+            savedUser = {};
           }
-
 
           setCurrentUser(
             savedUser
           );
 
 
-          /*
-           * IMPORTANT:
-           * If this is the user's own profile and localStorage
-           * contains the image, show it immediately.
-           */
+          /* ==================================================
+             KEEP OWN PROFILE IMAGE FAST
+          ================================================== */
 
           if (
             savedUser?.name ===
               riderName &&
             savedUser?.image
           ) {
-
             setRiderImage(
               savedUser.image
             );
-
           }
 
 
-          if (
-            !savedUser.name
-          ) {
+          /* ==================================================
+             NO LOGGED-IN USER
+          ================================================== */
 
+          if (!savedUser?.name) {
             return;
-
           }
 
 
-          /*
-           * Don't allow following yourself.
-           */
+          /* ==================================================
+             CHECK IF VIEWING OWN PROFILE
+          ================================================== */
 
-          if (
+          const viewingOwnProfile =
             savedUser.name ===
-            riderName
-          ) {
+            riderName;
+
+
+          /* ==================================================
+             FOLLOW STATUS
+             
+             If viewing another rider:
+             check whether current user follows them.
+
+             If viewing own profile:
+             don't check because you cannot follow yourself.
+          ================================================== */
+
+          if (viewingOwnProfile) {
+            setIsFollowing(false);
+          } else {
+            const followId =
+              `${savedUser.name}_${riderName}`;
+
+            const followDoc =
+              await getDoc(
+                doc(
+                  db,
+                  "follows",
+                  followId
+                )
+              );
 
             setIsFollowing(
-              false
+              followDoc.exists()
             );
-
-            return;
-
           }
 
 
-          const followId =
-            `${savedUser.name}_${riderName}`;
+          /* ==================================================
+             FOLLOWERS + FOLLOWING COUNTS
+             
+             THIS IS THE IMPORTANT FIX.
 
-
-          /*
-           * Only fetch the exact follow document here.
-           * We no longer wait for the complete follows
-           * collection before rendering the profile.
-           */
-
-          const followDoc =
-            await getDoc(
-              doc(
-                db,
-                "follows",
-                followId
-              )
-            );
-
-
-          setIsFollowing(
-            followDoc.exists()
-          );
-
-
-          /*
-           * Load follower/following counts separately.
-           */
+             These queries run for BOTH:
+             - your own profile
+             - another rider's profile
+          ================================================== */
 
           const [
             followersSnapshot,
             followingSnapshot,
           ] =
             await Promise.all([
+              /* ==============================================
+                 FOLLOWERS
+
+                 People whose "following" field is this rider.
+              ============================================== */
+
               getDocs(
                 query(
                   collection(
@@ -1906,6 +1212,12 @@ export default function RiderPage() {
                   )
                 )
               ),
+
+              /* ==============================================
+                 FOLLOWING
+
+                 People whose "follower" field is this rider.
+              ============================================== */
 
               getDocs(
                 query(
@@ -1923,24 +1235,24 @@ export default function RiderPage() {
             ]);
 
 
+          /* ==================================================
+             UPDATE PROFILE COUNTS
+          ================================================== */
+
           setFollowers(
             followersSnapshot.size
           );
-
 
           setFollowing(
             followingSnapshot.size
           );
 
         } catch (error) {
-
           console.error(
-            "Follow status error:",
+            "Follow status / count error:",
             error
           );
-
         }
-
       };
 
 
@@ -1957,73 +1269,40 @@ export default function RiderPage() {
   ========================================================= */
 
   useEffect(() => {
-
-    let cancelled =
-      false;
-
+    let cancelled = false;
 
     const loadRider =
       async () => {
-
         try {
-
-          /*
-           * ==================================================
-           * LOCAL CACHE FIRST
-           * ==================================================
-           */
-
-          let savedUser: any =
-            {};
+          let savedUser: any = {};
 
           try {
-
             savedUser =
               JSON.parse(
                 localStorage.getItem(
                   "ridemateUser"
                 ) || "{}"
               );
-
           } catch {
-
-            savedUser =
-              {};
-
+            savedUser = {};
           }
 
-
-          /*
-           * Keep cached own image visible.
-           */
-
-          let profileImage =
-            "";
+          let profileImage = "";
 
           if (
             savedUser?.name ===
               riderName &&
             savedUser?.image
           ) {
-
             profileImage =
               savedUser.image;
 
-
             if (!cancelled) {
-
               setRiderImage(
                 profileImage
               );
-
             }
-
           }
-
-
-          /*
-           * Admin image gets priority in investigation mode.
-           */
 
           if (
             isAdminView &&
@@ -2031,19 +1310,14 @@ export default function RiderPage() {
               riderName &&
             adminView?.userImage
           ) {
-
             profileImage =
               adminView.userImage;
 
-
             if (!cancelled) {
-
               setRiderImage(
                 profileImage
               );
-
             }
-
           }
 
 
@@ -2054,20 +1328,12 @@ export default function RiderPage() {
           let userProfileData:
             any = null;
 
-
-          /*
-           * For own profile, use the UID directly.
-           * This is faster than searching by name.
-           */
-
           if (
             savedUser?.uid &&
             savedUser?.name ===
               riderName
           ) {
-
             try {
-
               const ownUserDoc =
                 await getDoc(
                   doc(
@@ -2077,39 +1343,26 @@ export default function RiderPage() {
                   )
                 );
 
-
               if (
                 ownUserDoc.exists()
               ) {
-
                 userProfileData =
                   ownUserDoc.data();
-
               }
-
             } catch (error) {
-
               console.error(
                 "Failed to load own user profile:",
                 error
               );
-
             }
-
           }
 
-
-          /*
-           * For other riders, search username first.
-           */
 
           if (
             !userProfileData &&
             !isAdminView
           ) {
-
             try {
-
               const usernameQuery =
                 query(
                   collection(
@@ -2124,45 +1377,33 @@ export default function RiderPage() {
                   limit(1)
                 );
 
-
               const usernameSnapshot =
                 await getDocs(
                   usernameQuery
                 );
 
-
               if (
                 !usernameSnapshot.empty
               ) {
-
                 userProfileData =
-                  usernameSnapshot.docs[0].data();
-
+                  usernameSnapshot
+                    .docs[0]
+                    .data();
               }
-
             } catch (error) {
-
               console.error(
                 "Username profile lookup failed:",
                 error
               );
-
             }
-
           }
 
-
-          /*
-           * Fallback to name lookup for older accounts.
-           */
 
           if (
             !userProfileData &&
             !isAdminView
           ) {
-
             try {
-
               const nameQuery =
                 query(
                   collection(
@@ -2177,74 +1418,50 @@ export default function RiderPage() {
                   limit(1)
                 );
 
-
               const nameSnapshot =
                 await getDocs(
                   nameQuery
                 );
 
-
               if (
                 !nameSnapshot.empty
               ) {
-
                 userProfileData =
-                  nameSnapshot.docs[0].data();
-
+                  nameSnapshot
+                    .docs[0]
+                    .data();
               }
-
             } catch (error) {
-
               console.error(
                 "Name profile lookup failed:",
                 error
               );
-
             }
-
           }
 
-
-          /*
-           * Update image if Firestore has a newer one.
-           */
 
           if (
             userProfileData?.image
           ) {
-
             profileImage =
               userProfileData.image;
 
-
             if (!cancelled) {
-
               setRiderImage(
                 profileImage
               );
-
             }
-
-
-            /*
-             * Keep own local cache synchronized.
-             */
 
             if (
               savedUser?.name ===
               riderName
             ) {
-
               const updatedLocalUser =
                 {
-
                   ...savedUser,
-
                   image:
                     userProfileData.image,
-
                 };
-
 
               localStorage.setItem(
                 "ridemateUser",
@@ -2252,14 +1469,12 @@ export default function RiderPage() {
                   updatedLocalUser
                 )
               );
-
             }
-
           }
 
 
           /* ==================================================
-             LOAD ALL MAJOR PROFILE DATA IN PARALLEL
+             LOAD MAJOR PROFILE DATA
           ================================================== */
 
           const [
@@ -2290,7 +1505,6 @@ export default function RiderPage() {
               ),
             ]);
 
-
           if (cancelled) {
             return;
           }
@@ -2300,24 +1514,16 @@ export default function RiderPage() {
              COMPLETED TRIPS
           ================================================== */
 
-          const trips: any[] =
-            [];
+          const trips: any[] = [];
 
-          let likes =
-            0;
+          let likes = 0;
 
-          let distance =
-            0;
-
+          let distance = 0;
 
           tripsSnapshot.forEach(
-            (
-              tripDoc
-            ) => {
-
+            (tripDoc) => {
               const trip =
                 tripDoc.data();
-
 
               if (
                 trip.userName ===
@@ -2325,68 +1531,47 @@ export default function RiderPage() {
                 trip.status ===
                   "completed"
               ) {
-
                 trips.push({
-
                   id:
                     tripDoc.id,
-
                   ...trip,
-
                 });
 
+                likes += Number(
+                  trip.likes || 0
+                );
 
-                likes +=
-                  Number(
-                    trip.likes ||
-                      0
-                  );
-
-
-                distance +=
-                  Number(
-                    trip.distance ||
-                      0
-                  );
-
+                distance += Number(
+                  trip.distance || 0
+                );
 
                 if (
                   !profileImage &&
                   trip.userImage
                 ) {
-
                   profileImage =
                     trip.userImage;
-
                 }
-
               }
-
             }
           );
-
 
           if (
             profileImage &&
             !riderImage
           ) {
-
             setRiderImage(
               profileImage
             );
-
           }
-
 
           setRiderTrips(
             trips
           );
 
-
           setTotalLikes(
             likes
           );
-
 
           setTotalDistance(
             distance
@@ -2397,55 +1582,36 @@ export default function RiderPage() {
              POSTS
           ================================================== */
 
-          const posts: any[] =
-            [];
-
+          const posts: any[] = [];
 
           postsSnapshot.forEach(
-            (
-              postDoc
-            ) => {
-
+            (postDoc) => {
               const post =
                 postDoc.data();
-
 
               if (
                 post.userName ===
                   riderName &&
                 post.mediaUrl
               ) {
-
                 posts.push({
-
                   id:
                     postDoc.id,
-
                   ...post,
-
                 });
-
               }
-
             }
           );
 
-
           posts.sort(
-            (
-              a,
-              b
-            ) =>
+            (a, b) =>
               Number(
-                b.createdAt ||
-                  0
+                b.createdAt || 0
               ) -
               Number(
-                a.createdAt ||
-                  0
+                a.createdAt || 0
               )
           );
-
 
           setRiderPosts(
             posts
@@ -2457,70 +1623,48 @@ export default function RiderPage() {
           ================================================== */
 
           const riderReviews:
-            any[] =
-            [];
+            any[] = [];
 
-
-          let totalRating =
-            0;
-
+          let totalRating = 0;
 
           reviewsSnapshot.forEach(
-            (
-              reviewDoc
-            ) => {
-
+            (reviewDoc) => {
               const review =
                 reviewDoc.data();
-
 
               if (
                 review.rider ===
                 riderName
               ) {
-
                 riderReviews.push(
                   review
                 );
 
-
                 totalRating +=
                   Number(
-                    review.rating ||
-                      0
+                    review.rating || 0
                   );
-
               }
-
             }
           );
 
-
           riderReviews.sort(
-            (
-              a,
-              b
-            ) =>
+            (a, b) =>
               Number(
-                b.createdAt ||
-                  0
+                b.createdAt || 0
               ) -
               Number(
-                a.createdAt ||
-                  0
+                a.createdAt || 0
               )
           );
-
 
           setReviews(
             riderReviews
           );
 
-
           setReviewCount(
             riderReviews.length
           );
-
 
           setAvgRating(
             riderReviews.length
@@ -2534,58 +1678,38 @@ export default function RiderPage() {
              BADGE
           ================================================== */
 
-          if (
-            trips.length >= 10
-          ) {
-
+          if (trips.length >= 10) {
             setBadge(
               "🥇 RideMate Legend"
             );
-
           } else if (
             trips.length >= 5
           ) {
-
             setBadge(
               "🥈 Road Explorer"
             );
-
           } else if (
             trips.length >= 1
           ) {
-
             setBadge(
               "🥉 Rookie Rider"
             );
-
           } else {
-
             setBadge("");
-
           }
-
         } catch (error) {
-
           console.error(
             "Failed to load rider:",
             error
           );
-
         }
-
       };
-
 
     loadRider();
 
-
     return () => {
-
-      cancelled =
-        true;
-
+      cancelled = true;
     };
-
   }, [
     riderName,
     isAdminView,
@@ -2599,17 +1723,13 @@ export default function RiderPage() {
 
   const toggleFollow =
     async () => {
-
       if (
         blockedAdminAction(
           "follow or unfollow riders"
         )
       ) {
-
         return;
-
       }
-
 
       const currentUser =
         JSON.parse(
@@ -2618,36 +1738,22 @@ export default function RiderPage() {
           ) || "{}"
         );
 
-
-      if (
-        !currentUser.name
-      ) {
-
+      if (!currentUser.name) {
         return;
-
       }
-
 
       if (
         currentUser.name ===
         riderName
       ) {
-
         return;
-
       }
-
 
       const followId =
         `${currentUser.name}_${riderName}`;
 
-
       try {
-
-        if (
-          isFollowing
-        ) {
-
+        if (isFollowing) {
           await deleteDoc(
             doc(
               db,
@@ -2656,22 +1762,16 @@ export default function RiderPage() {
             )
           );
 
-
-          setIsFollowing(
-            false
-          );
-
+          setIsFollowing(false);
 
           setFollowers(
-            prev =>
+            (prev) =>
               Math.max(
                 0,
                 prev - 1
               )
           );
-
         } else {
-
           await setDoc(
             doc(
               db,
@@ -2679,16 +1779,13 @@ export default function RiderPage() {
               followId
             ),
             {
-
               follower:
                 currentUser.name,
 
               following:
                 riderName,
-
             }
           );
-
 
           await addDoc(
             collection(
@@ -2696,7 +1793,6 @@ export default function RiderPage() {
               "notifications"
             ),
             {
-
               user:
                 riderName,
 
@@ -2705,32 +1801,22 @@ export default function RiderPage() {
 
               createdAt:
                 Date.now(),
-
             }
           );
 
-
-          setIsFollowing(
-            true
-          );
-
+          setIsFollowing(true);
 
           setFollowers(
-            prev =>
+            (prev) =>
               prev + 1
           );
-
         }
-
       } catch (error) {
-
         console.error(
           "Follow error:",
           error
         );
-
       }
-
     };
 
 
@@ -2743,16 +1829,93 @@ export default function RiderPage() {
     riderName;
 
 
-  /*
-   * No Date.now() cache busting.
-   *
-   * Firebase Storage URL is unique for every new upload.
-   * Browser can therefore cache it for a long time.
-   */
-
   const displayedProfileImage =
     riderImage ||
     DEFAULT_PROFILE_IMAGE;
+
+
+  /* =========================================================
+     ACHIEVEMENTS
+  ========================================================= */
+
+  const achievements: string[] = [];
+
+  if (
+    riderTrips.length >= 1
+  )
+    achievements.push(
+      "🏍 First Ride"
+    );
+
+  if (
+    riderTrips.length >= 5
+  )
+    achievements.push(
+      "🥈 Road Explorer"
+    );
+
+  if (
+    riderTrips.length >= 10
+  )
+    achievements.push(
+      "🥇 RideMate Legend"
+    );
+
+  if (
+    totalDistance >= 500
+  )
+    achievements.push(
+      "🔵 Explorer"
+    );
+
+  if (
+    totalDistance >= 2000
+  )
+    achievements.push(
+      "🟣 Road Warrior"
+    );
+
+  if (
+    totalDistance >= 5000
+  )
+    achievements.push(
+      "🟠 Adventure Master"
+    );
+
+  if (
+    totalDistance >= 10000
+  )
+    achievements.push(
+      "🔴 RideMate Legend"
+    );
+
+  if (
+    totalLikes >= 50
+  )
+    achievements.push(
+      "❤️ Popular Rider"
+    );
+
+  if (
+    totalLikes >= 100
+  )
+    achievements.push(
+      "🔥 Viral Rider"
+    );
+
+  if (
+    followers >= 10
+  )
+    achievements.push(
+      "👥 Community Star"
+    );
+
+  if (
+    followers >= 50
+  )
+    achievements.push(
+      "👑 RideMate Icon"
+    );
 
 
   /* =========================================================
@@ -2760,7 +1923,6 @@ export default function RiderPage() {
   ========================================================= */
 
   return (
-
     <main
       className="
         min-h-screen
@@ -2771,7 +1933,6 @@ export default function RiderPage() {
         pb-10
       "
     >
-
       <div
         className="
           max-w-4xl
@@ -2779,12 +1940,9 @@ export default function RiderPage() {
         "
       >
 
-        {/* ==================================================
-            ADMIN BANNER
-        ================================================== */}
+        {/* ADMIN BANNER */}
 
         {isAdminView && (
-
           <div
             className="
               mb-8
@@ -2801,7 +1959,6 @@ export default function RiderPage() {
               shadow-orange-500/20
             "
           >
-
             🛡️ INVESTIGATION MODE — Viewing{" "}
             {adminView?.userName ||
               riderName}'s Profile
@@ -2809,55 +1966,30 @@ export default function RiderPage() {
             <span className="ml-2 opacity-70">
               (Read Only)
             </span>
-
           </div>
-
         )}
 
 
-        <div
-          className="
-            text-center
-          "
-        >
+        <div className="text-center">
 
           {/* ==================================================
               PROFILE PHOTO
           ================================================== */}
 
-          <div
-            className="
-              flex
-              justify-center
-            "
-          >
+          <div className="flex justify-center">
 
-            <div
-              className="
-                relative
-              "
-            >
+            <div className="relative">
 
               <img
-                src={
-                  displayedProfileImage
-                }
+                src={displayedProfileImage}
                 alt={`${riderName}'s profile picture`}
                 loading="eager"
                 fetchPriority="high"
                 decoding="async"
                 onClick={() => {
-
-                  if (
-                    riderImage
-                  ) {
-
-                    setShowProfileImage(
-                      true
-                    );
-
+                  if (riderImage) {
+                    setShowProfileImage(true);
                   }
-
                 }}
                 className="
                   w-36
@@ -2875,85 +2007,68 @@ export default function RiderPage() {
               />
 
 
-              {/* ==================================================
-                  CHANGE PROFILE PHOTO
-              ================================================== */}
+              {/* CHANGE PROFILE PHOTO */}
 
               {isOwnProfile &&
                 !isAdminView && (
-
-                <>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      profileInputRef.current?.click()
-                    }
-                    disabled={
-                      uploadingProfileImage
-                    }
-                    className="
-                      absolute
-                      bottom-0
-                      right-0
-                      w-11
-                      h-11
-                      rounded-full
-                      bg-orange-500
-                      text-black
-                      border-4
-                      border-black
-                      flex
-                      items-center
-                      justify-center
-                      font-black
-                      text-xl
-                      hover:bg-orange-400
-                      hover:scale-105
-                      transition
-                      disabled:opacity-50
-                    "
-                    title="Change profile picture"
-                  >
-
-                    {
-                      uploadingProfileImage
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        profileInputRef.current?.click()
+                      }
+                      disabled={
+                        uploadingProfileImage
+                      }
+                      className="
+                        absolute
+                        bottom-0
+                        right-0
+                        w-11
+                        h-11
+                        rounded-full
+                        bg-orange-500
+                        text-black
+                        border-4
+                        border-black
+                        flex
+                        items-center
+                        justify-center
+                        font-black
+                        text-xl
+                        hover:bg-orange-400
+                        hover:scale-105
+                        transition
+                        disabled:opacity-50
+                      "
+                      title="Change profile picture"
+                    >
+                      {uploadingProfileImage
                         ? "⏳"
-                        : "📷"
-                    }
+                        : "📷"}
+                    </button>
 
-                  </button>
-
-
-                  <input
-                    ref={
-                      profileInputRef
-                    }
-                    type="file"
-                    accept="image/*"
-                    onChange={
-                      changeProfilePicture
-                    }
-                    className="hidden"
-                  />
-
-                </>
-
-              )}
+                    <input
+                      ref={profileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={
+                        changeProfilePicture
+                      }
+                      className="hidden"
+                    />
+                  </>
+                )}
 
             </div>
-
           </div>
 
 
-          {/* ==================================================
-              UPLOAD STATUS
-          ================================================== */}
+          {/* UPLOAD STATUS */}
 
           {isOwnProfile &&
             !isAdminView &&
             uploadingProfileImage && (
-
               <div
                 className="
                   mt-3
@@ -2961,7 +2076,6 @@ export default function RiderPage() {
                   mx-auto
                 "
               >
-
                 <p
                   className="
                     text-orange-400
@@ -2970,12 +2084,9 @@ export default function RiderPage() {
                     mb-2
                   "
                 >
-
                   Optimizing & uploading...{" "}
                   {uploadProgress}%
-
                 </p>
-
 
                 <div
                   className="
@@ -2986,7 +2097,6 @@ export default function RiderPage() {
                     overflow-hidden
                   "
                 >
-
                   <div
                     className="
                       h-full
@@ -3000,34 +2110,27 @@ export default function RiderPage() {
                         `${uploadProgress}%`,
                     }}
                   />
-
                 </div>
-
               </div>
-
             )}
 
 
           {isOwnProfile &&
             !isAdminView &&
             !uploadingProfileImage && (
-
-            <p
-              className="
-                text-zinc-500
-                text-sm
-                mt-2
-              "
-            >
-              Tap the 📷 button to change your profile picture
-            </p>
-
-          )}
+              <p
+                className="
+                  text-zinc-500
+                  text-sm
+                  mt-2
+                "
+              >
+                Tap the 📷 button to change your profile picture
+              </p>
+            )}
 
 
-          {/* ==================================================
-              NAME
-          ================================================== */}
+          {/* NAME */}
 
           <h1
             className="
@@ -3054,12 +2157,9 @@ export default function RiderPage() {
           </div>
 
 
-          {/* ==================================================
-              FOLLOW + MESSAGE
-          ================================================== */}
+          {/* FOLLOW + MESSAGE */}
 
           {!isOwnProfile && (
-
             <div
               className="
                 mt-10
@@ -3070,7 +2170,6 @@ export default function RiderPage() {
                 items-center
               "
             >
-
               <button
                 onClick={
                   toggleFollow
@@ -3093,13 +2192,11 @@ export default function RiderPage() {
                   }
                 `}
               >
-
                 {isAdminView
                   ? "Follow 🔒"
                   : isFollowing
                   ? "Following ✅"
                   : "Follow 👥"}
-
               </button>
 
 
@@ -3117,15 +2214,11 @@ export default function RiderPage() {
               >
                 Message Rider 💬
               </Link>
-
             </div>
-
           )}
 
 
-          {/* ==================================================
-              STATS
-          ================================================== */}
+          {/* STATS */}
 
           <div
             className="
@@ -3151,7 +2244,6 @@ export default function RiderPage() {
                 transition
               "
             >
-
               <p
                 className="
                   text-2xl
@@ -3171,7 +2263,6 @@ export default function RiderPage() {
               >
                 Followers
               </p>
-
             </Link>
 
 
@@ -3190,7 +2281,6 @@ export default function RiderPage() {
                 transition
               "
             >
-
               <p
                 className="
                   text-2xl
@@ -3210,7 +2300,6 @@ export default function RiderPage() {
               >
                 Following
               </p>
-
             </Link>
 
 
@@ -3229,7 +2318,6 @@ export default function RiderPage() {
                 transition
               "
             >
-
               <p
                 className="
                   text-2xl
@@ -3249,27 +2337,18 @@ export default function RiderPage() {
               >
                 Rating
               </p>
-
             </Link>
 
           </div>
 
 
-          {/* ==================================================
-              RIDER BIO
-          ================================================== */}
+          {/* RIDER BIO */}
 
-          <div
-            className="
-              mt-6
-            "
-          >
+          <div className="mt-6">
 
             <button
               onClick={() =>
-                setShowBio(
-                  !showBio
-                )
+                setShowBio(!showBio)
               }
               className="
                 w-full
@@ -3282,18 +2361,13 @@ export default function RiderPage() {
                 font-black
               "
             >
-
-              {
-                showBio
-                  ? "▲ Hide Rider Bio"
-                  : "▼ Rider Bio"
-              }
-
+              {showBio
+                ? "▲ Hide Rider Bio"
+                : "▼ Rider Bio"}
             </button>
 
 
             {showBio && (
-
               <div
                 className="
                   space-y-3
@@ -3312,7 +2386,6 @@ export default function RiderPage() {
                   {riderTrips.length}
                 </div>
 
-
                 <div
                   className="
                     bg-zinc-900
@@ -3323,7 +2396,6 @@ export default function RiderPage() {
                   ❤️ Likes Received:{" "}
                   {totalLikes}
                 </div>
-
 
                 <div
                   className="
@@ -3336,7 +2408,6 @@ export default function RiderPage() {
                   {totalDistance} KM
                 </div>
 
-
                 <div
                   className="
                     bg-zinc-900
@@ -3344,19 +2415,15 @@ export default function RiderPage() {
                     rounded-2xl
                   "
                 >
-
-                  {
-                    totalDistance >= 10000
-                      ? "🔴 RideMate Legend"
-                      : totalDistance >= 5000
-                      ? "🟠 Adventure Master"
-                      : totalDistance >= 2000
-                      ? "🟣 Road Warrior"
-                      : totalDistance >= 500
-                      ? "🔵 Explorer"
-                      : "🟢 Beginner Rider"
-                  }
-
+                  {totalDistance >= 10000
+                    ? "🔴 RideMate Legend"
+                    : totalDistance >= 5000
+                    ? "🟠 Adventure Master"
+                    : totalDistance >= 2000
+                    ? "🟣 Road Warrior"
+                    : totalDistance >= 500
+                    ? "🔵 Explorer"
+                    : "🟢 Beginner Rider"}
                 </div>
 
 
@@ -3367,7 +2434,6 @@ export default function RiderPage() {
                     rounded-2xl
                   "
                 >
-
                   <h3
                     className="
                       text-orange-500
@@ -3378,41 +2444,31 @@ export default function RiderPage() {
                     🏅 Achievements
                   </h3>
 
-
                   <div
                     className="
                       space-y-2
                     "
                   >
-
                     {achievements.map(
                       (
                         achievement,
                         index
                       ) => (
-
                         <div
-                          key={
-                            index
-                          }
+                          key={index}
                           className="
                             bg-black
                             p-3
                             rounded-xl
                           "
                         >
-                          {
-                            achievement
-                          }
+                          {achievement}
                         </div>
-
                       )
                     )}
 
-
                     {achievements.length ===
                       0 && (
-
                       <p
                         className="
                           text-zinc-500
@@ -3420,29 +2476,19 @@ export default function RiderPage() {
                       >
                         Keep riding to unlock achievements 🏍️
                       </p>
-
                     )}
-
                   </div>
-
                 </div>
 
               </div>
-
             )}
 
           </div>
 
 
-          {/* ==================================================
-              POSTS
-          ================================================== */}
+          {/* POSTS */}
 
-          <div
-            className="
-              mt-10
-            "
-          >
+          <div className="mt-10">
 
             <h2
               className="
@@ -3457,9 +2503,7 @@ export default function RiderPage() {
             </h2>
 
 
-            {riderPosts.length ===
-            0 ? (
-
+            {riderPosts.length === 0 ? (
               <div
                 className="
                   bg-zinc-900
@@ -3472,9 +2516,7 @@ export default function RiderPage() {
               >
                 No posts yet 🏍️
               </div>
-
             ) : (
-
               <div
                 className="
                   grid
@@ -3482,20 +2524,12 @@ export default function RiderPage() {
                   gap-1
                 "
               >
-
                 {riderPosts.map(
-                  (
-                    post
-                  ) => (
-
+                  (post) => (
                     <div
-                      key={
-                        post.id
-                      }
+                      key={post.id}
                       onClick={() =>
-                        openPost(
-                          post
-                        )
+                        openPost(post)
                       }
                       className="
                         aspect-square
@@ -3506,13 +2540,10 @@ export default function RiderPage() {
                         transition
                       "
                     >
-
                       {post.mediaUrl ? (
-
                         post.mediaType?.startsWith(
                           "image"
                         ) ? (
-
                           <img
                             src={
                               post.mediaUrl
@@ -3526,9 +2557,7 @@ export default function RiderPage() {
                             "
                             alt=""
                           />
-
                         ) : (
-
                           <video
                             src={
                               post.mediaUrl
@@ -3542,11 +2571,8 @@ export default function RiderPage() {
                             playsInline
                             preload="metadata"
                           />
-
                         )
-
                       ) : (
-
                         <div
                           className="
                             w-full
@@ -3559,55 +2585,40 @@ export default function RiderPage() {
                         >
                           No Media
                         </div>
-
                       )}
-
                     </div>
-
                   )
                 )}
-
               </div>
-
             )}
 
           </div>
 
 
-          {/* ==================================================
-              LOGOUT
-          ================================================== */}
+          {/* LOGOUT */}
 
           {isOwnProfile &&
             !isAdminView && (
+              <div className="mt-12">
 
-            <div
-              className="
-                mt-12
-              "
-            >
+                <button
+                  onClick={logout}
+                  className="
+                    w-full
+                    bg-red-600
+                    hover:bg-red-700
+                    py-4
+                    rounded-2xl
+                    text-xl
+                    font-black
+                    transition
+                  "
+                >
+                  🚪 Logout
+                </button>
 
-              <button
-                onClick={
-                  logout
-                }
-                className="
-                  w-full
-                  bg-red-600
-                  hover:bg-red-700
-                  py-4
-                  rounded-2xl
-                  text-xl
-                  font-black
-                  transition
-                "
-              >
-                🚪 Logout
-              </button>
-
-            </div>
-
-          )}
+              </div>
+            )}
 
         </div>
 
@@ -3619,7 +2630,6 @@ export default function RiderPage() {
       ====================================================== */}
 
       {selectedPost && (
-
         <div
           className="
             fixed
@@ -3639,31 +2649,13 @@ export default function RiderPage() {
             "
           >
 
-            {/* CLOSE */}
-
             <button
               onClick={() => {
-
-                setSelectedPost(
-                  null
-                );
-
-                setNewComment(
-                  ""
-                );
-
-                setPostComments(
-                  []
-                );
-
-                setEditingPost(
-                  false
-                );
-
-                setEditedCaption(
-                  ""
-                );
-
+                setSelectedPost(null);
+                setNewComment("");
+                setPostComments([]);
+                setEditingPost(false);
+                setEditedCaption("");
               }}
               className="
                 text-3xl
@@ -3674,12 +2666,9 @@ export default function RiderPage() {
             </button>
 
 
-            {/* POST MEDIA */}
-
             {selectedPost.mediaType?.startsWith(
               "image"
             ) ? (
-
               <img
                 src={
                   selectedPost.mediaUrl
@@ -3695,9 +2684,7 @@ export default function RiderPage() {
                 decoding="async"
                 alt=""
               />
-
             ) : (
-
               <video
                 src={
                   selectedPost.mediaUrl
@@ -3711,7 +2698,6 @@ export default function RiderPage() {
                   bg-black
                 "
               />
-
             )}
 
 
@@ -3719,240 +2705,217 @@ export default function RiderPage() {
 
             {isOwnProfile &&
               !isAdminView && (
+                <div
+                  className="
+                    mt-5
+                    bg-zinc-900
+                    border
+                    border-zinc-800
+                    rounded-2xl
+                    p-4
+                  "
+                >
 
-              <div
-                className="
-                  mt-5
-                  bg-zinc-900
-                  border
-                  border-zinc-800
-                  rounded-2xl
-                  p-4
-                "
-              >
-
-                {!editingPost ? (
-
-                  <div
-                    className="
-                      flex
-                      flex-col
-                      sm:flex-row
-                      gap-3
-                    "
-                  >
-
-                    <button
-                      type="button"
-                      onClick={
-                        startEditingPost
-                      }
-                      className="
-                        flex-1
-                        bg-orange-500
-                        text-black
-                        py-3
-                        px-5
-                        rounded-xl
-                        font-black
-                        hover:bg-orange-400
-                        transition
-                      "
-                    >
-                      ✏️ Edit Post
-                    </button>
-
-
-                    <button
-                      type="button"
-                      onClick={
-                        removePost
-                      }
-                      disabled={
-                        deletingPost
-                      }
-                      className="
-                        flex-1
-                        bg-red-600
-                        text-white
-                        py-3
-                        px-5
-                        rounded-xl
-                        font-black
-                        hover:bg-red-700
-                        transition
-                        disabled:opacity-50
-                      "
-                    >
-
-                      {deletingPost
-                        ? "Removing..."
-                        : "🗑️ Remove Post"}
-
-                    </button>
-
-                  </div>
-
-                ) : (
-
-                  <div>
-
-                    <h3
-                      className="
-                        text-lg
-                        font-black
-                        text-orange-500
-                        mb-3
-                      "
-                    >
-                      ✏️ Edit Caption
-                    </h3>
-
-
-                    <textarea
-                      value={
-                        editedCaption
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        setEditedCaption(
-                          event.target.value
-                        )
-                      }
-                      rows={4}
-                      maxLength={500}
-                      placeholder="Write your caption..."
-                      className="
-                        w-full
-                        bg-black
-                        border
-                        border-zinc-700
-                        rounded-xl
-                        p-4
-                        text-white
-                        outline-none
-                        resize-none
-                        focus:border-orange-500
-                      "
-                    />
-
-
+                  {!editingPost ? (
                     <div
                       className="
                         flex
-                        justify-between
-                        items-center
-                        mt-2
-                      "
-                    >
-
-                      <span
-                        className="
-                          text-xs
-                          text-zinc-500
-                        "
-                      >
-                        {
-                          editedCaption.length
-                        }/500
-                      </span>
-
-
-                      <span
-                        className="
-                          text-xs
-                          text-zinc-500
-                        "
-                      >
-                        Caption only
-                      </span>
-
-                    </div>
-
-
-                    <div
-                      className="
-                        flex
+                        flex-col
+                        sm:flex-row
                         gap-3
-                        mt-4
                       "
                     >
-
-                      <button
-                        type="button"
-                        onClick={() => {
-
-                          setEditingPost(
-                            false
-                          );
-
-                          setEditedCaption(
-                            selectedPost.caption ||
-                              ""
-                          );
-
-                        }}
-                        disabled={
-                          savingCaption
-                        }
-                        className="
-                          flex-1
-                          bg-zinc-700
-                          py-3
-                          rounded-xl
-                          font-black
-                          hover:bg-zinc-600
-                          transition
-                          disabled:opacity-50
-                        "
-                      >
-                        Cancel
-                      </button>
-
 
                       <button
                         type="button"
                         onClick={
-                          saveEditedCaption
-                        }
-                        disabled={
-                          savingCaption
+                          startEditingPost
                         }
                         className="
                           flex-1
                           bg-orange-500
                           text-black
                           py-3
+                          px-5
                           rounded-xl
                           font-black
                           hover:bg-orange-400
                           transition
+                        "
+                      >
+                        ✏️ Edit Post
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={
+                          removePost
+                        }
+                        disabled={
+                          deletingPost
+                        }
+                        className="
+                          flex-1
+                          bg-red-600
+                          text-white
+                          py-3
+                          px-5
+                          rounded-xl
+                          font-black
+                          hover:bg-red-700
+                          transition
                           disabled:opacity-50
                         "
                       >
-
-                        {savingCaption
-                          ? "Saving..."
-                          : "💾 Save Changes"}
-
+                        {deletingPost
+                          ? "Removing..."
+                          : "🗑️ Remove Post"}
                       </button>
 
                     </div>
+                  ) : (
+                    <div>
 
-                  </div>
+                      <h3
+                        className="
+                          text-lg
+                          font-black
+                          text-orange-500
+                          mb-3
+                        "
+                      >
+                        ✏️ Edit Caption
+                      </h3>
 
-                )}
+                      <textarea
+                        value={
+                          editedCaption
+                        }
+                        onChange={(event) =>
+                          setEditedCaption(
+                            event.target.value
+                          )
+                        }
+                        rows={4}
+                        maxLength={500}
+                        placeholder="Write your caption..."
+                        className="
+                          w-full
+                          bg-black
+                          border
+                          border-zinc-700
+                          rounded-xl
+                          p-4
+                          text-white
+                          outline-none
+                          resize-none
+                          focus:border-orange-500
+                        "
+                      />
 
-              </div>
+                      <div
+                        className="
+                          flex
+                          justify-between
+                          items-center
+                          mt-2
+                        "
+                      >
+                        <span
+                          className="
+                            text-xs
+                            text-zinc-500
+                          "
+                        >
+                          {
+                            editedCaption.length
+                          }/500
+                        </span>
 
-            )}
+                        <span
+                          className="
+                            text-xs
+                            text-zinc-500
+                          "
+                        >
+                          Caption only
+                        </span>
+                      </div>
+
+                      <div
+                        className="
+                          flex
+                          gap-3
+                          mt-4
+                        "
+                      >
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingPost(
+                              false
+                            );
+
+                            setEditedCaption(
+                              selectedPost.caption ||
+                                ""
+                            );
+                          }}
+                          disabled={
+                            savingCaption
+                          }
+                          className="
+                            flex-1
+                            bg-zinc-700
+                            py-3
+                            rounded-xl
+                            font-black
+                            hover:bg-zinc-600
+                            transition
+                            disabled:opacity-50
+                          "
+                        >
+                          Cancel
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={
+                            saveEditedCaption
+                          }
+                          disabled={
+                            savingCaption
+                          }
+                          className="
+                            flex-1
+                            bg-orange-500
+                            text-black
+                            py-3
+                            rounded-xl
+                            font-black
+                            hover:bg-orange-400
+                            transition
+                            disabled:opacity-50
+                          "
+                        >
+                          {savingCaption
+                            ? "Saving..."
+                            : "💾 Save Changes"}
+                        </button>
+
+                      </div>
+
+                    </div>
+                  )}
+
+                </div>
+              )}
 
 
             {/* ADMIN NOTICE */}
 
             {isAdminView && (
-
               <div
                 className="
                   mt-5
@@ -3965,7 +2928,6 @@ export default function RiderPage() {
                   text-center
                 "
               >
-
                 <p
                   className="
                     text-orange-400
@@ -3975,19 +2937,13 @@ export default function RiderPage() {
                 >
                   🔒 Investigation Mode — Post editing and removal are disabled
                 </p>
-
               </div>
-
             )}
 
 
             {/* LIKES + CAPTION */}
 
-            <div
-              className="
-                mt-6
-              "
-            >
+            <div className="mt-6">
 
               <h2
                 className="
@@ -3996,13 +2952,9 @@ export default function RiderPage() {
                 "
               >
                 ❤️{" "}
-                {
-                  selectedPost.likes ||
-                  0
-                }{" "}
+                {selectedPost.likes || 0}{" "}
                 Likes
               </h2>
-
 
               <p
                 className="
@@ -4011,10 +2963,8 @@ export default function RiderPage() {
                   whitespace-pre-wrap
                 "
               >
-                {
-                  selectedPost.caption ||
-                  "No caption"
-                }
+                {selectedPost.caption ||
+                  "No caption"}
               </p>
 
             </div>
@@ -4041,15 +2991,10 @@ export default function RiderPage() {
             </h2>
 
 
-            <div
-              className="
-                space-y-3
-              "
-            >
+            <div className="space-y-3">
 
               {postComments.length ===
               0 ? (
-
                 <p
                   className="
                     text-zinc-500
@@ -4059,15 +3004,12 @@ export default function RiderPage() {
                 >
                   No comments yet.
                 </p>
-
               ) : (
-
                 postComments.map(
                   (
                     comment,
                     index
                   ) => (
-
                     <div
                       key={
                         comment.id ||
@@ -4079,7 +3021,6 @@ export default function RiderPage() {
                         rounded-xl
                       "
                     >
-
                       <b>
                         {
                           comment.user
@@ -4096,13 +3037,9 @@ export default function RiderPage() {
                           comment.text
                         }
                       </p>
-
                     </div>
-
                   )
-
                 )
-
               )}
 
             </div>
@@ -4111,7 +3048,6 @@ export default function RiderPage() {
             {/* COMMENT INPUT */}
 
             {isAdminView ? (
-
               <div
                 className="
                   mt-6
@@ -4124,7 +3060,6 @@ export default function RiderPage() {
                   text-center
                 "
               >
-
                 <p
                   className="
                     text-orange-400
@@ -4134,11 +3069,8 @@ export default function RiderPage() {
                 >
                   🔒 Investigation Mode — Comments are read-only
                 </p>
-
               </div>
-
             ) : (
-
               <div
                 className="
                   flex
@@ -4148,12 +3080,8 @@ export default function RiderPage() {
               >
 
                 <input
-                  value={
-                    newComment
-                  }
-                  onChange={(
-                    e
-                  ) =>
+                  value={newComment}
+                  onChange={(e) =>
                     setNewComment(
                       e.target.value
                     )
@@ -4161,18 +3089,14 @@ export default function RiderPage() {
                   onKeyDown={async (
                     e
                   ) => {
-
                     if (
                       e.key ===
                       "Enter"
                     ) {
-
                       e.preventDefault();
 
                       await addCommentToPost();
-
                     }
-
                   }}
                   placeholder="Write a comment..."
                   className="
@@ -4186,7 +3110,6 @@ export default function RiderPage() {
                     focus:border-orange-500
                   "
                 />
-
 
                 <button
                   onClick={
@@ -4208,13 +3131,11 @@ export default function RiderPage() {
                 </button>
 
               </div>
-
             )}
 
           </div>
 
         </div>
-
       )}
 
 
@@ -4233,26 +3154,22 @@ export default function RiderPage() {
             flex
             items-center
             justify-center
-            bg-black/35
+            bg-black/60
             backdrop-blur-xl
             p-4
             sm:p-8
           "
           onClick={() =>
-            setShowProfileImage(
-              false
-            )
+            setShowProfileImage(false)
           }
         >
 
-          {/* CLOSE */}
+          {/* CLOSE BUTTON */}
 
           <button
             type="button"
             onClick={() =>
-              setShowProfileImage(
-                false
-              )
+              setShowProfileImage(false)
             }
             className="
               absolute
@@ -4287,7 +3204,7 @@ export default function RiderPage() {
           </button>
 
 
-          {/* IMAGE */}
+          {/* IMAGE CONTAINER */}
 
           <div
             className="
@@ -4298,35 +3215,45 @@ export default function RiderPage() {
               w-full
               max-w-[900px]
               max-h-[90vh]
-              cursor-default
             "
-            onClick={(
-              event
-            ) =>
+            onClick={(event) =>
               event.stopPropagation()
             }
           >
 
-            <img
-              src={
-                riderImage
-              }
-              alt={`${riderName}'s profile picture`}
-              loading="eager"
-              decoding="async"
+            {/* FIXED VIEWER BOX */}
+
+            <div
               className="
-                block
-                w-auto
-                h-auto
-                max-w-[92vw]
+                relative
+                w-[min(82vw,700px)]
+                h-[min(82vw,700px)]
                 max-h-[82vh]
-                object-contain
-                rounded-2xl
-                border-2
-                border-orange-500
-                shadow-2xl
+                max-w-[82vw]
+                flex
+                items-center
+                justify-center
               "
-            />
+            >
+
+              <img
+                src={riderImage}
+                alt={`${riderName}'s profile picture`}
+                loading="eager"
+                fetchPriority="high"
+                decoding="async"
+                className="
+                  w-full
+                  h-full
+                  object-contain
+                  rounded-2xl
+                  border-2
+                  border-orange-500
+                  shadow-2xl
+                "
+              />
+
+            </div>
 
           </div>
 
@@ -4335,7 +3262,5 @@ export default function RiderPage() {
       )}
 
     </main>
-
   );
-
 }
