@@ -290,6 +290,18 @@ function FeedContent() {
   };
 
   /* =========================================================
+     NORMALIZE USER NAME
+  ========================================================= */
+
+  const normalizeUserName = (
+    value: any
+  ) => {
+    return String(value || "")
+      .trim()
+      .toLowerCase();
+  };
+
+  /* =========================================================
      LOAD CURRENT USER GENDER
   ========================================================= */
 
@@ -357,13 +369,17 @@ function FeedContent() {
   }, []);
 
   /* =========================================================
-     LOAD TRIPS + USER GENDERS
+     LOAD TRIPS + CURRENT USER GENDER + CURRENT USER IMAGES
   ========================================================= */
 
   useEffect(() => {
     const fetchTrips = async () => {
       try {
         setLoading(true);
+
+        /* ===================================================
+           LOAD TRIPS
+        =================================================== */
 
         const q = query(
           collection(db, "trips"),
@@ -376,9 +392,16 @@ function FeedContent() {
         const querySnapshot =
           await getDocs(q);
 
-        /* =====================================================
-           LOAD USER GENDERS
-        ===================================================== */
+        /* ===================================================
+           LOAD USERS
+           
+           IMPORTANT:
+           We use the users collection as the source of truth
+           for the rider's CURRENT profile picture.
+           
+           This fixes the problem where old trip documents
+           still contain an old userImage.
+        =================================================== */
 
         const usersSnapshot =
           await getDocs(
@@ -393,6 +416,21 @@ function FeedContent() {
           string
         > = {};
 
+        const imageMap: Record<
+          string,
+          string
+        > = {};
+
+        const userIdMap: Record<
+          string,
+          {
+            gender: string;
+            image: string;
+            name: string;
+            username: string;
+          }
+        > = {};
+
         usersSnapshot.forEach(
           (userDoc) => {
             const userData =
@@ -403,41 +441,85 @@ function FeedContent() {
                 userData.gender || ""
               ).trim();
 
-            if (!gender) {
-              return;
+            const image =
+              String(
+                userData.image || ""
+              ).trim();
+
+            const name =
+              String(
+                userData.name || ""
+              ).trim();
+
+            const username =
+              String(
+                userData.username || ""
+              ).trim();
+
+            /* =================================================
+               MAP BY FIREBASE UID
+            ================================================= */
+
+            userIdMap[
+              userDoc.id
+            ] = {
+              gender,
+              image,
+              name,
+              username,
+            };
+
+            /* =================================================
+               MAP BY NAME
+            ================================================= */
+
+            if (name) {
+              const normalizedName =
+                normalizeUserName(
+                  name
+                );
+
+              if (gender) {
+                genderMap[
+                  normalizedName
+                ] = gender;
+              }
+
+              if (image) {
+                imageMap[
+                  normalizedName
+                ] = image;
+              }
             }
 
-            /*
-             * Support both name and username
-             * because existing RideMate accounts
-             * may use either field.
-             */
+            /* =================================================
+               MAP BY USERNAME
+            ================================================= */
 
-            if (
-              userData.name
-            ) {
-              genderMap[
-                String(
-                  userData.name
-                )
-                  .trim()
-                  .toLowerCase()
-              ] = gender;
-            }
+            if (username) {
+              const normalizedUsername =
+                normalizeUserName(
+                  username
+                );
 
-            if (
-              userData.username
-            ) {
-              genderMap[
-                String(
-                  userData.username
-                )
-                  .trim()
-                  .toLowerCase()
-              ] = gender;
+              if (gender) {
+                genderMap[
+                  normalizedUsername
+                ] = gender;
+              }
+
+              if (image) {
+                imageMap[
+                  normalizedUsername
+                ] = image;
+              }
             }
           }
         );
+
+        /* ===================================================
+           BUILD TRIPS
+        =================================================== */
 
         const loadedTrips: any[] =
           [];
@@ -448,32 +530,82 @@ function FeedContent() {
               tripDoc.data();
 
             const hostName =
-              String(
+              normalizeUserName(
                 tripData.userName ||
                   ""
-              )
-                .trim()
-                .toLowerCase();
+              );
+
+            /* =================================================
+               TRY TO FIND USER BY UID FIRST
+            ================================================= */
+
+            const possibleUserId =
+              tripData.userId ||
+              tripData.uid ||
+              tripData.ownerId ||
+              tripData.hostId ||
+              "";
+
+            const matchedUserById =
+              possibleUserId
+                ? userIdMap[
+                    String(
+                      possibleUserId
+                    )
+                  ]
+                : undefined;
+
+            /* =================================================
+               CURRENT HOST GENDER
+            ================================================= */
+
+            const hostGender =
+              matchedUserById?.gender ||
+              genderMap[
+                hostName
+              ] ||
+              "";
+
+            /* =================================================
+               CURRENT HOST IMAGE
+               
+               PRIORITY:
+               1. Current users/{uid}.image
+               2. Current users/{name/username}.image
+               3. Old trip.userImage as fallback
+            ================================================= */
+
+            const hostImage =
+              matchedUserById?.image ||
+              imageMap[
+                hostName
+              ] ||
+              tripData.userImage ||
+              "";
 
             loadedTrips.push({
               id: tripDoc.id,
               ...tripData,
 
               /*
-               * Add gender only to the local
-               * trip object. Firestore is not changed.
+               * Current rider gender.
+               * Local only — Firestore is not changed.
                */
-              hostGender:
-                genderMap[
-                  hostName
-                ] || "",
+              hostGender,
+
+              /*
+               * IMPORTANT:
+               * Current rider profile image.
+               * Local only — Firestore is not changed.
+               */
+              hostImage,
             });
           }
         );
 
-        /* =====================================================
+        /* ===================================================
            REMOVE DUPLICATES
-        ===================================================== */
+        =================================================== */
 
         const uniqueTrips =
           loadedTrips.filter(
@@ -493,9 +625,9 @@ function FeedContent() {
           uniqueTrips
         );
 
-        /* =====================================================
+        /* ===================================================
            APPLY INITIAL URL FILTER
-        ===================================================== */
+        =================================================== */
 
         const normalizedRequestedStart =
           normalizeLocation(
@@ -631,9 +763,9 @@ function FeedContent() {
           }
         }
 
-        /* =====================================================
+        /* ===================================================
            SHARED TRIP
-        ===================================================== */
+        =================================================== */
 
         if (sharedTripId) {
           const sharedTrip =
@@ -2493,6 +2625,19 @@ function FeedContent() {
                   : trip.startLocation
                 : "Not specified";
 
+            /*
+             * IMPORTANT:
+             * Always use hostImage here.
+             *
+             * hostImage comes from the current users
+             * collection and falls back to trip.userImage
+             * only when no current profile image exists.
+             */
+            const currentHostImage =
+              trip.hostImage ||
+              trip.userImage ||
+              "";
+
             return (
               <div
                 key={trip.id}
@@ -2578,15 +2723,17 @@ function FeedContent() {
                       bg-zinc-950
                     "
                   >
-                    {trip.userImage ? (
+                    {currentHostImage ? (
                       <img
                         src={
-                          trip.userImage
+                          currentHostImage
                         }
                         alt={
                           trip.userName ||
                           "Rider"
                         }
+                        loading="lazy"
+                        decoding="async"
                         className="
                           absolute
                           inset-0
@@ -2911,12 +3058,14 @@ function FeedContent() {
                           transition
                         "
                       >
-                        {trip.userImage ? (
+                        {currentHostImage ? (
                           <img
                             src={
-                              trip.userImage
+                              currentHostImage
                             }
                             alt="Rider"
+                            loading="lazy"
+                            decoding="async"
                             className={`
                               w-10
                               h-10
@@ -3736,6 +3885,8 @@ function FeedContent() {
                                     alt={
                                       comment.user
                                     }
+                                    loading="lazy"
+                                    decoding="async"
                                     className="
                                       w-9
                                       h-9

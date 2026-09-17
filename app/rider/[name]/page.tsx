@@ -59,10 +59,216 @@ type AdminView = {
 };
 
 
+/* =========================================================
+   DEFAULT PROFILE IMAGE
+========================================================= */
+
+const DEFAULT_PROFILE_IMAGE =
+  "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&q=90";
+
+
+/* =========================================================
+   PROFILE IMAGE COMPRESSION
+========================================================= */
+
+/*
+ * Large phone images can easily be 3–10 MB.
+ * That makes profile loading slow.
+ *
+ * We resize the image before uploading:
+ *
+ * Maximum dimensions: 600 x 600
+ * Output: JPEG
+ * Quality: 0.82
+ *
+ * This keeps the image visually sharp while making
+ * the downloaded profile image much smaller.
+ */
+
+const compressProfileImage = (
+  file: File
+): Promise<Blob> => {
+
+  return new Promise(
+    (resolve, reject) => {
+
+      const image =
+        new Image();
+
+      const objectUrl =
+        URL.createObjectURL(file);
+
+      image.onload = () => {
+
+        try {
+
+          const maxSize = 600;
+
+          let width =
+            image.naturalWidth;
+
+          let height =
+            image.naturalHeight;
+
+
+          if (
+            width >
+              maxSize ||
+            height >
+              maxSize
+          ) {
+
+            const scale =
+              Math.min(
+                maxSize / width,
+                maxSize / height
+              );
+
+            width =
+              Math.round(
+                width * scale
+              );
+
+            height =
+              Math.round(
+                height * scale
+              );
+
+          }
+
+
+          const canvas =
+            document.createElement(
+              "canvas"
+            );
+
+          canvas.width =
+            width;
+
+          canvas.height =
+            height;
+
+
+          const context =
+            canvas.getContext(
+              "2d"
+            );
+
+
+          if (!context) {
+
+            URL.revokeObjectURL(
+              objectUrl
+            );
+
+            reject(
+              new Error(
+                "Could not create image canvas."
+              )
+            );
+
+            return;
+
+          }
+
+
+          /*
+           * Better image quality while resizing.
+           */
+
+          context.imageSmoothingEnabled =
+            true;
+
+          context.imageSmoothingQuality =
+            "high";
+
+
+          context.drawImage(
+            image,
+            0,
+            0,
+            width,
+            height
+          );
+
+
+          canvas.toBlob(
+            (blob) => {
+
+              URL.revokeObjectURL(
+                objectUrl
+              );
+
+
+              if (!blob) {
+
+                reject(
+                  new Error(
+                    "Could not compress image."
+                  )
+                );
+
+                return;
+
+              }
+
+
+              resolve(
+                blob
+              );
+
+            },
+            "image/jpeg",
+            0.82
+          );
+
+        } catch (error) {
+
+          URL.revokeObjectURL(
+            objectUrl
+          );
+
+          reject(error);
+
+        }
+
+      };
+
+
+      image.onerror = () => {
+
+        URL.revokeObjectURL(
+          objectUrl
+        );
+
+        reject(
+          new Error(
+            "Could not read the selected image."
+          )
+        );
+
+      };
+
+
+      image.src =
+        objectUrl;
+
+    }
+  );
+
+};
+
+
+/* =========================================================
+   RIDER PAGE
+========================================================= */
+
 export default function RiderPage() {
 
   const params = useParams();
+
   const router = useRouter();
+
 
   const riderName =
     decodeURIComponent(
@@ -83,8 +289,51 @@ export default function RiderPage() {
   const [totalLikes, setTotalLikes] =
     useState(0);
 
+  /*
+   * IMPORTANT:
+   * Initialise the image directly from localStorage.
+   *
+   * This means the image can appear immediately on the
+   * first client render instead of waiting for Firestore.
+   */
+
   const [riderImage, setRiderImage] =
-    useState("");
+    useState(() => {
+
+      try {
+
+        const savedUser =
+          localStorage.getItem(
+            "ridemateUser"
+          );
+
+        if (!savedUser) {
+          return "";
+        }
+
+        const user =
+          JSON.parse(
+            savedUser
+          );
+
+        if (
+          user?.name ===
+            riderName &&
+          user?.image
+        ) {
+
+          return user.image;
+
+        }
+
+      } catch {
+        // Ignore localStorage errors
+      }
+
+      return "";
+
+    });
+
 
   const [isFollowing, setIsFollowing] =
     useState(false);
@@ -102,7 +351,27 @@ export default function RiderPage() {
     useState(0);
 
   const [currentUser, setCurrentUser] =
-    useState<any>(null);
+    useState<any>(() => {
+
+      try {
+
+        const savedUser =
+          localStorage.getItem(
+            "ridemateUser"
+          );
+
+        return savedUser
+          ? JSON.parse(savedUser)
+          : null;
+
+      } catch {
+
+        return null;
+
+      }
+
+    });
+
 
   const [showBio, setShowBio] =
     useState(false);
@@ -147,12 +416,14 @@ export default function RiderPage() {
      PROFILE IMAGE VIEWER
   ========================================================= */
 
-  const [showProfileImage, setShowProfileImage] =
-    useState(false);
+  const [
+    showProfileImage,
+    setShowProfileImage,
+  ] = useState(false);
 
 
   /* =========================================================
-     ADMIN VIEW STATE
+     ADMIN VIEW
   ========================================================= */
 
   const [adminView, setAdminView] =
@@ -163,11 +434,13 @@ export default function RiderPage() {
 
 
   /* =========================================================
-     PROFILE PHOTO UPLOAD STATE
+     PROFILE PHOTO UPLOAD
   ========================================================= */
 
-  const [uploadingProfileImage, setUploadingProfileImage] =
-    useState(false);
+  const [
+    uploadingProfileImage,
+    setUploadingProfileImage,
+  ] = useState(false);
 
   const [uploadProgress, setUploadProgress] =
     useState(0);
@@ -265,7 +538,7 @@ export default function RiderPage() {
 
 
   /* =========================================================
-     CLOSE PROFILE IMAGE WITH ESC
+     ESCAPE FOR PROFILE IMAGE
   ========================================================= */
 
   useEffect(() => {
@@ -476,7 +749,7 @@ export default function RiderPage() {
 
 
       /* =====================================================
-         FILE SIZE
+         ORIGINAL FILE SIZE
       ===================================================== */
 
       const maxSize =
@@ -484,7 +757,8 @@ export default function RiderPage() {
 
 
       if (
-        file.size > maxSize
+        file.size >
+        maxSize
       ) {
 
         alert(
@@ -497,7 +771,7 @@ export default function RiderPage() {
 
 
       /* =====================================================
-         FIREBASE AUTH
+         FIREBASE USER
       ===================================================== */
 
       const firebaseUser =
@@ -533,27 +807,17 @@ export default function RiderPage() {
       );
 
       console.log(
-        "PROFILE IMAGE UPLOAD STARTED"
+        "PROFILE IMAGE UPDATE STARTED"
       );
 
       console.log(
-        "User:",
-        firebaseUser.uid
-      );
-
-      console.log(
-        "File:",
+        "Original file:",
         file.name
       );
 
       console.log(
-        "Size:",
+        "Original size:",
         file.size
-      );
-
-      console.log(
-        "Type:",
-        file.type
       );
 
       console.log(
@@ -562,18 +826,42 @@ export default function RiderPage() {
 
 
       /* =====================================================
-         SAFE FILE NAME
+         COMPRESS IMAGE
       ===================================================== */
 
-      const safeFileName =
-        file.name.replace(
-          /[^a-zA-Z0-9._-]/g,
-          "_"
+      setUploadProgress(
+        15
+      );
+
+
+      console.log(
+        "Compressing profile image..."
+      );
+
+
+      const compressedBlob =
+        await compressProfileImage(
+          file
         );
 
 
+      console.log(
+        "Compressed size:",
+        compressedBlob.size
+      );
+
+
+      setUploadProgress(
+        30
+      );
+
+
+      /* =====================================================
+         SAFE FILE NAME
+      ===================================================== */
+
       const fileName =
-        `${Date.now()}_${safeFileName}`;
+        `${Date.now()}_profile.jpg`;
 
 
       /* =====================================================
@@ -604,39 +892,39 @@ export default function RiderPage() {
 
 
       /* =====================================================
-         UPLOAD
+         UPLOAD COMPRESSED IMAGE
       ===================================================== */
 
       setUploadProgress(
-        15
-      );
-
-
-      console.log(
-        "Uploading image to Firebase Storage..."
+        40
       );
 
 
       await uploadBytes(
         storageRef,
-        file,
+        compressedBlob,
         {
           contentType:
-            file.type,
+            "image/jpeg",
+
+          /*
+           * Since every upload receives a new filename,
+           * this can be cached aggressively.
+           */
 
           cacheControl:
-            "public,max-age=31536000",
+            "public,max-age=31536000,immutable",
         }
-      );
-
-
-      console.log(
-        "Firebase Storage upload completed."
       );
 
 
       setUploadProgress(
         70
+      );
+
+
+      console.log(
+        "Compressed image uploaded successfully."
       );
 
 
@@ -650,19 +938,13 @@ export default function RiderPage() {
         );
 
 
-      console.log(
-        "Download URL:",
-        downloadURL
-      );
-
-
       setUploadProgress(
         80
       );
 
 
       /* =====================================================
-         SAVE TO FIRESTORE
+         SAVE FIRESTORE
       ===================================================== */
 
       await setDoc(
@@ -672,22 +954,15 @@ export default function RiderPage() {
           firebaseUser.uid
         ),
         {
-
           image:
             downloadURL,
 
           profileImageUpdatedAt:
             Date.now(),
-
         },
         {
           merge: true,
         }
-      );
-
-
-      console.log(
-        "Profile image saved to Firestore."
       );
 
 
@@ -700,12 +975,22 @@ export default function RiderPage() {
          UPDATE LOCAL STORAGE
       ===================================================== */
 
-      const savedUser =
-        JSON.parse(
-          localStorage.getItem(
-            "ridemateUser"
-          ) || "{}"
-        );
+      let savedUser: any = {};
+
+      try {
+
+        savedUser =
+          JSON.parse(
+            localStorage.getItem(
+              "ridemateUser"
+            ) || "{}"
+          );
+
+      } catch {
+
+        savedUser = {};
+
+      }
 
 
       const updatedUser = {
@@ -740,9 +1025,9 @@ export default function RiderPage() {
       );
 
 
-      /* =====================================================
-         UPDATE PAGE IMMEDIATELY
-      ===================================================== */
+      /*
+       * Update UI immediately.
+       */
 
       setCurrentUser(
         updatedUser
@@ -776,30 +1061,8 @@ export default function RiderPage() {
     } catch (error: any) {
 
       console.error(
-        "================================="
-      );
-
-      console.error(
-        "PROFILE PICTURE UPLOAD ERROR"
-      );
-
-      console.error(
-        "Error:",
+        "PROFILE PICTURE UPLOAD ERROR:",
         error
-      );
-
-      console.error(
-        "Error code:",
-        error?.code
-      );
-
-      console.error(
-        "Error message:",
-        error?.message
-      );
-
-      console.error(
-        "================================="
       );
 
 
@@ -866,7 +1129,6 @@ export default function RiderPage() {
       setUploadingProfileImage(
         false
       );
-
 
       setUploadProgress(
         0
@@ -1078,10 +1340,8 @@ export default function RiderPage() {
             selectedPost.id
           ),
           {
-
             caption:
               updatedCaption,
-
           }
         );
 
@@ -1209,10 +1469,6 @@ export default function RiderPage() {
         );
 
 
-        /* =====================================================
-           DELETE POST DOCUMENT
-        ===================================================== */
-
         await deleteDoc(
           doc(
             db,
@@ -1222,9 +1478,9 @@ export default function RiderPage() {
         );
 
 
-        /* =====================================================
-           DELETE COMMENTS BELONGING TO THIS POST
-        ===================================================== */
+        /*
+         * Delete comments belonging to this post.
+         */
 
         try {
 
@@ -1272,10 +1528,6 @@ export default function RiderPage() {
 
         }
 
-
-        /* =====================================================
-           UPDATE PROFILE UI
-        ===================================================== */
 
         setRiderPosts(
           prev =>
@@ -1413,7 +1665,7 @@ export default function RiderPage() {
         );
 
 
-        openPost(
+        await openPost(
           selectedPost
         );
 
@@ -1433,7 +1685,8 @@ export default function RiderPage() {
      ACHIEVEMENTS
   ========================================================= */
 
-  const achievements: string[] = [];
+  const achievements: string[] =
+    [];
 
 
   if (
@@ -1535,12 +1788,24 @@ export default function RiderPage() {
 
         try {
 
-          const savedUser =
-            JSON.parse(
-              localStorage.getItem(
-                "ridemateUser"
-              ) || "{}"
-            );
+          let savedUser: any =
+            {};
+
+          try {
+
+            savedUser =
+              JSON.parse(
+                localStorage.getItem(
+                  "ridemateUser"
+                ) || "{}"
+              );
+
+          } catch {
+
+            savedUser =
+              {};
+
+          }
 
 
           setCurrentUser(
@@ -1550,8 +1815,8 @@ export default function RiderPage() {
 
           /*
            * IMPORTANT:
-           * Show the locally cached profile picture immediately.
-           * This avoids waiting for Firestore before displaying it.
+           * If this is the user's own profile and localStorage
+           * contains the image, show it immediately.
            */
 
           if (
@@ -1576,9 +1841,33 @@ export default function RiderPage() {
           }
 
 
+          /*
+           * Don't allow following yourself.
+           */
+
+          if (
+            savedUser.name ===
+            riderName
+          ) {
+
+            setIsFollowing(
+              false
+            );
+
+            return;
+
+          }
+
+
           const followId =
             `${savedUser.name}_${riderName}`;
 
+
+          /*
+           * Only fetch the exact follow document here.
+           * We no longer wait for the complete follows
+           * collection before rendering the profile.
+           */
 
           const followDoc =
             await getDoc(
@@ -1595,62 +1884,52 @@ export default function RiderPage() {
           );
 
 
-          const followsSnapshot =
-            await getDocs(
-              collection(
-                db,
-                "follows"
-              )
-            );
+          /*
+           * Load follower/following counts separately.
+           */
 
+          const [
+            followersSnapshot,
+            followingSnapshot,
+          ] =
+            await Promise.all([
+              getDocs(
+                query(
+                  collection(
+                    db,
+                    "follows"
+                  ),
+                  where(
+                    "following",
+                    "==",
+                    riderName
+                  )
+                )
+              ),
 
-          let count =
-            0;
-
-
-          let followingCount =
-            0;
-
-
-          followsSnapshot.forEach(
-            (
-              followDoc
-            ) => {
-
-              const follow =
-                followDoc.data();
-
-
-              if (
-                follow.following ===
-                riderName
-              ) {
-
-                count++;
-
-              }
-
-
-              if (
-                follow.follower ===
-                riderName
-              ) {
-
-                followingCount++;
-
-              }
-
-            }
-          );
+              getDocs(
+                query(
+                  collection(
+                    db,
+                    "follows"
+                  ),
+                  where(
+                    "follower",
+                    "==",
+                    riderName
+                  )
+                )
+              ),
+            ]);
 
 
           setFollowers(
-            count
+            followersSnapshot.size
           );
 
 
           setFollowing(
-            followingCount
+            followingSnapshot.size
           );
 
         } catch (error) {
@@ -1679,28 +1958,47 @@ export default function RiderPage() {
 
   useEffect(() => {
 
+    let cancelled =
+      false;
+
+
     const loadRider =
       async () => {
 
         try {
 
-          const savedUser =
-            JSON.parse(
-              localStorage.getItem(
-                "ridemateUser"
-              ) || "{}"
-            );
+          /*
+           * ==================================================
+           * LOCAL CACHE FIRST
+           * ==================================================
+           */
+
+          let savedUser: any =
+            {};
+
+          try {
+
+            savedUser =
+              JSON.parse(
+                localStorage.getItem(
+                  "ridemateUser"
+                ) || "{}"
+              );
+
+          } catch {
+
+            savedUser =
+              {};
+
+          }
 
 
           /*
-           * ==================================================
-           * SHOW CACHED OWN PROFILE IMAGE IMMEDIATELY
-           * ==================================================
+           * Keep cached own image visible.
            */
 
           let profileImage =
             "";
-
 
           if (
             savedUser?.name ===
@@ -1712,88 +2010,10 @@ export default function RiderPage() {
               savedUser.image;
 
 
-            setRiderImage(
-              profileImage
-            );
+            if (!cancelled) {
 
-          }
-
-
-          /* ==================================================
-             OWN PROFILE
-          ================================================== */
-
-          if (
-            savedUser?.uid &&
-            savedUser?.name ===
-              riderName
-          ) {
-
-            try {
-
-              const userDoc =
-                await getDoc(
-                  doc(
-                    db,
-                    "users",
-                    savedUser.uid
-                  )
-                );
-
-
-              if (
-                userDoc.exists()
-              ) {
-
-                const userData =
-                  userDoc.data();
-
-
-                if (
-                  userData.image
-                ) {
-
-                  profileImage =
-                    userData.image;
-
-
-                  setRiderImage(
-                    userData.image
-                  );
-
-
-                  /*
-                   * Keep local cache synchronized
-                   */
-
-                  const updatedLocalUser = {
-
-                    ...savedUser,
-
-                    image:
-                      userData.image,
-
-                  };
-
-
-                  localStorage.setItem(
-                    "ridemateUser",
-                    JSON.stringify(
-                      updatedLocalUser
-                    )
-                  );
-
-                }
-
-              }
-
-            } catch (
-              profileError
-            ) {
-
-              console.error(
-                "Failed to refresh own profile image:",
-                profileError
+              setRiderImage(
+                profileImage
               );
 
             }
@@ -1801,9 +2021,9 @@ export default function RiderPage() {
           }
 
 
-          /* ==================================================
-             ADMIN VIEW SELECTED USER IMAGE
-          ================================================== */
+          /*
+           * Admin image gets priority in investigation mode.
+           */
 
           if (
             isAdminView &&
@@ -1816,28 +2036,81 @@ export default function RiderPage() {
               adminView.userImage;
 
 
-            setRiderImage(
-              adminView.userImage
-            );
+            if (!cancelled) {
+
+              setRiderImage(
+                profileImage
+              );
+
+            }
 
           }
 
 
           /* ==================================================
-             OTHER RIDER
-             
-             IMPORTANT:
-             Previously this downloaded the entire users
-             collection. Now we only query the matching user.
+             USER LOOKUP
           ================================================== */
 
+          let userProfileData:
+            any = null;
+
+
+          /*
+           * For own profile, use the UID directly.
+           * This is faster than searching by name.
+           */
+
           if (
-            !profileImage
+            savedUser?.uid &&
+            savedUser?.name ===
+              riderName
           ) {
 
             try {
 
-              const userQuery =
+              const ownUserDoc =
+                await getDoc(
+                  doc(
+                    db,
+                    "users",
+                    savedUser.uid
+                  )
+                );
+
+
+              if (
+                ownUserDoc.exists()
+              ) {
+
+                userProfileData =
+                  ownUserDoc.data();
+
+              }
+
+            } catch (error) {
+
+              console.error(
+                "Failed to load own user profile:",
+                error
+              );
+
+            }
+
+          }
+
+
+          /*
+           * For other riders, search username first.
+           */
+
+          if (
+            !userProfileData &&
+            !isAdminView
+          ) {
+
+            try {
+
+              const usernameQuery =
                 query(
                   collection(
                     db,
@@ -1852,43 +2125,132 @@ export default function RiderPage() {
                 );
 
 
-              const usersSnapshot =
+              const usernameSnapshot =
                 await getDocs(
-                  userQuery
+                  usernameQuery
                 );
 
 
               if (
-                !usersSnapshot.empty
+                !usernameSnapshot.empty
               ) {
 
-                const userData =
-                  usersSnapshot.docs[0].data();
-
-
-                if (
-                  userData.image
-                ) {
-
-                  profileImage =
-                    userData.image;
-
-
-                  setRiderImage(
-                    userData.image
-                  );
-
-                }
+                userProfileData =
+                  usernameSnapshot.docs[0].data();
 
               }
 
-            } catch (
-              userSearchError
-            ) {
+            } catch (error) {
 
               console.error(
-                "Failed to find rider profile image:",
-                userSearchError
+                "Username profile lookup failed:",
+                error
+              );
+
+            }
+
+          }
+
+
+          /*
+           * Fallback to name lookup for older accounts.
+           */
+
+          if (
+            !userProfileData &&
+            !isAdminView
+          ) {
+
+            try {
+
+              const nameQuery =
+                query(
+                  collection(
+                    db,
+                    "users"
+                  ),
+                  where(
+                    "name",
+                    "==",
+                    riderName
+                  ),
+                  limit(1)
+                );
+
+
+              const nameSnapshot =
+                await getDocs(
+                  nameQuery
+                );
+
+
+              if (
+                !nameSnapshot.empty
+              ) {
+
+                userProfileData =
+                  nameSnapshot.docs[0].data();
+
+              }
+
+            } catch (error) {
+
+              console.error(
+                "Name profile lookup failed:",
+                error
+              );
+
+            }
+
+          }
+
+
+          /*
+           * Update image if Firestore has a newer one.
+           */
+
+          if (
+            userProfileData?.image
+          ) {
+
+            profileImage =
+              userProfileData.image;
+
+
+            if (!cancelled) {
+
+              setRiderImage(
+                profileImage
+              );
+
+            }
+
+
+            /*
+             * Keep own local cache synchronized.
+             */
+
+            if (
+              savedUser?.name ===
+              riderName
+            ) {
+
+              const updatedLocalUser =
+                {
+
+                  ...savedUser,
+
+                  image:
+                    userProfileData.image,
+
+                };
+
+
+              localStorage.setItem(
+                "ridemateUser",
+                JSON.stringify(
+                  updatedLocalUser
+                )
               );
 
             }
@@ -1897,35 +2259,58 @@ export default function RiderPage() {
 
 
           /* ==================================================
-             COMPLETED TRIPS
+             LOAD ALL MAJOR PROFILE DATA IN PARALLEL
           ================================================== */
 
-          const snapshot =
-            await getDocs(
-              collection(
-                db,
-                "trips"
-              )
-            );
+          const [
+            tripsSnapshot,
+            postsSnapshot,
+            reviewsSnapshot,
+          ] =
+            await Promise.all([
+              getDocs(
+                collection(
+                  db,
+                  "trips"
+                )
+              ),
 
+              getDocs(
+                collection(
+                  db,
+                  "feedPosts"
+                )
+              ),
+
+              getDocs(
+                collection(
+                  db,
+                  "rideReviews"
+                )
+              ),
+            ]);
+
+
+          if (cancelled) {
+            return;
+          }
+
+
+          /* ==================================================
+             COMPLETED TRIPS
+          ================================================== */
 
           const trips: any[] =
             [];
 
-
           let likes =
             0;
-
 
           let distance =
             0;
 
 
-          let image =
-            profileImage;
-
-
-          snapshot.forEach(
+          tripsSnapshot.forEach(
             (
               tripDoc
             ) => {
@@ -1966,11 +2351,11 @@ export default function RiderPage() {
 
 
                 if (
-                  !image &&
+                  !profileImage &&
                   trip.userImage
                 ) {
 
-                  image =
+                  profileImage =
                     trip.userImage;
 
                 }
@@ -1979,6 +2364,18 @@ export default function RiderPage() {
 
             }
           );
+
+
+          if (
+            profileImage &&
+            !riderImage
+          ) {
+
+            setRiderImage(
+              profileImage
+            );
+
+          }
 
 
           setRiderTrips(
@@ -1996,35 +2393,15 @@ export default function RiderPage() {
           );
 
 
-          if (
-            image
-          ) {
-
-            setRiderImage(
-              image
-            );
-
-          }
-
-
           /* ==================================================
              POSTS
           ================================================== */
-
-          const postSnapshot =
-            await getDocs(
-              collection(
-                db,
-                "feedPosts"
-              )
-            );
-
 
           const posts: any[] =
             [];
 
 
-          postSnapshot.forEach(
+          postsSnapshot.forEach(
             (
               postDoc
             ) => {
@@ -2079,15 +2456,6 @@ export default function RiderPage() {
              REVIEWS
           ================================================== */
 
-          const reviewSnapshot =
-            await getDocs(
-              collection(
-                db,
-                "rideReviews"
-              )
-            );
-
-
           const riderReviews:
             any[] =
             [];
@@ -2097,7 +2465,7 @@ export default function RiderPage() {
             0;
 
 
-          reviewSnapshot.forEach(
+          reviewsSnapshot.forEach(
             (
               reviewDoc
             ) => {
@@ -2128,21 +2496,24 @@ export default function RiderPage() {
           );
 
 
+          riderReviews.sort(
+            (
+              a,
+              b
+            ) =>
+              Number(
+                b.createdAt ||
+                  0
+              ) -
+              Number(
+                a.createdAt ||
+                  0
+              )
+          );
+
+
           setReviews(
-            riderReviews.sort(
-              (
-                a,
-                b
-              ) =>
-                Number(
-                  b.createdAt ||
-                    0
-                ) -
-                Number(
-                  a.createdAt ||
-                    0
-                )
-            )
+            riderReviews
           );
 
 
@@ -2187,6 +2558,10 @@ export default function RiderPage() {
               "🥉 Rookie Rider"
             );
 
+          } else {
+
+            setBadge("");
+
           }
 
         } catch (error) {
@@ -2202,6 +2577,14 @@ export default function RiderPage() {
 
 
     loadRider();
+
+
+    return () => {
+
+      cancelled =
+        true;
+
+    };
 
   }, [
     riderName,
@@ -2238,6 +2621,16 @@ export default function RiderPage() {
 
       if (
         !currentUser.name
+      ) {
+
+        return;
+
+      }
+
+
+      if (
+        currentUser.name ===
+        riderName
       ) {
 
         return;
@@ -2351,18 +2744,15 @@ export default function RiderPage() {
 
 
   /*
-   * IMPORTANT:
-   * No Date.now() cache-busting here.
+   * No Date.now() cache busting.
    *
-   * Firebase Storage already gives us a stable URL and the
-   * uploaded file has a long cache lifetime.
-   *
-   * This allows the browser to cache the profile picture.
+   * Firebase Storage URL is unique for every new upload.
+   * Browser can therefore cache it for a long time.
    */
 
   const displayedProfileImage =
     riderImage ||
-    "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&q=90";
+    DEFAULT_PROFILE_IMAGE;
 
 
   /* =========================================================
@@ -2581,7 +2971,7 @@ export default function RiderPage() {
                   "
                 >
 
-                  Uploading profile picture...{" "}
+                  Optimizing & uploading...{" "}
                   {uploadProgress}%
 
                 </p>
@@ -3249,9 +3639,7 @@ export default function RiderPage() {
             "
           >
 
-            {/* ==================================================
-                CLOSE
-            ================================================== */}
+            {/* CLOSE */}
 
             <button
               onClick={() => {
@@ -3286,9 +3674,7 @@ export default function RiderPage() {
             </button>
 
 
-            {/* ==================================================
-                POST MEDIA
-            ================================================== */}
+            {/* POST MEDIA */}
 
             {selectedPost.mediaType?.startsWith(
               "image"
@@ -3329,9 +3715,7 @@ export default function RiderPage() {
             )}
 
 
-            {/* ==================================================
-                OWNER POST CONTROLS
-            ================================================== */}
+            {/* OWNER POST CONTROLS */}
 
             {isOwnProfile &&
               !isAdminView && (
@@ -3358,8 +3742,6 @@ export default function RiderPage() {
                     "
                   >
 
-                    {/* EDIT POST */}
-
                     <button
                       type="button"
                       onClick={
@@ -3380,8 +3762,6 @@ export default function RiderPage() {
                       ✏️ Edit Post
                     </button>
 
-
-                    {/* REMOVE POST */}
 
                     <button
                       type="button"
@@ -3414,10 +3794,6 @@ export default function RiderPage() {
                   </div>
 
                 ) : (
-
-                  /* ==================================================
-                     EDIT CAPTION
-                  ================================================== */
 
                   <div>
 
@@ -3573,9 +3949,7 @@ export default function RiderPage() {
             )}
 
 
-            {/* ==================================================
-                ADMIN READ ONLY NOTICE
-            ================================================== */}
+            {/* ADMIN NOTICE */}
 
             {isAdminView && (
 
@@ -3607,9 +3981,7 @@ export default function RiderPage() {
             )}
 
 
-            {/* ==================================================
-                LIKES + CAPTION
-            ================================================== */}
+            {/* LIKES + CAPTION */}
 
             <div
               className="
@@ -3656,9 +4028,7 @@ export default function RiderPage() {
             />
 
 
-            {/* ==================================================
-                COMMENTS
-            ================================================== */}
+            {/* COMMENTS */}
 
             <h2
               className="
@@ -3738,9 +4108,7 @@ export default function RiderPage() {
             </div>
 
 
-            {/* ==================================================
-                COMMENT INPUT
-            ================================================== */}
+            {/* COMMENT INPUT */}
 
             {isAdminView ? (
 
@@ -3877,9 +4245,7 @@ export default function RiderPage() {
           }
         >
 
-          {/* ==================================================
-              CLOSE BUTTON
-          ================================================== */}
+          {/* CLOSE */}
 
           <button
             type="button"
@@ -3921,9 +4287,7 @@ export default function RiderPage() {
           </button>
 
 
-          {/* ==================================================
-              IMAGE
-          ================================================== */}
+          {/* IMAGE */}
 
           <div
             className="
