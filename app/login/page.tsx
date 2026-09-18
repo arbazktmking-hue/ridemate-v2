@@ -50,14 +50,18 @@ export default function LoginPage() {
   // =========================================================
   // ONBOARDING SLIDES
   // =========================================================
+  // 4 slides:
+  // 1. Post your upcoming trip
+  // 2. Get requests from fellow riders
+  // 3. Split the cost / make new friends
+  // 4. Your additional RideMate slide
+  // =========================================================
 
   const slides = [
-    "/onboarding/slide1.png",
-    "/onboarding/slide2.png",
-    "/onboarding/slide3.png",
-    "/onboarding/slide4.png",
-    "/onboarding/slide5.png",
-    "/onboarding/slide6.png",
+    "/onboarding/new-slide1.png",
+    "/onboarding/new-slide2.png",
+    "/onboarding/new-slide3.png",
+    "/onboarding/slide6.png.png",
   ];
 
   // =========================================================
@@ -506,7 +510,7 @@ export default function LoginPage() {
           />
 
           {/* =================================================
-              MOBILE / DESKTOP CONTROLS
+              SLIDE INDICATORS
           ================================================= */}
 
           <div
@@ -553,7 +557,6 @@ export default function LoginPage() {
 
           </div>
 
-
           {/* =================================================
               PREVIOUS BUTTON
           ================================================= */}
@@ -587,15 +590,15 @@ export default function LoginPage() {
                 hover:bg-black/70
                 transition
               "
+              aria-label="Previous slide"
             >
               ←
             </button>
 
           )}
 
-
           {/* =================================================
-              NEXT / START BUTTON
+              NEXT / GET STARTED BUTTON
           ================================================= */}
 
           <button
@@ -629,7 +632,6 @@ export default function LoginPage() {
               ? "Get Started →"
               : "Next →"}
           </button>
-
 
           {/* =================================================
               SKIP
@@ -715,7 +717,7 @@ export default function LoginPage() {
         >
 
           <img
-            src="/onboarding/slide1.png"
+            src="/icon-192.png"
             alt="RideMate"
             className="
               w-28
@@ -726,7 +728,6 @@ export default function LoginPage() {
           />
 
         </div>
-
 
         <h1
           className="
@@ -739,7 +740,6 @@ export default function LoginPage() {
           RideMate 🏍️
         </h1>
 
-
         <p
           className="
             text-zinc-400
@@ -748,7 +748,6 @@ export default function LoginPage() {
         >
           Ride together. Explore more.
         </p>
-
 
         {/* =================================================
             NAME
@@ -772,7 +771,6 @@ export default function LoginPage() {
           >
             Your Name
           </label>
-
 
           <input
             type="text"
@@ -804,7 +802,6 @@ export default function LoginPage() {
 
         </div>
 
-
         {/* =================================================
             GENDER
         ================================================= */}
@@ -827,7 +824,6 @@ export default function LoginPage() {
           >
             Gender
           </label>
-
 
           <select
             value={
@@ -880,7 +876,6 @@ export default function LoginPage() {
 
         </div>
 
-
         {/* =================================================
             GOOGLE LOGIN
         ================================================= */}
@@ -915,7 +910,6 @@ export default function LoginPage() {
 
         </button>
 
-
         <p
           className="
             text-xs
@@ -927,7 +921,6 @@ export default function LoginPage() {
           By continuing, you agree to RideMate's
           terms and community guidelines.
         </p>
-
 
         {/* =================================================
             VIEW ONBOARDING AGAIN
