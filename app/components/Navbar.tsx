@@ -77,7 +77,6 @@ export default function Navbar() {
 
     loadIdentity();
 
-    // Listen for admin-view changes made in the same browser
     const handleAdminViewChange = () => {
       loadIdentity();
     };
@@ -121,7 +120,6 @@ export default function Navbar() {
     setAdminView(null);
     setMenuOpen(false);
 
-    // Tell other components on the page that the mode changed
     window.dispatchEvent(
       new Event("ridemateAdminViewChanged")
     );
@@ -182,10 +180,36 @@ export default function Navbar() {
   // =========================================================
   // LOAD TOTAL RIDES
   // =========================================================
+  // IMPORTANT:
+  // Do not query Firestore when nobody is logged in.
+  // =========================================================
 
   useEffect(() => {
     const loadRideCount = async () => {
       try {
+        let currentUser: any = null;
+
+        try {
+          currentUser = JSON.parse(
+            localStorage.getItem("ridemateUser") || "null"
+          );
+        } catch {
+          currentUser = null;
+        }
+
+        // ---------------------------------------------------
+        // LOGGED OUT
+        // ---------------------------------------------------
+
+        if (!currentUser?.uid) {
+          setRideCount(0);
+          return;
+        }
+
+        // ---------------------------------------------------
+        // LOGGED IN
+        // ---------------------------------------------------
+
         const snapshot = await getDocs(
           collection(db, "trips")
         );
@@ -201,6 +225,10 @@ export default function Navbar() {
 
     loadRideCount();
   }, []);
+
+  // =========================================================
+  // RENDER
+  // =========================================================
 
   return (
     <>
@@ -285,9 +313,11 @@ export default function Navbar() {
           flex
           items-center
           justify-between
-          ${adminView?.active
-            ? "top-[40px]"
-            : "top-0"}
+          ${
+            adminView?.active
+              ? "top-[40px]"
+              : "top-0"
+          }
         `}
       >
         {/* =================================================
@@ -467,12 +497,13 @@ export default function Navbar() {
               pb-20
               overflow-y-auto
               z-[9999]
-              ${adminView?.active
-                ? "top-[40px]"
-                : "top-0"}
+              ${
+                adminView?.active
+                  ? "top-[40px]"
+                  : "top-0"
+              }
             `}
           >
-
             {/* Close button */}
 
             <button
@@ -734,6 +765,7 @@ export default function Navbar() {
               >
                 Total rides: {rideCount}
               </div>
+
             </div>
           </div>
         </>
