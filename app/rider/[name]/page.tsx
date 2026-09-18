@@ -30,7 +30,6 @@ import { db, auth, app } from "../../firebase";
 
 import { signOut } from "firebase/auth";
 
-
 /* =========================================================
    ADMIN INVESTIGATION MODE
 ========================================================= */
@@ -43,14 +42,12 @@ type AdminView = {
   userImage?: string;
 };
 
-
 /* =========================================================
    DEFAULT PROFILE IMAGE
 ========================================================= */
 
 const DEFAULT_PROFILE_IMAGE =
   "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&q=90";
-
 
 /* =========================================================
    PROFILE IMAGE COMPRESSION
@@ -71,35 +68,54 @@ const compressProfileImage = (
         let width = image.naturalWidth;
         let height = image.naturalHeight;
 
-        if (width > maxSize || height > maxSize) {
+        if (
+          width > maxSize ||
+          height > maxSize
+        ) {
           const scale = Math.min(
             maxSize / width,
             maxSize / height
           );
 
-          width = Math.round(width * scale);
-          height = Math.round(height * scale);
+          width = Math.round(
+            width * scale
+          );
+
+          height = Math.round(
+            height * scale
+          );
         }
 
-        const canvas = document.createElement("canvas");
+        const canvas =
+          document.createElement(
+            "canvas"
+          );
 
         canvas.width = width;
         canvas.height = height;
 
-        const context = canvas.getContext("2d");
+        const context =
+          canvas.getContext("2d");
 
         if (!context) {
-          URL.revokeObjectURL(objectUrl);
+          URL.revokeObjectURL(
+            objectUrl
+          );
 
           reject(
-            new Error("Could not create image canvas.")
+            new Error(
+              "Could not create image canvas."
+            )
           );
 
           return;
         }
 
-        context.imageSmoothingEnabled = true;
-        context.imageSmoothingQuality = "high";
+        context.imageSmoothingEnabled =
+          true;
+
+        context.imageSmoothingQuality =
+          "high";
 
         context.drawImage(
           image,
@@ -111,11 +127,15 @@ const compressProfileImage = (
 
         canvas.toBlob(
           (blob) => {
-            URL.revokeObjectURL(objectUrl);
+            URL.revokeObjectURL(
+              objectUrl
+            );
 
             if (!blob) {
               reject(
-                new Error("Could not compress image.")
+                new Error(
+                  "Could not compress image."
+                )
               );
 
               return;
@@ -127,23 +147,29 @@ const compressProfileImage = (
           0.82
         );
       } catch (error) {
-        URL.revokeObjectURL(objectUrl);
+        URL.revokeObjectURL(
+          objectUrl
+        );
+
         reject(error);
       }
     };
 
     image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
+      URL.revokeObjectURL(
+        objectUrl
+      );
 
       reject(
-        new Error("Could not read the selected image.")
+        new Error(
+          "Could not read the selected image."
+        )
       );
     };
 
     image.src = objectUrl;
   });
 };
-
 
 /* =========================================================
    RIDER PAGE
@@ -156,7 +182,6 @@ export default function RiderPage() {
   const riderName = decodeURIComponent(
     params.name as string
   );
-
 
   /* =========================================================
      PROFILE DATA
@@ -171,28 +196,17 @@ export default function RiderPage() {
   const [totalLikes, setTotalLikes] =
     useState(0);
 
+  /*
+   * IMPORTANT:
+   *
+   * DO NOT read localStorage here.
+   *
+   * The server cannot access localStorage.
+   * We load it inside useEffect instead.
+   */
+
   const [riderImage, setRiderImage] =
-    useState(() => {
-      try {
-        const savedUser =
-          localStorage.getItem("ridemateUser");
-
-        if (!savedUser) {
-          return "";
-        }
-
-        const user = JSON.parse(savedUser);
-
-        if (
-          user?.name === riderName &&
-          user?.image
-        ) {
-          return user.image;
-        }
-      } catch {}
-
-      return "";
-    });
+    useState("");
 
   const [isFollowing, setIsFollowing] =
     useState(false);
@@ -209,19 +223,17 @@ export default function RiderPage() {
   const [following, setFollowing] =
     useState(0);
 
-  const [currentUser, setCurrentUser] =
-    useState<any>(() => {
-      try {
-        const savedUser =
-          localStorage.getItem("ridemateUser");
+  /*
+   * IMPORTANT:
+   *
+   * Start with null so server and client
+   * render exactly the same HTML.
+   *
+   * The real user is loaded after hydration.
+   */
 
-        return savedUser
-          ? JSON.parse(savedUser)
-          : null;
-      } catch {
-        return null;
-      }
-    });
+  const [currentUser, setCurrentUser] =
+    useState<any>(null);
 
   const [showBio, setShowBio] =
     useState(false);
@@ -244,7 +256,6 @@ export default function RiderPage() {
   const [newComment, setNewComment] =
     useState("");
 
-
   /* =========================================================
      POST EDITING
   ========================================================= */
@@ -261,7 +272,6 @@ export default function RiderPage() {
   const [deletingPost, setDeletingPost] =
     useState(false);
 
-
   /* =========================================================
      PROFILE IMAGE VIEWER
   ========================================================= */
@@ -270,7 +280,6 @@ export default function RiderPage() {
     showProfileImage,
     setShowProfileImage,
   ] = useState(false);
-
 
   /* =========================================================
      ADMIN VIEW
@@ -282,7 +291,6 @@ export default function RiderPage() {
   const isAdminView =
     adminView?.active === true;
 
-
   /* =========================================================
      PROFILE PHOTO UPLOAD
   ========================================================= */
@@ -292,12 +300,13 @@ export default function RiderPage() {
     setUploadingProfileImage,
   ] = useState(false);
 
-  const [uploadProgress, setUploadProgress] =
-    useState(0);
+  const [
+    uploadProgress,
+    setUploadProgress,
+  ] = useState(0);
 
   const profileInputRef =
     useRef<HTMLInputElement | null>(null);
-
 
   /* =========================================================
      LOAD ADMIN VIEW
@@ -357,7 +366,6 @@ export default function RiderPage() {
     };
   }, []);
 
-
   /* =========================================================
      ESCAPE FOR PROFILE IMAGE
   ========================================================= */
@@ -388,7 +396,6 @@ export default function RiderPage() {
     };
   }, [showProfileImage]);
 
-
   /* =========================================================
      LOCK BODY SCROLL
   ========================================================= */
@@ -414,7 +421,6 @@ export default function RiderPage() {
     selectedPost,
   ]);
 
-
   /* =========================================================
      ADMIN ACTION BLOCKER
   ========================================================= */
@@ -432,7 +438,6 @@ export default function RiderPage() {
 
     return true;
   };
-
 
   /* =========================================================
      LOGOUT
@@ -462,7 +467,6 @@ export default function RiderPage() {
       alert("Logout failed");
     }
   };
-
 
   /* =========================================================
      CHANGE PROFILE PICTURE
@@ -521,7 +525,10 @@ export default function RiderPage() {
         return;
       }
 
-      setUploadingProfileImage(true);
+      setUploadingProfileImage(
+        true
+      );
+
       setUploadProgress(5);
 
       const compressedBlob =
@@ -712,7 +719,6 @@ export default function RiderPage() {
     }
   };
 
-
   /* =========================================================
      OPEN POST
   ========================================================= */
@@ -774,7 +780,6 @@ export default function RiderPage() {
     }
   };
 
-
   /* =========================================================
      EDIT POST
   ========================================================= */
@@ -802,7 +807,6 @@ export default function RiderPage() {
 
     setEditingPost(true);
   };
-
 
   /* =========================================================
      SAVE EDITED CAPTION
@@ -892,7 +896,6 @@ export default function RiderPage() {
         setSavingCaption(false);
       }
     };
-
 
   /* =========================================================
      DELETE POST
@@ -1014,7 +1017,6 @@ export default function RiderPage() {
       }
     };
 
-
   /* =========================================================
      ADD COMMENT
   ========================================================= */
@@ -1079,23 +1081,23 @@ export default function RiderPage() {
       }
     };
 
-
   /* =========================================================
      CURRENT USER + FOLLOW STATUS + COUNTS
      
-     IMPORTANT FIX:
-     Followers and Following counts are now loaded even
-     when viewing your own profile.
+     IMPORTANT:
+     localStorage is read ONLY inside useEffect.
+     
+     This prevents hydration mismatch.
+     
+     Followers and following counts load for:
+     - own profile
+     - other rider profile
 ========================================================= */
 
   useEffect(() => {
     const checkFollowStatus =
       async () => {
         try {
-          /* ==================================================
-             LOAD CURRENT USER
-          ================================================== */
-
           let savedUser: any = {};
 
           try {
@@ -1113,10 +1115,10 @@ export default function RiderPage() {
             savedUser
           );
 
-
-          /* ==================================================
-             KEEP OWN PROFILE IMAGE FAST
-          ================================================== */
+          /*
+           * Load own profile image from localStorage
+           * only AFTER hydration.
+           */
 
           if (
             savedUser?.name ===
@@ -1128,34 +1130,13 @@ export default function RiderPage() {
             );
           }
 
-
-          /* ==================================================
-             NO LOGGED-IN USER
-          ================================================== */
-
           if (!savedUser?.name) {
             return;
           }
 
-
-          /* ==================================================
-             CHECK IF VIEWING OWN PROFILE
-          ================================================== */
-
           const viewingOwnProfile =
             savedUser.name ===
             riderName;
-
-
-          /* ==================================================
-             FOLLOW STATUS
-             
-             If viewing another rider:
-             check whether current user follows them.
-
-             If viewing own profile:
-             don't check because you cannot follow yourself.
-          ================================================== */
 
           if (viewingOwnProfile) {
             setIsFollowing(false);
@@ -1177,28 +1158,15 @@ export default function RiderPage() {
             );
           }
 
-
-          /* ==================================================
-             FOLLOWERS + FOLLOWING COUNTS
-             
-             THIS IS THE IMPORTANT FIX.
-
-             These queries run for BOTH:
-             - your own profile
-             - another rider's profile
-          ================================================== */
+          /*
+           * FOLLOWERS + FOLLOWING
+           */
 
           const [
             followersSnapshot,
             followingSnapshot,
           ] =
             await Promise.all([
-              /* ==============================================
-                 FOLLOWERS
-
-                 People whose "following" field is this rider.
-              ============================================== */
-
               getDocs(
                 query(
                   collection(
@@ -1212,12 +1180,6 @@ export default function RiderPage() {
                   )
                 )
               ),
-
-              /* ==============================================
-                 FOLLOWING
-
-                 People whose "follower" field is this rider.
-              ============================================== */
 
               getDocs(
                 query(
@@ -1234,11 +1196,6 @@ export default function RiderPage() {
               ),
             ]);
 
-
-          /* ==================================================
-             UPDATE PROFILE COUNTS
-          ================================================== */
-
           setFollowers(
             followersSnapshot.size
           );
@@ -1246,7 +1203,6 @@ export default function RiderPage() {
           setFollowing(
             followingSnapshot.size
           );
-
         } catch (error) {
           console.error(
             "Follow status / count error:",
@@ -1255,14 +1211,11 @@ export default function RiderPage() {
         }
       };
 
-
     checkFollowStatus();
-
   }, [
     riderName,
     isAdminView,
   ]);
-
 
   /* =========================================================
      LOAD RIDER DATA
@@ -1289,6 +1242,10 @@ export default function RiderPage() {
 
           let profileImage = "";
 
+          /*
+           * OWN PROFILE IMAGE
+           */
+
           if (
             savedUser?.name ===
               riderName &&
@@ -1303,6 +1260,10 @@ export default function RiderPage() {
               );
             }
           }
+
+          /*
+           * ADMIN PROFILE IMAGE
+           */
 
           if (
             isAdminView &&
@@ -1320,13 +1281,17 @@ export default function RiderPage() {
             }
           }
 
-
           /* ==================================================
              USER LOOKUP
           ================================================== */
 
           let userProfileData:
             any = null;
+
+          /*
+           * Own profile:
+           * use UID directly.
+           */
 
           if (
             savedUser?.uid &&
@@ -1357,6 +1322,10 @@ export default function RiderPage() {
             }
           }
 
+          /*
+           * Other rider:
+           * username lookup.
+           */
 
           if (
             !userProfileData &&
@@ -1398,6 +1367,10 @@ export default function RiderPage() {
             }
           }
 
+          /*
+           * Fallback:
+           * name lookup.
+           */
 
           if (
             !userProfileData &&
@@ -1439,6 +1412,9 @@ export default function RiderPage() {
             }
           }
 
+          /*
+           * Update profile image from Firestore.
+           */
 
           if (
             userProfileData?.image
@@ -1451,6 +1427,10 @@ export default function RiderPage() {
                 profileImage
               );
             }
+
+            /*
+             * Keep localStorage synchronized.
+             */
 
             if (
               savedUser?.name ===
@@ -1472,9 +1452,8 @@ export default function RiderPage() {
             }
           }
 
-
           /* ==================================================
-             LOAD MAJOR PROFILE DATA
+             LOAD PROFILE DATA
           ================================================== */
 
           const [
@@ -1508,7 +1487,6 @@ export default function RiderPage() {
           if (cancelled) {
             return;
           }
-
 
           /* ==================================================
              COMPLETED TRIPS
@@ -1577,7 +1555,6 @@ export default function RiderPage() {
             distance
           );
 
-
           /* ==================================================
              POSTS
           ================================================== */
@@ -1616,7 +1593,6 @@ export default function RiderPage() {
           setRiderPosts(
             posts
           );
-
 
           /* ==================================================
              REVIEWS
@@ -1673,7 +1649,6 @@ export default function RiderPage() {
               : 0
           );
 
-
           /* ==================================================
              BADGE
           ================================================== */
@@ -1715,7 +1690,6 @@ export default function RiderPage() {
     isAdminView,
     adminView?.userImage,
   ]);
-
 
   /* =========================================================
      FOLLOW / UNFOLLOW
@@ -1819,7 +1793,6 @@ export default function RiderPage() {
       }
     };
 
-
   /* =========================================================
      PROFILE STATE
   ========================================================= */
@@ -1828,11 +1801,9 @@ export default function RiderPage() {
     currentUser?.name ===
     riderName;
 
-
   const displayedProfileImage =
     riderImage ||
     DEFAULT_PROFILE_IMAGE;
-
 
   /* =========================================================
      ACHIEVEMENTS
@@ -1917,7 +1888,6 @@ export default function RiderPage() {
       "👑 RideMate Icon"
     );
 
-
   /* =========================================================
      RENDER
   ========================================================= */
@@ -1969,7 +1939,6 @@ export default function RiderPage() {
           </div>
         )}
 
-
         <div className="text-center">
 
           {/* ==================================================
@@ -1981,14 +1950,18 @@ export default function RiderPage() {
             <div className="relative">
 
               <img
-                src={displayedProfileImage}
+                src={
+                  displayedProfileImage
+                }
                 alt={`${riderName}'s profile picture`}
                 loading="eager"
                 fetchPriority="high"
                 decoding="async"
                 onClick={() => {
                   if (riderImage) {
-                    setShowProfileImage(true);
+                    setShowProfileImage(
+                      true
+                    );
                   }
                 }}
                 className="
@@ -2006,8 +1979,9 @@ export default function RiderPage() {
                 "
               />
 
-
-              {/* CHANGE PROFILE PHOTO */}
+              {/* =================================================
+                  CHANGE PROFILE PHOTO
+              ================================================= */}
 
               {isOwnProfile &&
                 !isAdminView && (
@@ -2049,7 +2023,9 @@ export default function RiderPage() {
                     </button>
 
                     <input
-                      ref={profileInputRef}
+                      ref={
+                        profileInputRef
+                      }
                       type="file"
                       accept="image/*"
                       onChange={
@@ -2062,7 +2038,6 @@ export default function RiderPage() {
 
             </div>
           </div>
-
 
           {/* UPLOAD STATUS */}
 
@@ -2114,7 +2089,6 @@ export default function RiderPage() {
               </div>
             )}
 
-
           {isOwnProfile &&
             !isAdminView &&
             !uploadingProfileImage && (
@@ -2129,7 +2103,6 @@ export default function RiderPage() {
               </p>
             )}
 
-
           {/* NAME */}
 
           <h1
@@ -2143,7 +2116,6 @@ export default function RiderPage() {
             {riderName}
           </h1>
 
-
           <div
             className="
               mt-2
@@ -2155,7 +2127,6 @@ export default function RiderPage() {
           >
             {badge}
           </div>
-
 
           {/* FOLLOW + MESSAGE */}
 
@@ -2177,20 +2148,13 @@ export default function RiderPage() {
                 disabled={
                   isAdminView
                 }
-                className={`
-                  px-8
-                  py-3
-                  rounded-2xl
-                  font-black
-                  transition
-                  ${
-                    isAdminView
-                      ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                      : isFollowing
-                      ? "bg-zinc-700"
-                      : "bg-orange-500 text-black"
-                  }
-                `}
+                className={`px-8 py-3 rounded-2xl font-black transition ${
+                  isAdminView
+                    ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                    : isFollowing
+                    ? "bg-zinc-700"
+                    : "bg-orange-500 text-black"
+                }`}
               >
                 {isAdminView
                   ? "Follow 🔒"
@@ -2198,7 +2162,6 @@ export default function RiderPage() {
                   ? "Following ✅"
                   : "Follow 👥"}
               </button>
-
 
               <Link
                 href={`/chat/${encodeURIComponent(
@@ -2216,7 +2179,6 @@ export default function RiderPage() {
               </Link>
             </div>
           )}
-
 
           {/* STATS */}
 
@@ -2265,7 +2227,6 @@ export default function RiderPage() {
               </p>
             </Link>
 
-
             <Link
               href={`/rider/${encodeURIComponent(
                 riderName
@@ -2301,7 +2262,6 @@ export default function RiderPage() {
                 Following
               </p>
             </Link>
-
 
             <Link
               href={`/rider/${encodeURIComponent(
@@ -2341,7 +2301,6 @@ export default function RiderPage() {
 
           </div>
 
-
           {/* RIDER BIO */}
 
           <div className="mt-6">
@@ -2365,7 +2324,6 @@ export default function RiderPage() {
                 ? "▲ Hide Rider Bio"
                 : "▼ Rider Bio"}
             </button>
-
 
             {showBio && (
               <div
@@ -2426,7 +2384,6 @@ export default function RiderPage() {
                     : "🟢 Beginner Rider"}
                 </div>
 
-
                 <div
                   className="
                     bg-zinc-900
@@ -2485,7 +2442,6 @@ export default function RiderPage() {
 
           </div>
 
-
           {/* POSTS */}
 
           <div className="mt-10">
@@ -2501,7 +2457,6 @@ export default function RiderPage() {
             >
               Posts
             </h2>
-
 
             {riderPosts.length === 0 ? (
               <div
@@ -2594,7 +2549,6 @@ export default function RiderPage() {
 
           </div>
 
-
           {/* LOGOUT */}
 
           {isOwnProfile &&
@@ -2623,7 +2577,6 @@ export default function RiderPage() {
         </div>
 
       </div>
-
 
       {/* ======================================================
           POST MODAL
@@ -2665,7 +2618,6 @@ export default function RiderPage() {
               ❌
             </button>
 
-
             {selectedPost.mediaType?.startsWith(
               "image"
             ) ? (
@@ -2699,7 +2651,6 @@ export default function RiderPage() {
                 "
               />
             )}
-
 
             {/* OWNER POST CONTROLS */}
 
@@ -2912,7 +2863,6 @@ export default function RiderPage() {
                 </div>
               )}
 
-
             {/* ADMIN NOTICE */}
 
             {isAdminView && (
@@ -2939,7 +2889,6 @@ export default function RiderPage() {
                 </p>
               </div>
             )}
-
 
             {/* LIKES + CAPTION */}
 
@@ -2969,14 +2918,12 @@ export default function RiderPage() {
 
             </div>
 
-
             <hr
               className="
                 my-6
                 border-zinc-800
               "
             />
-
 
             {/* COMMENTS */}
 
@@ -2989,7 +2936,6 @@ export default function RiderPage() {
             >
               Comments
             </h2>
-
 
             <div className="space-y-3">
 
@@ -3043,7 +2989,6 @@ export default function RiderPage() {
               )}
 
             </div>
-
 
             {/* COMMENT INPUT */}
 
@@ -3138,7 +3083,6 @@ export default function RiderPage() {
         </div>
       )}
 
-
       {/* ======================================================
           PROFILE IMAGE VIEWER
       ====================================================== */}
@@ -3203,7 +3147,6 @@ export default function RiderPage() {
             ✕
           </button>
 
-
           {/* IMAGE CONTAINER */}
 
           <div
@@ -3220,8 +3163,6 @@ export default function RiderPage() {
               event.stopPropagation()
             }
           >
-
-            {/* FIXED VIEWER BOX */}
 
             <div
               className="
@@ -3258,7 +3199,6 @@ export default function RiderPage() {
           </div>
 
         </div>
-
       )}
 
     </main>

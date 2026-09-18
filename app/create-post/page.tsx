@@ -26,7 +26,7 @@ import { db, auth, app } from "../firebase";
    SETTINGS
 ========================================================= */
 
-const MAX_VIDEO_DURATION = 30; // seconds
+const MAX_VIDEO_DURATION = 30;
 
 const MAX_IMAGE_WIDTH = 1920;
 const MAX_IMAGE_HEIGHT = 1920;
@@ -37,23 +37,158 @@ const IMAGE_QUALITY = 0.82;
    HELPER: FORMAT FILE SIZE
 ========================================================= */
 
-function formatFileSize(
-  bytes: number
-) {
+function formatFileSize(bytes: number) {
   if (bytes < 1024) {
     return `${bytes} B`;
   }
 
   if (bytes < 1024 * 1024) {
-    return `${(
-      bytes / 1024
-    ).toFixed(1)} KB`;
+    return `${(bytes / 1024).toFixed(1)} KB`;
   }
 
-  return `${(
-    bytes /
-    (1024 * 1024)
-  ).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/* =========================================================
+   HELPER: LOAD IMAGE
+========================================================= */
+
+async function loadImage(
+  file: File
+): Promise<{
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+  cleanup?: () => void;
+}> {
+  /*
+   * First try createImageBitmap.
+   *
+   * This is generally more reliable and faster
+   * for processing local image files.
+   */
+
+  if (
+    typeof createImageBitmap === "function"
+  ) {
+    try {
+      const bitmap =
+        await createImageBitmap(file);
+
+      if (
+        bitmap.width > 0 &&
+        bitmap.height > 0
+      ) {
+        return {
+          source: bitmap,
+          width: bitmap.width,
+          height: bitmap.height,
+          cleanup: () => {
+            bitmap.close();
+          },
+        };
+      }
+    } catch (error) {
+      console.warn(
+        "createImageBitmap failed, using browser image fallback:",
+        error
+      );
+    }
+  }
+
+  /*
+   * Fallback:
+   * Use FileReader + Image.
+   *
+   * This avoids depending on an object URL
+   * being decoded correctly by the browser.
+   */
+
+  const dataUrl =
+    await new Promise<string>(
+      (resolve, reject) => {
+        const reader =
+          new FileReader();
+
+        reader.onload = () => {
+          if (
+            typeof reader.result !==
+            "string"
+          ) {
+            reject(
+              new Error(
+                "Could not read image data."
+              )
+            );
+
+            return;
+          }
+
+          resolve(
+            reader.result
+          );
+        };
+
+        reader.onerror = () => {
+          reject(
+            new Error(
+              "Could not read selected image."
+            )
+          );
+        };
+
+        reader.onabort = () => {
+          reject(
+            new Error(
+              "Image reading was cancelled."
+            )
+          );
+        };
+
+        reader.readAsDataURL(file);
+      }
+    );
+
+  const image =
+    await new Promise<HTMLImageElement>(
+      (resolve, reject) => {
+        const img =
+          new Image();
+
+        img.onload = () => {
+          if (
+            img.naturalWidth <= 0 ||
+            img.naturalHeight <= 0
+          ) {
+            reject(
+              new Error(
+                "Image has invalid dimensions."
+              )
+            );
+
+            return;
+          }
+
+          resolve(img);
+        };
+
+        img.onerror = () => {
+          reject(
+            new Error(
+              "Browser could not decode this image."
+            )
+          );
+        };
+
+        img.src = dataUrl;
+      }
+    );
+
+  return {
+    source: image,
+    width: image.naturalWidth,
+    height: image.naturalHeight,
+  };
 }
 
 /* =========================================================
@@ -63,170 +198,231 @@ function formatFileSize(
 async function compressImage(
   file: File
 ): Promise<File> {
-  return new Promise(
-    (resolve, reject) => {
-      const image =
-        new Image();
+  /*
+   * Basic validation.
+   */
 
-      const objectUrl =
-        URL.createObjectURL(
-          file
+  if (!file) {
+    throw new Error(
+      "No image selected."
+    );
+  }
+
+  if (
+    !file.type ||
+    !file.type.startsWith("image/")
+  ) {
+    throw new Error(
+      "Selected file is not an image."
+    );
+  }
+
+  if (file.size <= 0) {
+    throw new Error(
+      "Selected image is empty."
+    );
+  }
+
+  /*
+   * Load image using robust decoder.
+   */
+
+  const {
+    source,
+    width: originalWidth,
+    height: originalHeight,
+    cleanup,
+  } = await loadImage(file);
+
+  try {
+    let width =
+      originalWidth;
+
+    let height =
+      originalHeight;
+
+    /*
+     * Keep aspect ratio while
+     * limiting maximum dimensions.
+     */
+
+    if (
+      width >
+        MAX_IMAGE_WIDTH ||
+      height >
+        MAX_IMAGE_HEIGHT
+    ) {
+      const widthRatio =
+        MAX_IMAGE_WIDTH /
+        width;
+
+      const heightRatio =
+        MAX_IMAGE_HEIGHT /
+        height;
+
+      const ratio =
+        Math.min(
+          widthRatio,
+          heightRatio
         );
 
-      image.onload = () => {
-        try {
-          let width =
-            image.naturalWidth;
+      width = Math.max(
+        1,
+        Math.round(
+          width * ratio
+        )
+      );
 
-          let height =
-            image.naturalHeight;
+      height = Math.max(
+        1,
+        Math.round(
+          height * ratio
+        )
+      );
+    }
 
-          /*
-           * Resize large images while
-           * keeping their original aspect ratio.
-           */
+    /*
+     * Create canvas.
+     */
 
-          if (
-            width >
-              MAX_IMAGE_WIDTH ||
-            height >
-              MAX_IMAGE_HEIGHT
-          ) {
-            const widthRatio =
-              MAX_IMAGE_WIDTH /
-              width;
+    const canvas =
+      document.createElement(
+        "canvas"
+      );
 
-            const heightRatio =
-              MAX_IMAGE_HEIGHT /
-              height;
+    canvas.width =
+      width;
 
-            const ratio =
-              Math.min(
-                widthRatio,
-                heightRatio
-              );
+    canvas.height =
+      height;
 
-            width = Math.round(
-              width * ratio
-            );
+    const context =
+      canvas.getContext(
+        "2d",
+        {
+          alpha: false,
+        }
+      );
 
-            height = Math.round(
-              height * ratio
-            );
-          }
+    if (!context) {
+      throw new Error(
+        "Could not create image canvas."
+      );
+    }
 
-          const canvas =
-            document.createElement(
-              "canvas"
-            );
+    /*
+     * Image quality settings.
+     */
 
-          canvas.width =
-            width;
+    context.imageSmoothingEnabled =
+      true;
 
-          canvas.height =
-            height;
+    context.imageSmoothingQuality =
+      "high";
 
-          const context =
-            canvas.getContext(
-              "2d"
-            );
+    /*
+     * Draw image.
+     */
 
-          if (!context) {
-            throw new Error(
-              "Could not create image canvas."
-            );
-          }
+    context.drawImage(
+      source,
+      0,
+      0,
+      width,
+      height
+    );
 
-          /*
-           * Better image scaling.
-           */
+    /*
+     * Convert to JPEG.
+     */
 
-          context.imageSmoothingEnabled =
-            true;
-
-          context.imageSmoothingQuality =
-            "high";
-
-          context.drawImage(
-            image,
-            0,
-            0,
-            width,
-            height
-          );
-
-          /*
-           * Convert to JPEG.
-           *
-           * This significantly reduces
-           * large phone-camera images.
-           */
-
+    const blob =
+      await new Promise<Blob | null>(
+        (resolve) => {
           canvas.toBlob(
-            (blob) => {
-              URL.revokeObjectURL(
-                objectUrl
-              );
-
-              if (!blob) {
-                reject(
-                  new Error(
-                    "Image compression failed."
-                  )
-                );
-
-                return;
-              }
-
-              const compressedFile =
-                new File(
-                  [
-                    blob,
-                  ],
-                  file.name.replace(
-                    /\.[^/.]+$/,
-                    ""
-                  ) + ".jpg",
-                  {
-                    type:
-                      "image/jpeg",
-                    lastModified:
-                      Date.now(),
-                  }
-                );
-
-              resolve(
-                compressedFile
-              );
+            (result) => {
+              resolve(result);
             },
             "image/jpeg",
             IMAGE_QUALITY
           );
-        } catch (error) {
-          URL.revokeObjectURL(
-            objectUrl
-          );
-
-          reject(error);
         }
-      };
+      );
 
-      image.onerror = () => {
-        URL.revokeObjectURL(
-          objectUrl
-        );
+    /*
+     * If the browser cannot create
+     * the compressed JPEG, don't destroy
+     * the user's selected image.
+     */
 
-        reject(
-          new Error(
-            "Could not read selected image."
-          )
-        );
-      };
+    if (!blob) {
+      console.warn(
+        "Canvas compression failed. Using original image."
+      );
 
-      image.src =
-        objectUrl;
+      return file;
     }
-  );
+
+    /*
+     * If compression somehow produces
+     * an empty file, use original.
+     */
+
+    if (blob.size <= 0) {
+      console.warn(
+        "Compressed image is empty. Using original image."
+      );
+
+      return file;
+    }
+
+    /*
+     * Generate a clean JPEG filename.
+     */
+
+    const baseName =
+      file.name.replace(
+        /\.[^/.]+$/,
+        ""
+      );
+
+    const compressedFile =
+      new File(
+        [blob],
+        `${baseName}.jpg`,
+        {
+          type: "image/jpeg",
+          lastModified:
+            Date.now(),
+        }
+      );
+
+    /*
+     * If the compressed version is actually
+     * larger than the original, keep the original.
+     */
+
+    if (
+      compressedFile.size >=
+      file.size
+    ) {
+      console.log(
+        "Compressed file is not smaller. Keeping original."
+      );
+
+      return file;
+    }
+
+    return compressedFile;
+  } finally {
+    /*
+     * Close ImageBitmap if one was used.
+     */
+
+    if (cleanup) {
+      cleanup();
+    }
+  }
 }
 
 /* =========================================================
@@ -283,9 +479,10 @@ export default function CreatePostPage() {
     null
   );
 
-  /*
-   * Used to clean up preview URLs.
-   */
+  const [
+    previewUrl,
+    setPreviewUrl,
+  ] = useState("");
 
   const previewUrlRef =
     useRef<string | null>(
@@ -304,9 +501,87 @@ export default function CreatePostPage() {
         URL.revokeObjectURL(
           previewUrlRef.current
         );
+
+        previewUrlRef.current =
+          null;
       }
     };
   }, []);
+
+  /* =========================================================
+     CREATE PREVIEW URL
+  ========================================================= */
+
+  const createPreviewUrl = (
+    file: File
+  ) => {
+    /*
+     * Remove old preview.
+     */
+
+    if (
+      previewUrlRef.current
+    ) {
+      URL.revokeObjectURL(
+        previewUrlRef.current
+      );
+    }
+
+    const url =
+      URL.createObjectURL(
+        file
+      );
+
+    previewUrlRef.current =
+      url;
+
+    setPreviewUrl(url);
+
+    return url;
+  };
+
+  /* =========================================================
+     CLEAR SELECTED FILE
+  ========================================================= */
+
+  const clearSelectedFile = (
+    input?: HTMLInputElement
+  ) => {
+    setSelectedFile(
+      null
+    );
+
+    setVideoDuration(
+      null
+    );
+
+    setOriginalFileSize(
+      0
+    );
+
+    setOptimizedFileSize(
+      null
+    );
+
+    setPreviewUrl(
+      ""
+    );
+
+    if (
+      previewUrlRef.current
+    ) {
+      URL.revokeObjectURL(
+        previewUrlRef.current
+      );
+
+      previewUrlRef.current =
+        null;
+    }
+
+    if (input) {
+      input.value = "";
+    }
+  };
 
   /* =========================================================
      SELECT FILE
@@ -324,10 +599,16 @@ export default function CreatePostPage() {
       }
 
       /*
-       * Reset previous information.
+       * Reset previous file.
        */
 
-      setVideoDuration(null);
+      setSelectedFile(
+        null
+      );
+
+      setVideoDuration(
+        null
+      );
 
       setOptimizedFileSize(
         null
@@ -337,8 +618,12 @@ export default function CreatePostPage() {
         file.size
       );
 
+      setPreviewUrl(
+        ""
+      );
+
       /*
-       * Clean previous preview URL.
+       * Remove previous preview URL.
        */
 
       if (
@@ -353,7 +638,7 @@ export default function CreatePostPage() {
       }
 
       /* =====================================================
-         VIDEO VALIDATION
+         VIDEO
       ===================================================== */
 
       if (
@@ -396,23 +681,12 @@ export default function CreatePostPage() {
                 "Could not determine video duration. Please select another video."
               );
 
-              setSelectedFile(
-                null
+              clearSelectedFile(
+                e.target
               );
-
-              setOriginalFileSize(
-                0
-              );
-
-              e.target.value =
-                "";
 
               return;
             }
-
-            /*
-             * HARD 30 SECOND LIMIT
-             */
 
             if (
               duration >
@@ -422,20 +696,9 @@ export default function CreatePostPage() {
                 `Video is too long.\n\nMaximum allowed duration is ${MAX_VIDEO_DURATION} seconds.`
               );
 
-              setSelectedFile(
-                null
+              clearSelectedFile(
+                e.target
               );
-
-              setVideoDuration(
-                null
-              );
-
-              setOriginalFileSize(
-                0
-              );
-
-              e.target.value =
-                "";
 
               return;
             }
@@ -444,12 +707,11 @@ export default function CreatePostPage() {
              * Valid video.
              */
 
-            previewUrlRef.current =
-              URL.createObjectURL(
-                file
-              );
-
             setSelectedFile(
+              file
+            );
+
+            createPreviewUrl(
               file
             );
           };
@@ -464,16 +726,9 @@ export default function CreatePostPage() {
               "Unable to read this video. Please select another video."
             );
 
-            setSelectedFile(
-              null
+            clearSelectedFile(
+              e.target
             );
-
-            setOriginalFileSize(
-              0
-            );
-
-            e.target.value =
-              "";
           };
 
         video.src =
@@ -500,10 +755,31 @@ export default function CreatePostPage() {
             "Optimizing image..."
           );
 
+          console.log(
+            "Selected image:",
+            {
+              name: file.name,
+              type: file.type,
+              size: file.size,
+            }
+          );
+
           const compressed =
             await compressImage(
               file
             );
+
+          console.log(
+            "Image processed:",
+            {
+              name:
+                compressed.name,
+              type:
+                compressed.type,
+              size:
+                compressed.size,
+            }
+          );
 
           setSelectedFile(
             compressed
@@ -513,23 +789,59 @@ export default function CreatePostPage() {
             compressed.size
           );
 
-          previewUrlRef.current =
-            URL.createObjectURL(
-              compressed
-            );
+          createPreviewUrl(
+            compressed
+          );
         } catch (error) {
           console.error(
-            "Image compression error:",
+            "Image processing error:",
             error
           );
 
-          alert(
-            "Unable to process this image. Please try another image."
-          );
+          /*
+           * Important:
+           * Try using the original file
+           * instead of immediately rejecting it.
+           */
 
-          setSelectedFile(
-            null
-          );
+          try {
+            console.log(
+              "Trying original image as fallback..."
+            );
+
+            setSelectedFile(
+              file
+            );
+
+            setOptimizedFileSize(
+              file.size
+            );
+
+            createPreviewUrl(
+              file
+            );
+
+            setProcessingText(
+              ""
+            );
+
+            console.log(
+              "Original image accepted as fallback."
+            );
+          } catch (fallbackError) {
+            console.error(
+              "Original image fallback failed:",
+              fallbackError
+            );
+
+            alert(
+              "Unable to process this image. Please try another image."
+            );
+
+            clearSelectedFile(
+              e.target
+            );
+          }
         } finally {
           setProcessing(
             false
@@ -543,24 +855,17 @@ export default function CreatePostPage() {
         return;
       }
 
-      /*
-       * Unsupported format.
-       */
+      /* =====================================================
+         UNSUPPORTED FILE
+      ===================================================== */
 
       alert(
         "Please select a photo or video."
       );
 
-      setSelectedFile(
-        null
+      clearSelectedFile(
+        e.target
       );
-
-      setOriginalFileSize(
-        0
-      );
-
-      e.target.value =
-        "";
     };
 
   /* =========================================================
@@ -598,8 +903,7 @@ export default function CreatePostPage() {
         }
 
         /*
-         * Double-check video duration
-         * before upload.
+         * Check video duration.
          */
 
         if (
@@ -631,12 +935,35 @@ export default function CreatePostPage() {
           auth.currentUser
         );
 
+        /*
+         * Require Firebase authentication.
+         */
+
+        if (!auth.currentUser) {
+          alert(
+            "Your login session has expired. Please log in again."
+          );
+
+          setUploading(
+            false
+          );
+
+          return;
+        }
+
         /* =====================================================
            FILE NAME
         ===================================================== */
 
+        const safeFileName =
+          selectedFile.name
+            .replace(
+              /[^a-zA-Z0-9._-]/g,
+              "_"
+            );
+
         const fileName =
-          `${Date.now()}_${selectedFile.name}`;
+          `${Date.now()}_${safeFileName}`;
 
         /* =====================================================
            STORAGE
@@ -661,6 +988,11 @@ export default function CreatePostPage() {
         );
 
         console.log(
+          "Upload type:",
+          selectedFile.type
+        );
+
+        console.log(
           "Upload size:",
           formatFileSize(
             selectedFile.size
@@ -673,12 +1005,6 @@ export default function CreatePostPage() {
           {
             contentType:
               selectedFile.type,
-
-            /*
-             * Helps browsers/CDNs cache
-             * the media instead of repeatedly
-             * treating it as a fresh resource.
-             */
 
             cacheControl:
               "public,max-age=31536000,immutable",
@@ -753,14 +1079,26 @@ export default function CreatePostPage() {
         router.push(
           "/home"
         );
-      } catch (error) {
+      } catch (error: any) {
         console.error(
           "Error creating post:",
           error
         );
 
+        console.error(
+          "Firebase error code:",
+          error?.code
+        );
+
+        console.error(
+          "Firebase error message:",
+          error?.message
+        );
+
         alert(
-          "Error uploading post. Please try again."
+          error?.message
+            ? `Error uploading post:\n\n${error.message}`
+            : "Error uploading post. Please try again."
         );
       } finally {
         setUploading(
@@ -768,16 +1106,6 @@ export default function CreatePostPage() {
         );
       }
     };
-
-  /* =========================================================
-     PREVIEW URL
-  ========================================================= */
-
-  const previewUrl =
-    selectedFile &&
-    previewUrlRef.current
-      ? previewUrlRef.current
-      : "";
 
   /* =========================================================
      RENDER
