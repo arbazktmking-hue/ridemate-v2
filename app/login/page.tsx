@@ -9,7 +9,6 @@ import {
   doc,
   getDoc,
   setDoc,
-  updateDoc,
 } from "firebase/firestore";
 
 import { auth, db } from "../firebase";
@@ -35,8 +34,11 @@ export default function LoginPage() {
     useState(0);
 
   // =========================================================
-  // LOGIN FORM
+  // AUTH / PROFILE SETUP
   // =========================================================
+
+  const [googleUser, setGoogleUser] =
+    useState<any>(null);
 
   const [username, setUsername] =
     useState("");
@@ -47,14 +49,11 @@ export default function LoginPage() {
   const [loading, setLoading] =
     useState(false);
 
+  const [setupMode, setSetupMode] =
+    useState(false);
+
   // =========================================================
   // ONBOARDING SLIDES
-  // =========================================================
-  // 4 slides:
-  // 1. Post your upcoming trip
-  // 2. Get requests from fellow riders
-  // 3. Split the cost / make new friends
-  // 4. Your additional RideMate slide
   // =========================================================
 
   const slides = [
@@ -65,7 +64,7 @@ export default function LoginPage() {
   ];
 
   // =========================================================
-  // CHECK WHETHER ONBOARDING WAS ALREADY COMPLETED
+  // CHECK WHETHER ONBOARDING WAS COMPLETED
   // =========================================================
 
   useEffect(() => {
@@ -75,8 +74,7 @@ export default function LoginPage() {
       );
 
     if (
-      onboardingCompleted ===
-      "true"
+      onboardingCompleted === "true"
     ) {
       setShowOnboarding(false);
     }
@@ -105,8 +103,7 @@ export default function LoginPage() {
 
   const previousSlide = () => {
     if (
-      currentSlide >
-      0
+      currentSlide > 0
     ) {
       setCurrentSlide(
         currentSlide - 1
@@ -132,14 +129,10 @@ export default function LoginPage() {
   // =========================================================
 
   const [touchStart, setTouchStart] =
-    useState<number | null>(
-      null
-    );
+    useState<number | null>(null);
 
   const [touchEnd, setTouchEnd] =
-    useState<number | null>(
-      null
-    );
+    useState<number | null>(null);
 
   const handleTouchStart = (
     e: React.TouchEvent
@@ -166,22 +159,18 @@ export default function LoginPage() {
     }
 
     const distance =
-      touchStart -
-      touchEnd;
+      touchStart - touchEnd;
 
-    const minimumSwipe =
-      50;
+    const minimumSwipe = 50;
 
     if (
-      distance >
-      minimumSwipe
+      distance > minimumSwipe
     ) {
       nextSlide();
     }
 
     if (
-      distance <
-      -minimumSwipe
+      distance < -minimumSwipe
     ) {
       previousSlide();
     }
@@ -197,34 +186,10 @@ export default function LoginPage() {
   const loginWithGoogle =
     async () => {
       try {
-        // ---------------------------------------------------
-        // VALIDATE NAME
-        // ---------------------------------------------------
-
-        if (
-          !username.trim()
-        ) {
-          alert(
-            "Please enter your name."
-          );
-          return;
-        }
-
-        // ---------------------------------------------------
-        // VALIDATE GENDER
-        // ---------------------------------------------------
-
-        if (!gender) {
-          alert(
-            "Please select your gender."
-          );
-          return;
-        }
-
         setLoading(true);
 
         // ---------------------------------------------------
-        // GOOGLE AUTH
+        // GOOGLE AUTHENTICATION FIRST
         // ---------------------------------------------------
 
         const provider =
@@ -236,11 +201,14 @@ export default function LoginPage() {
             provider
           );
 
+        const firebaseUser =
+          result.user;
+
         const uid =
-          result.user.uid;
+          firebaseUser.uid;
 
         // ---------------------------------------------------
-        // CHECK USER
+        // CHECK FIRESTORE USER
         // ---------------------------------------------------
 
         const userRef =
@@ -265,178 +233,99 @@ export default function LoginPage() {
           const user =
             userDoc.data();
 
-          // -----------------------------------------------
-          // Save gender if selected
-          // -----------------------------------------------
-
-          await updateDoc(
-            userRef,
-            {
-              gender:
-                gender,
-
-              genderUpdatedAt:
-                Date.now(),
-            }
-          );
-
-          // -----------------------------------------------
-          // Keep existing username
-          // -----------------------------------------------
-
           const existingUsername =
             user.username ||
             user.name ||
-            username.trim();
+            firebaseUser.displayName ||
+            "Rider";
+
+          const existingGender =
+            user.gender ||
+            "";
 
           const existingImage =
             user.image ||
-            result.user.photoURL ||
+            firebaseUser.photoURL ||
             "";
 
           const existingEmail =
             user.email ||
-            result.user.email ||
+            firebaseUser.email ||
             "";
 
           // -----------------------------------------------
-          // LOCAL STORAGE
+          // USE EXISTING USER DATA
+          // DO NOT ASK FOR USERNAME/GENDER AGAIN
           // -----------------------------------------------
 
           localStorage.setItem(
             "ridemateUser",
             JSON.stringify({
               uid,
-
               email:
                 existingEmail,
-
               image:
                 existingImage,
-
               name:
                 existingUsername,
-
               gender:
-                gender,
+                existingGender,
             })
           );
 
           // -----------------------------------------------
-          // TERMS
+          // CHECK TERMS FOR THIS SPECIFIC USER
           // -----------------------------------------------
 
           const termsAccepted =
-            localStorage.getItem(
-              "termsAccepted"
-            );
+            user.termsAccepted === true;
 
           if (
-            termsAccepted ===
-            "true"
+            termsAccepted
           ) {
-            router.push(
+            localStorage.setItem(
+              `termsAccepted_${uid}`,
+              "true"
+            );
+
+            router.replace(
               "/profile"
             );
           } else {
-            router.push(
+            localStorage.removeItem(
+              `termsAccepted_${uid}`
+            );
+
+            router.replace(
               "/terms"
             );
           }
+
+          return;
         }
 
         // ===================================================
         // NEW USER
         // ===================================================
 
-        else {
-          const finalUsername =
-            username.trim();
+        setGoogleUser({
+          uid,
+          email:
+            firebaseUser.email ||
+            "",
+          image:
+            firebaseUser.photoURL ||
+            "",
+        });
 
-          const finalEmail =
-            result.user.email ||
-            "";
+        setUsername(
+          firebaseUser.displayName ||
+          ""
+        );
 
-          const finalImage =
-            result.user.photoURL ||
-            "";
+        setGender("");
 
-          // -----------------------------------------------
-          // CREATE USER
-          // -----------------------------------------------
-
-          await setDoc(
-            userRef,
-            {
-              uid,
-
-              username:
-                finalUsername,
-
-              email:
-                finalEmail,
-
-              image:
-                finalImage,
-
-              gender:
-                gender,
-
-              createdAt:
-                Date.now(),
-            }
-          );
-
-          // -----------------------------------------------
-          // PENDING USER
-          // -----------------------------------------------
-
-          localStorage.setItem(
-            "pendingUser",
-            JSON.stringify({
-              uid,
-
-              email:
-                finalEmail,
-
-              image:
-                finalImage,
-
-              username:
-                finalUsername,
-
-              gender:
-                gender,
-            })
-          );
-
-          // -----------------------------------------------
-          // ALSO SAVE CURRENT USER
-          // -----------------------------------------------
-
-          localStorage.setItem(
-            "ridemateUser",
-            JSON.stringify({
-              uid,
-
-              email:
-                finalEmail,
-
-              image:
-                finalImage,
-
-              name:
-                finalUsername,
-
-              gender:
-                gender,
-            })
-          );
-
-          router.push(
-            "/terms"
-          );
-        }
+        setSetupMode(true);
       } catch (error) {
         console.error(
           "Google login failed:",
@@ -444,7 +333,139 @@ export default function LoginPage() {
         );
 
         alert(
-          "Login failed. Please try again."
+          "Google login failed. Please try again."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+  // =========================================================
+  // CREATE NEW USER PROFILE
+  // =========================================================
+
+  const createNewUser =
+    async () => {
+      try {
+        if (
+          !username.trim()
+        ) {
+          alert(
+            "Please enter your name."
+          );
+          return;
+        }
+
+        if (!gender) {
+          alert(
+            "Please select your gender."
+          );
+          return;
+        }
+
+        if (!googleUser?.uid) {
+          alert(
+            "Google authentication is missing. Please login again."
+          );
+          return;
+        }
+
+        setLoading(true);
+
+        const userRef =
+          doc(
+            db,
+            "users",
+            googleUser.uid
+          );
+
+        // ---------------------------------------------------
+        // CREATE USER
+        // ---------------------------------------------------
+
+        await setDoc(
+          userRef,
+          {
+            uid:
+              googleUser.uid,
+
+            username:
+              username.trim(),
+
+            email:
+              googleUser.email ||
+              "",
+
+            image:
+              googleUser.image ||
+              "",
+
+            gender:
+              gender,
+
+            termsAccepted:
+              false,
+
+            createdAt:
+              Date.now(),
+          }
+        );
+
+        // ---------------------------------------------------
+        // SAVE CURRENT USER
+        // ---------------------------------------------------
+
+        localStorage.setItem(
+          "ridemateUser",
+          JSON.stringify({
+            uid:
+              googleUser.uid,
+
+            email:
+              googleUser.email ||
+              "",
+
+            image:
+              googleUser.image ||
+              "",
+
+            name:
+              username.trim(),
+
+            gender:
+              gender,
+          })
+        );
+
+        // ---------------------------------------------------
+        // IMPORTANT:
+        // DO NOT MARK TERMS AS ACCEPTED
+        // ---------------------------------------------------
+
+        localStorage.removeItem(
+          `termsAccepted_${googleUser.uid}`
+        );
+
+        // Old temporary key is no longer needed
+        localStorage.removeItem(
+          "pendingUser"
+        );
+
+        // ---------------------------------------------------
+        // GO TO TERMS
+        // ---------------------------------------------------
+
+        router.replace(
+          "/terms"
+        );
+      } catch (error) {
+        console.error(
+          "Failed to create user:",
+          error
+        );
+
+        alert(
+          "Unable to create your RideMate profile. Please try again."
         );
       } finally {
         setLoading(false);
@@ -455,7 +476,9 @@ export default function LoginPage() {
   // ONBOARDING SCREEN
   // =========================================================
 
-  if (showOnboarding) {
+  if (
+    showOnboarding
+  ) {
     return (
       <main
         className="
@@ -466,11 +489,6 @@ export default function LoginPage() {
           overflow-hidden
         "
       >
-
-        {/* =================================================
-            SLIDE
-        ================================================= */}
-
         <div
           className="
             relative
@@ -490,28 +508,25 @@ export default function LoginPage() {
             handleTouchEnd
           }
         >
-
           <img
-            src={
-              slides[
-                currentSlide
-              ]
-            }
-            alt={`RideMate onboarding slide ${
-              currentSlide + 1
-            }`}
-            className="
-              w-full
-              h-full
-              object-cover
-              select-none
-              pointer-events-none
-            "
-          />
+  src={
+    slides[
+      currentSlide
+    ]
+  }
+  alt={`RideMate onboarding slide ${
+    currentSlide + 1
+  }`}
+  className="
+    w-full
+    h-full
+    object-contain
+    select-none
+    pointer-events-none
+  "
+/>
 
-          {/* =================================================
-              SLIDE INDICATORS
-          ================================================= */}
+          {/* SLIDE INDICATORS */}
 
           <div
             className="
@@ -527,7 +542,6 @@ export default function LoginPage() {
               z-20
             "
           >
-
             {slides.map(
               (_, index) => (
                 <button
@@ -554,16 +568,11 @@ export default function LoginPage() {
                 />
               )
             )}
-
           </div>
 
-          {/* =================================================
-              PREVIOUS BUTTON
-          ================================================= */}
+          {/* PREVIOUS */}
 
-          {currentSlide >
-            0 && (
-
+          {currentSlide > 0 && (
             <button
               onClick={
                 previousSlide
@@ -590,16 +599,12 @@ export default function LoginPage() {
                 hover:bg-black/70
                 transition
               "
-              aria-label="Previous slide"
             >
               ←
             </button>
-
           )}
 
-          {/* =================================================
-              NEXT / GET STARTED BUTTON
-          ================================================= */}
+          {/* NEXT / GET STARTED */}
 
           <button
             onClick={
@@ -633,9 +638,7 @@ export default function LoginPage() {
               : "Next →"}
           </button>
 
-          {/* =================================================
-              SKIP
-          ================================================= */}
+          {/* SKIP */}
 
           <button
             onClick={
@@ -663,9 +666,229 @@ export default function LoginPage() {
           >
             Skip
           </button>
-
         </div>
+      </main>
+    );
+  }
 
+  // =========================================================
+  // NEW USER PROFILE SETUP
+  // =========================================================
+
+  if (
+    setupMode &&
+    googleUser
+  ) {
+    return (
+      <main
+        className="
+          min-h-screen
+          bg-black
+          text-white
+          flex
+          items-center
+          justify-center
+          px-5
+          py-10
+        "
+      >
+        <div
+          className="
+            bg-zinc-900
+            border
+            border-zinc-800
+            rounded-3xl
+            p-7
+            md:p-10
+            max-w-md
+            w-full
+            text-center
+            shadow-2xl
+          "
+        >
+          <div
+            className="
+              flex
+              justify-center
+              mb-5
+            "
+          >
+            <img
+              src={
+                googleUser.image ||
+                "/icon-192.png"
+              }
+              alt="Profile"
+              className="
+                w-24
+                h-24
+                rounded-full
+                object-cover
+                border-2
+                border-orange-500
+              "
+            />
+          </div>
+
+          <h1
+            className="
+              text-3xl
+              font-black
+              text-orange-500
+            "
+          >
+            Welcome to RideMate 🏍️
+          </h1>
+
+          <p
+            className="
+              text-zinc-400
+              mt-3
+            "
+          >
+            Let's create your rider profile.
+          </p>
+
+          {/* USERNAME */}
+
+          <div
+            className="
+              text-left
+              mt-8
+            "
+          >
+            <label
+              className="
+                block
+                text-sm
+                font-bold
+                text-zinc-300
+                mb-2
+              "
+            >
+              Your Name
+            </label>
+
+            <input
+              type="text"
+              value={
+                username
+              }
+              onChange={(e) =>
+                setUsername(
+                  e.target.value
+                )
+              }
+              placeholder="Enter your name"
+              maxLength={50}
+              className="
+                w-full
+                bg-black
+                border
+                border-zinc-800
+                focus:border-orange-500
+                outline-none
+                rounded-2xl
+                px-5
+                py-4
+                text-white
+                placeholder:text-zinc-600
+              "
+            />
+          </div>
+
+          {/* GENDER */}
+
+          <div
+            className="
+              text-left
+              mt-5
+            "
+          >
+            <label
+              className="
+                block
+                text-sm
+                font-bold
+                text-zinc-300
+                mb-2
+              "
+            >
+              Gender
+            </label>
+
+            <select
+              value={
+                gender
+              }
+              onChange={(e) =>
+                setGender(
+                  e.target.value
+                )
+              }
+              className="
+                w-full
+                bg-black
+                border
+                border-zinc-800
+                focus:border-orange-500
+                outline-none
+                rounded-2xl
+                px-5
+                py-4
+                text-white
+              "
+            >
+              <option
+                value=""
+                disabled
+              >
+                Select your gender
+              </option>
+
+              <option value="Male">
+                Male
+              </option>
+
+              <option value="Female">
+                Female
+              </option>
+
+              <option value="Other">
+                Other
+              </option>
+
+              <option value="Prefer not to say">
+                Prefer not to say
+              </option>
+            </select>
+          </div>
+
+          <button
+            onClick={
+              createNewUser
+            }
+            disabled={
+              loading
+            }
+            className="
+              w-full
+              bg-orange-500
+              hover:bg-orange-600
+              disabled:opacity-50
+              py-4
+              rounded-2xl
+              text-lg
+              font-black
+              mt-7
+              transition
+            "
+          >
+            {loading
+              ? "Creating profile..."
+              : "Continue →"}
+          </button>
+        </div>
       </main>
     );
   }
@@ -687,7 +910,6 @@ export default function LoginPage() {
         py-10
       "
     >
-
       <div
         className="
           bg-zinc-900
@@ -700,13 +922,9 @@ export default function LoginPage() {
           w-full
           text-center
           shadow-2xl
-          shadow-black/50
         "
       >
-
-        {/* =================================================
-            LOGO / TITLE
-        ================================================= */}
+        {/* LOGO */}
 
         <div
           className="
@@ -715,7 +933,6 @@ export default function LoginPage() {
             mb-5
           "
         >
-
           <img
             src="/icon-192.png"
             alt="RideMate"
@@ -726,7 +943,6 @@ export default function LoginPage() {
               rounded-full
             "
           />
-
         </div>
 
         <h1
@@ -749,136 +965,7 @@ export default function LoginPage() {
           Ride together. Explore more.
         </p>
 
-        {/* =================================================
-            NAME
-        ================================================= */}
-
-        <div
-          className="
-            text-left
-            mt-8
-          "
-        >
-
-          <label
-            className="
-              block
-              text-sm
-              font-bold
-              text-zinc-300
-              mb-2
-            "
-          >
-            Your Name
-          </label>
-
-          <input
-            type="text"
-            value={
-              username
-            }
-            onChange={(e) =>
-              setUsername(
-                e.target.value
-              )
-            }
-            placeholder="Enter your name"
-            maxLength={50}
-            className="
-              w-full
-              bg-black
-              border
-              border-zinc-800
-              focus:border-orange-500
-              outline-none
-              rounded-2xl
-              px-5
-              py-4
-              text-white
-              placeholder:text-zinc-600
-              transition
-            "
-          />
-
-        </div>
-
-        {/* =================================================
-            GENDER
-        ================================================= */}
-
-        <div
-          className="
-            text-left
-            mt-5
-          "
-        >
-
-          <label
-            className="
-              block
-              text-sm
-              font-bold
-              text-zinc-300
-              mb-2
-            "
-          >
-            Gender
-          </label>
-
-          <select
-            value={
-              gender
-            }
-            onChange={(e) =>
-              setGender(
-                e.target.value
-              )
-            }
-            className="
-              w-full
-              bg-black
-              border
-              border-zinc-800
-              focus:border-orange-500
-              outline-none
-              rounded-2xl
-              px-5
-              py-4
-              text-white
-              transition
-            "
-          >
-
-            <option
-              value=""
-              disabled
-            >
-              Select your gender
-            </option>
-
-            <option value="Male">
-              Male
-            </option>
-
-            <option value="Female">
-              Female
-            </option>
-
-            <option value="Other">
-              Other
-            </option>
-
-            <option value="Prefer not to say">
-              Prefer not to say
-            </option>
-
-          </select>
-
-        </div>
-
-        {/* =================================================
-            GOOGLE LOGIN
-        ================================================= */}
+        {/* GOOGLE LOGIN */}
 
         <button
           onClick={
@@ -897,17 +984,14 @@ export default function LoginPage() {
             rounded-2xl
             text-lg
             font-black
-            mt-7
+            mt-8
             transition
             hover:scale-[1.02]
-            active:scale-[0.98]
           "
         >
-
           {loading
             ? "Signing in..."
             : "Continue with Google"}
-
         </button>
 
         <p
@@ -918,23 +1002,18 @@ export default function LoginPage() {
             leading-relaxed
           "
         >
-          By continuing, you agree to RideMate's
-          terms and community guidelines.
+          By continuing, you agree to
+          complete your RideMate profile
+          and review the Terms & Conditions
+          before entering the app.
         </p>
 
-        {/* =================================================
-            VIEW ONBOARDING AGAIN
-        ================================================= */}
+        {/* VIEW ONBOARDING AGAIN */}
 
         <button
           onClick={() => {
-            setCurrentSlide(
-              0
-            );
-
-            setShowOnboarding(
-              true
-            );
+            setCurrentSlide(0);
+            setShowOnboarding(true);
           }}
           className="
             text-orange-500
@@ -947,9 +1026,7 @@ export default function LoginPage() {
         >
           ↻ View RideMate introduction
         </button>
-
       </div>
-
     </main>
   );
 }
