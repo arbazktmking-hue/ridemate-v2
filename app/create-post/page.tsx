@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -63,22 +58,13 @@ async function loadImage(
 }> {
   /*
    * First try createImageBitmap.
-   *
-   * This is generally more reliable and faster
-   * for processing local image files.
    */
 
-  if (
-    typeof createImageBitmap === "function"
-  ) {
+  if (typeof createImageBitmap === "function") {
     try {
-      const bitmap =
-        await createImageBitmap(file);
+      const bitmap = await createImageBitmap(file);
 
-      if (
-        bitmap.width > 0 &&
-        bitmap.height > 0
-      ) {
+      if (bitmap.width > 0 && bitmap.height > 0) {
         return {
           source: bitmap,
           width: bitmap.width,
@@ -98,91 +84,50 @@ async function loadImage(
 
   /*
    * Fallback:
-   * Use FileReader + Image.
-   *
-   * This avoids depending on an object URL
-   * being decoded correctly by the browser.
+   * FileReader + Image.
    */
 
-  const dataUrl =
-    await new Promise<string>(
-      (resolve, reject) => {
-        const reader =
-          new FileReader();
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
 
-        reader.onload = () => {
-          if (
-            typeof reader.result !==
-            "string"
-          ) {
-            reject(
-              new Error(
-                "Could not read image data."
-              )
-            );
-
-            return;
-          }
-
-          resolve(
-            reader.result
-          );
-        };
-
-        reader.onerror = () => {
-          reject(
-            new Error(
-              "Could not read selected image."
-            )
-          );
-        };
-
-        reader.onabort = () => {
-          reject(
-            new Error(
-              "Image reading was cancelled."
-            )
-          );
-        };
-
-        reader.readAsDataURL(file);
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        reject(new Error("Could not read image data."));
+        return;
       }
-    );
 
-  const image =
-    await new Promise<HTMLImageElement>(
-      (resolve, reject) => {
-        const img =
-          new Image();
+      resolve(reader.result);
+    };
 
-        img.onload = () => {
-          if (
-            img.naturalWidth <= 0 ||
-            img.naturalHeight <= 0
-          ) {
-            reject(
-              new Error(
-                "Image has invalid dimensions."
-              )
-            );
+    reader.onerror = () => {
+      reject(new Error("Could not read selected image."));
+    };
 
-            return;
-          }
+    reader.onabort = () => {
+      reject(new Error("Image reading was cancelled."));
+    };
 
-          resolve(img);
-        };
+    reader.readAsDataURL(file);
+  });
 
-        img.onerror = () => {
-          reject(
-            new Error(
-              "Browser could not decode this image."
-            )
-          );
-        };
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
 
-        img.src = dataUrl;
+    img.onload = () => {
+      if (img.naturalWidth <= 0 || img.naturalHeight <= 0) {
+        reject(new Error("Image has invalid dimensions."));
+        return;
       }
-    );
+
+      resolve(img);
+    };
+
+    img.onerror = () => {
+      reject(new Error("Browser could not decode this image."));
+    };
+
+    img.src = dataUrl;
+  });
 
   return {
     source: image,
@@ -195,37 +140,18 @@ async function loadImage(
    HELPER: COMPRESS IMAGE
 ========================================================= */
 
-async function compressImage(
-  file: File
-): Promise<File> {
-  /*
-   * Basic validation.
-   */
-
+async function compressImage(file: File): Promise<File> {
   if (!file) {
-    throw new Error(
-      "No image selected."
-    );
+    throw new Error("No image selected.");
   }
 
-  if (
-    !file.type ||
-    !file.type.startsWith("image/")
-  ) {
-    throw new Error(
-      "Selected file is not an image."
-    );
+  if (!file.type || !file.type.startsWith("image/")) {
+    throw new Error("Selected file is not an image.");
   }
 
   if (file.size <= 0) {
-    throw new Error(
-      "Selected image is empty."
-    );
+    throw new Error("Selected image is empty.");
   }
-
-  /*
-   * Load image using robust decoder.
-   */
 
   const {
     source,
@@ -235,49 +161,34 @@ async function compressImage(
   } = await loadImage(file);
 
   try {
-    let width =
-      originalWidth;
-
-    let height =
-      originalHeight;
+    let width = originalWidth;
+    let height = originalHeight;
 
     /*
-     * Keep aspect ratio while
-     * limiting maximum dimensions.
+     * Keep aspect ratio while limiting
+     * maximum dimensions.
      */
 
     if (
-      width >
-        MAX_IMAGE_WIDTH ||
-      height >
-        MAX_IMAGE_HEIGHT
+      width > MAX_IMAGE_WIDTH ||
+      height > MAX_IMAGE_HEIGHT
     ) {
-      const widthRatio =
-        MAX_IMAGE_WIDTH /
-        width;
+      const widthRatio = MAX_IMAGE_WIDTH / width;
+      const heightRatio = MAX_IMAGE_HEIGHT / height;
 
-      const heightRatio =
-        MAX_IMAGE_HEIGHT /
-        height;
-
-      const ratio =
-        Math.min(
-          widthRatio,
-          heightRatio
-        );
+      const ratio = Math.min(
+        widthRatio,
+        heightRatio
+      );
 
       width = Math.max(
         1,
-        Math.round(
-          width * ratio
-        )
+        Math.round(width * ratio)
       );
 
       height = Math.max(
         1,
-        Math.round(
-          height * ratio
-        )
+        Math.round(height * ratio)
       );
     }
 
@@ -285,40 +196,21 @@ async function compressImage(
      * Create canvas.
      */
 
-    const canvas =
-      document.createElement(
-        "canvas"
-      );
+    const canvas = document.createElement("canvas");
 
-    canvas.width =
-      width;
+    canvas.width = width;
+    canvas.height = height;
 
-    canvas.height =
-      height;
-
-    const context =
-      canvas.getContext(
-        "2d",
-        {
-          alpha: false,
-        }
-      );
+    const context = canvas.getContext("2d", {
+      alpha: false,
+    });
 
     if (!context) {
-      throw new Error(
-        "Could not create image canvas."
-      );
+      throw new Error("Could not create image canvas.");
     }
 
-    /*
-     * Image quality settings.
-     */
-
-    context.imageSmoothingEnabled =
-      true;
-
-    context.imageSmoothingQuality =
-      "high";
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
 
     /*
      * Draw image.
@@ -336,24 +228,17 @@ async function compressImage(
      * Convert to JPEG.
      */
 
-    const blob =
-      await new Promise<Blob | null>(
-        (resolve) => {
-          canvas.toBlob(
-            (result) => {
-              resolve(result);
-            },
-            "image/jpeg",
-            IMAGE_QUALITY
-          );
-        }
-      );
-
-    /*
-     * If the browser cannot create
-     * the compressed JPEG, don't destroy
-     * the user's selected image.
-     */
+    const blob = await new Promise<Blob | null>(
+      (resolve) => {
+        canvas.toBlob(
+          (result) => {
+            resolve(result);
+          },
+          "image/jpeg",
+          IMAGE_QUALITY
+        );
+      }
+    );
 
     if (!blob) {
       console.warn(
@@ -362,11 +247,6 @@ async function compressImage(
 
       return file;
     }
-
-    /*
-     * If compression somehow produces
-     * an empty file, use original.
-     */
 
     if (blob.size <= 0) {
       console.warn(
@@ -377,35 +257,28 @@ async function compressImage(
     }
 
     /*
-     * Generate a clean JPEG filename.
+     * Generate clean JPEG filename.
      */
 
-    const baseName =
-      file.name.replace(
-        /\.[^/.]+$/,
-        ""
-      );
+    const baseName = file.name.replace(
+      /\.[^/.]+$/,
+      ""
+    );
 
-    const compressedFile =
-      new File(
-        [blob],
-        `${baseName}.jpg`,
-        {
-          type: "image/jpeg",
-          lastModified:
-            Date.now(),
-        }
-      );
+    const compressedFile = new File(
+      [blob],
+      `${baseName}.jpg`,
+      {
+        type: "image/jpeg",
+        lastModified: Date.now(),
+      }
+    );
 
     /*
-     * If the compressed version is actually
-     * larger than the original, keep the original.
+     * Never replace an image with a larger file.
      */
 
-    if (
-      compressedFile.size >=
-      file.size
-    ) {
+    if (compressedFile.size >= file.size) {
       console.log(
         "Compressed file is not smaller. Keeping original."
       );
@@ -415,10 +288,6 @@ async function compressImage(
 
     return compressedFile;
   } finally {
-    /*
-     * Close ImageBitmap if one was used.
-     */
-
     if (cleanup) {
       cleanup();
     }
@@ -430,152 +299,96 @@ async function compressImage(
 ========================================================= */
 
 export default function CreatePostPage() {
-  const router =
-    useRouter();
+  const router = useRouter();
 
-  const [
-    caption,
-    setCaption,
-  ] = useState("");
+  /* =======================================================
+     STATE
+  ======================================================= */
 
-  const [
-    selectedFile,
-    setSelectedFile,
-  ] = useState<File | null>(
-    null
-  );
+  const [caption, setCaption] = useState("");
 
-  const [
-    uploading,
-    setUploading,
-  ] = useState(false);
+  const [selectedFile, setSelectedFile] =
+    useState<File | null>(null);
 
-  const [
-    processing,
-    setProcessing,
-  ] = useState(false);
+  const [uploading, setUploading] =
+    useState(false);
 
-  const [
-    processingText,
-    setProcessingText,
-  ] = useState("");
+  const [processing, setProcessing] =
+    useState(false);
 
-  const [
-    videoDuration,
-    setVideoDuration,
-  ] = useState<number | null>(
-    null
-  );
+  const [processingText, setProcessingText] =
+    useState("");
 
-  const [
-    originalFileSize,
-    setOriginalFileSize,
-  ] = useState(0);
+  const [videoDuration, setVideoDuration] =
+    useState<number | null>(null);
 
-  const [
-    optimizedFileSize,
-    setOptimizedFileSize,
-  ] = useState<number | null>(
-    null
-  );
+  const [originalFileSize, setOriginalFileSize] =
+    useState(0);
 
-  const [
-    previewUrl,
-    setPreviewUrl,
-  ] = useState("");
+  const [optimizedFileSize, setOptimizedFileSize] =
+    useState<number | null>(null);
+
+  const [previewUrl, setPreviewUrl] =
+    useState("");
 
   const previewUrlRef =
-    useRef<string | null>(
-      null
-    );
+    useRef<string | null>(null);
 
-  /* =========================================================
+  /* =======================================================
      CLEAN PREVIEW URL
-  ========================================================= */
+  ======================================================= */
 
   useEffect(() => {
     return () => {
-      if (
-        previewUrlRef.current
-      ) {
+      if (previewUrlRef.current) {
         URL.revokeObjectURL(
           previewUrlRef.current
         );
 
-        previewUrlRef.current =
-          null;
+        previewUrlRef.current = null;
       }
     };
   }, []);
 
-  /* =========================================================
+  /* =======================================================
      CREATE PREVIEW URL
-  ========================================================= */
+  ======================================================= */
 
-  const createPreviewUrl = (
-    file: File
-  ) => {
-    /*
-     * Remove old preview.
-     */
-
-    if (
-      previewUrlRef.current
-    ) {
+  const createPreviewUrl = (file: File) => {
+    if (previewUrlRef.current) {
       URL.revokeObjectURL(
         previewUrlRef.current
       );
     }
 
-    const url =
-      URL.createObjectURL(
-        file
-      );
+    const url = URL.createObjectURL(file);
 
-    previewUrlRef.current =
-      url;
+    previewUrlRef.current = url;
 
     setPreviewUrl(url);
 
     return url;
   };
 
-  /* =========================================================
+  /* =======================================================
      CLEAR SELECTED FILE
-  ========================================================= */
+  ======================================================= */
 
   const clearSelectedFile = (
     input?: HTMLInputElement
   ) => {
-    setSelectedFile(
-      null
-    );
+    setSelectedFile(null);
+    setVideoDuration(null);
+    setOriginalFileSize(0);
+    setOptimizedFileSize(null);
+    setPreviewUrl("");
 
-    setVideoDuration(
-      null
-    );
-
-    setOriginalFileSize(
-      0
-    );
-
-    setOptimizedFileSize(
-      null
-    );
-
-    setPreviewUrl(
-      ""
-    );
-
-    if (
-      previewUrlRef.current
-    ) {
+    if (previewUrlRef.current) {
       URL.revokeObjectURL(
         previewUrlRef.current
       );
 
-      previewUrlRef.current =
-        null;
+      previewUrlRef.current = null;
     }
 
     if (input) {
@@ -583,545 +396,507 @@ export default function CreatePostPage() {
     }
   };
 
-  /* =========================================================
+  /* =======================================================
      SELECT FILE
-  ========================================================= */
+  ======================================================= */
 
-  const handleFileChange =
-    async (
-      e: React.ChangeEvent<HTMLInputElement>
-    ) => {
-      const file =
-        e.target.files?.[0];
+  const handleFileChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
 
-      if (!file) {
-        return;
-      }
+    if (!file) {
+      return;
+    }
 
-      /*
-       * Reset previous file.
-       */
+    /*
+     * Reset previous file.
+     */
 
-      setSelectedFile(
-        null
-      );
+    setSelectedFile(null);
+    setVideoDuration(null);
+    setOptimizedFileSize(null);
+    setOriginalFileSize(file.size);
+    setPreviewUrl("");
 
-      setVideoDuration(
-        null
-      );
-
-      setOptimizedFileSize(
-        null
-      );
-
-      setOriginalFileSize(
-        file.size
-      );
-
-      setPreviewUrl(
-        ""
-      );
-
-      /*
-       * Remove previous preview URL.
-       */
-
-      if (
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(
         previewUrlRef.current
-      ) {
-        URL.revokeObjectURL(
-          previewUrlRef.current
-        );
+      );
 
-        previewUrlRef.current =
-          null;
-      }
+      previewUrlRef.current = null;
+    }
 
-      /* =====================================================
-         VIDEO
-      ===================================================== */
+    /* =====================================================
+       VIDEO
+    ===================================================== */
 
-      if (
-        file.type.startsWith(
-          "video/"
-        )
-      ) {
-        const video =
-          document.createElement(
-            "video"
+    if (file.type.startsWith("video/")) {
+      const video =
+        document.createElement("video");
+
+      const videoUrl =
+        URL.createObjectURL(file);
+
+      video.preload = "metadata";
+
+      video.onloadedmetadata = () => {
+        URL.revokeObjectURL(videoUrl);
+
+        const duration = video.duration;
+
+        setVideoDuration(duration);
+
+        if (!Number.isFinite(duration)) {
+          alert(
+            "Could not determine video duration. Please select another video."
           );
 
-        const videoUrl =
-          URL.createObjectURL(
-            file
-          );
-
-        video.preload =
-          "metadata";
-
-        video.onloadedmetadata =
-          () => {
-            URL.revokeObjectURL(
-              videoUrl
-            );
-
-            const duration =
-              video.duration;
-
-            setVideoDuration(
-              duration
-            );
-
-            if (
-              !Number.isFinite(
-                duration
-              )
-            ) {
-              alert(
-                "Could not determine video duration. Please select another video."
-              );
-
-              clearSelectedFile(
-                e.target
-              );
-
-              return;
-            }
-
-            if (
-              duration >
-              MAX_VIDEO_DURATION
-            ) {
-              alert(
-                `Video is too long.\n\nMaximum allowed duration is ${MAX_VIDEO_DURATION} seconds.`
-              );
-
-              clearSelectedFile(
-                e.target
-              );
-
-              return;
-            }
-
-            /*
-             * Valid video.
-             */
-
-            setSelectedFile(
-              file
-            );
-
-            createPreviewUrl(
-              file
-            );
-          };
-
-        video.onerror =
-          () => {
-            URL.revokeObjectURL(
-              videoUrl
-            );
-
-            alert(
-              "Unable to read this video. Please select another video."
-            );
-
-            clearSelectedFile(
-              e.target
-            );
-          };
-
-        video.src =
-          videoUrl;
-
-        return;
-      }
-
-      /* =====================================================
-         IMAGE
-      ===================================================== */
-
-      if (
-        file.type.startsWith(
-          "image/"
-        )
-      ) {
-        try {
-          setProcessing(
-            true
-          );
-
-          setProcessingText(
-            "Optimizing image..."
-          );
-
-          console.log(
-            "Selected image:",
-            {
-              name: file.name,
-              type: file.type,
-              size: file.size,
-            }
-          );
-
-          const compressed =
-            await compressImage(
-              file
-            );
-
-          console.log(
-            "Image processed:",
-            {
-              name:
-                compressed.name,
-              type:
-                compressed.type,
-              size:
-                compressed.size,
-            }
-          );
-
-          setSelectedFile(
-            compressed
-          );
-
-          setOptimizedFileSize(
-            compressed.size
-          );
-
-          createPreviewUrl(
-            compressed
-          );
-        } catch (error) {
-          console.error(
-            "Image processing error:",
-            error
-          );
-
-          /*
-           * Important:
-           * Try using the original file
-           * instead of immediately rejecting it.
-           */
-
-          try {
-            console.log(
-              "Trying original image as fallback..."
-            );
-
-            setSelectedFile(
-              file
-            );
-
-            setOptimizedFileSize(
-              file.size
-            );
-
-            createPreviewUrl(
-              file
-            );
-
-            setProcessingText(
-              ""
-            );
-
-            console.log(
-              "Original image accepted as fallback."
-            );
-          } catch (fallbackError) {
-            console.error(
-              "Original image fallback failed:",
-              fallbackError
-            );
-
-            alert(
-              "Unable to process this image. Please try another image."
-            );
-
-            clearSelectedFile(
-              e.target
-            );
-          }
-        } finally {
-          setProcessing(
-            false
-          );
-
-          setProcessingText(
-            ""
-          );
+          clearSelectedFile(e.target);
+          return;
         }
 
-        return;
+        if (duration > MAX_VIDEO_DURATION) {
+          alert(
+            `Video is too long.\n\nMaximum allowed duration is ${MAX_VIDEO_DURATION} seconds.`
+          );
+
+          clearSelectedFile(e.target);
+          return;
+        }
+
+        /*
+         * Valid video.
+         */
+
+        setSelectedFile(file);
+        createPreviewUrl(file);
+      };
+
+      video.onerror = () => {
+        URL.revokeObjectURL(videoUrl);
+
+        alert(
+          "Unable to read this video. Please select another video."
+        );
+
+        clearSelectedFile(e.target);
+      };
+
+      video.src = videoUrl;
+
+      return;
+    }
+
+    /* =====================================================
+       IMAGE
+    ===================================================== */
+
+    if (file.type.startsWith("image/")) {
+      try {
+        setProcessing(true);
+        setProcessingText(
+          "Optimizing image..."
+        );
+
+        const compressed =
+          await compressImage(file);
+
+        setSelectedFile(compressed);
+
+        setOptimizedFileSize(
+          compressed.size
+        );
+
+        createPreviewUrl(compressed);
+      } catch (error) {
+        console.error(
+          "Image processing error:",
+          error
+        );
+
+        /*
+         * Use original image as fallback.
+         */
+
+        try {
+          setSelectedFile(file);
+
+          setOptimizedFileSize(
+            file.size
+          );
+
+          createPreviewUrl(file);
+        } catch (fallbackError) {
+          console.error(
+            "Original image fallback failed:",
+            fallbackError
+          );
+
+          alert(
+            "Unable to process this image. Please try another image."
+          );
+
+          clearSelectedFile(e.target);
+        }
+      } finally {
+        setProcessing(false);
+        setProcessingText("");
       }
 
-      /* =====================================================
-         UNSUPPORTED FILE
-      ===================================================== */
+      return;
+    }
 
-      alert(
-        "Please select a photo or video."
-      );
+    /* =====================================================
+       UNSUPPORTED FILE
+    ===================================================== */
 
-      clearSelectedFile(
-        e.target
-      );
-    };
+    alert(
+      "Please select a photo or video."
+    );
+
+    clearSelectedFile(e.target);
+  };
 
   /* =========================================================
      CREATE POST
   ========================================================= */
 
-  const createPost =
-    async () => {
-      try {
-        console.log(
-          "POST BUTTON CLICKED"
+  const createPost = async () => {
+    if (uploading || processing) {
+      return;
+    }
+
+    try {
+      console.log(
+        "POST BUTTON CLICKED"
+      );
+
+      /* =====================================================
+         GET CURRENT USER
+      ===================================================== */
+
+      const storedUser =
+        localStorage.getItem(
+          "ridemateUser"
         );
 
-        const currentUser =
-          JSON.parse(
-            localStorage.getItem(
-              "ridemateUser"
-            ) || "{}"
-          );
+      const currentUser = storedUser
+        ? JSON.parse(storedUser)
+        : {};
 
-        if (!currentUser.name) {
-          alert(
-            "No logged in user"
-          );
+      /*
+       * Firebase Auth is the source of truth
+       * for the UID.
+       */
 
-          return;
-        }
+      const firebaseUser =
+        auth.currentUser;
 
-        if (!selectedFile) {
-          alert(
-            "Please select a photo or video."
-          );
-
-          return;
-        }
-
-        /*
-         * Check video duration.
-         */
-
-        if (
-          selectedFile.type.startsWith(
-            "video/"
-          ) &&
-          videoDuration !== null &&
-          videoDuration >
-            MAX_VIDEO_DURATION
-        ) {
-          alert(
-            `Video cannot be longer than ${MAX_VIDEO_DURATION} seconds.`
-          );
-
-          return;
-        }
-
-        setUploading(
-          true
-        );
-
-        console.log(
-          "Current RideMate user:",
-          currentUser
-        );
-
-        console.log(
-          "Firebase user:",
-          auth.currentUser
-        );
-
-        /*
-         * Require Firebase authentication.
-         */
-
-        if (!auth.currentUser) {
-          alert(
-            "Your login session has expired. Please log in again."
-          );
-
-          setUploading(
-            false
-          );
-
-          return;
-        }
-
-        /* =====================================================
-           FILE NAME
-        ===================================================== */
-
-        const safeFileName =
-          selectedFile.name
-            .replace(
-              /[^a-zA-Z0-9._-]/g,
-              "_"
-            );
-
-        const fileName =
-          `${Date.now()}_${safeFileName}`;
-
-        /* =====================================================
-           STORAGE
-        ===================================================== */
-
-        const storage =
-          getStorage(app);
-
-        const storageRef =
-          ref(
-            storage,
-            `feedPosts/${currentUser.uid}/${fileName}`
-          );
-
-        /* =====================================================
-           UPLOAD
-        ===================================================== */
-
-        console.log(
-          "Uploading file:",
-          selectedFile.name
-        );
-
-        console.log(
-          "Upload type:",
-          selectedFile.type
-        );
-
-        console.log(
-          "Upload size:",
-          formatFileSize(
-            selectedFile.size
-          )
-        );
-
-        await uploadBytes(
-          storageRef,
-          selectedFile,
-          {
-            contentType:
-              selectedFile.type,
-
-            cacheControl:
-              "public,max-age=31536000,immutable",
-          }
-        );
-
-        /* =====================================================
-           DOWNLOAD URL
-        ===================================================== */
-
-        const mediaUrl =
-          await getDownloadURL(
-            storageRef
-          );
-
-        console.log(
-          "Upload successful:",
-          mediaUrl
-        );
-
-        /* =====================================================
-           SAVE POST
-        ===================================================== */
-
-        await addDoc(
-          collection(
-            db,
-            "feedPosts"
-          ),
-          {
-            userName:
-              currentUser.name,
-
-            userImage:
-              currentUser.image ||
-              "",
-
-            fileName:
-              selectedFile.name,
-
-            mediaType:
-              selectedFile.type,
-
-            mediaUrl:
-              mediaUrl,
-
-            caption:
-              caption.trim(),
-
-            likes:
-              0,
-
-            likedBy:
-              [],
-
-            comments:
-              [],
-
-            createdAt:
-              Date.now(),
-          }
-        );
-
-        console.log(
-          "Post saved successfully"
-        );
-
+      if (!firebaseUser) {
         alert(
-          "Post created 🔥"
+          "Your login session has expired. Please log in again."
         );
 
-        router.push(
-          "/home"
-        );
-      } catch (error: any) {
-        console.error(
-          "Error creating post:",
-          error
-        );
-
-        console.error(
-          "Firebase error code:",
-          error?.code
-        );
-
-        console.error(
-          "Firebase error message:",
-          error?.message
-        );
-
-        alert(
-          error?.message
-            ? `Error uploading post:\n\n${error.message}`
-            : "Error uploading post. Please try again."
-        );
-      } finally {
-        setUploading(
-          false
-        );
+        return;
       }
-    };
+
+      if (!currentUser.name) {
+        alert(
+          "Unable to find your RideMate profile. Please log in again."
+        );
+
+        return;
+      }
+
+      /* =====================================================
+         VALIDATE MEDIA
+      ===================================================== */
+
+      if (!selectedFile) {
+        alert(
+          "Please select a photo or video."
+        );
+
+        return;
+      }
+
+      /*
+       * Check video duration one more time
+       * before uploading.
+       */
+
+      if (
+        selectedFile.type.startsWith("video/") &&
+        videoDuration !== null &&
+        videoDuration > MAX_VIDEO_DURATION
+      ) {
+        alert(
+          `Video cannot be longer than ${MAX_VIDEO_DURATION} seconds.`
+        );
+
+        return;
+      }
+
+      /* =====================================================
+         START UPLOAD
+      ===================================================== */
+
+      setUploading(true);
+
+      console.log(
+        "Current RideMate user:",
+        currentUser
+      );
+
+      console.log(
+        "Firebase user:",
+        firebaseUser
+      );
+
+      /* =====================================================
+         SAFE FILE NAME
+      ===================================================== */
+
+      const safeFileName =
+        selectedFile.name.replace(
+          /[^a-zA-Z0-9._-]/g,
+          "_"
+        );
+
+      const fileName =
+        `${Date.now()}_${safeFileName}`;
+
+      /* =====================================================
+         FIREBASE STORAGE
+      ===================================================== */
+
+      const storage =
+        getStorage(app);
+
+      const storageRef =
+        ref(
+          storage,
+          `feedPosts/${firebaseUser.uid}/${fileName}`
+        );
+
+      /* =====================================================
+         UPLOAD MEDIA
+      ===================================================== */
+
+      console.log(
+        "Uploading file:",
+        selectedFile.name
+      );
+
+      console.log(
+        "Upload type:",
+        selectedFile.type
+      );
+
+      console.log(
+        "Upload size:",
+        formatFileSize(
+          selectedFile.size
+        )
+      );
+
+      await uploadBytes(
+        storageRef,
+        selectedFile,
+        {
+          contentType:
+            selectedFile.type,
+
+          cacheControl:
+            "public,max-age=31536000,immutable",
+        }
+      );
+
+      console.log(
+        "Media upload successful."
+      );
+
+      /* =====================================================
+         GET DOWNLOAD URL
+      ===================================================== */
+
+      const mediaUrl =
+        await getDownloadURL(
+          storageRef
+        );
+
+      console.log(
+        "Media URL:",
+        mediaUrl
+      );
+
+      /* =====================================================
+         SAVE FEED POST
+         
+         IMPORTANT:
+         This collection is ONLY for HOME FEED posts.
+         It is intentionally separate from trips.
+      ===================================================== */
+
+      const postData = {
+        /*
+         * User identity
+         */
+
+        userId:
+          firebaseUser.uid,
+
+        userName:
+          currentUser.name,
+
+        userImage:
+          currentUser.image || "",
+
+        /*
+         * Media
+         */
+
+        fileName:
+          selectedFile.name,
+
+        mediaType:
+          selectedFile.type,
+
+        mediaUrl:
+          mediaUrl,
+
+        /*
+         * Caption
+         */
+
+        caption:
+          caption.trim(),
+
+        /*
+         * Social Feed data
+         *
+         * These arrays are intentionally kept
+         * ready for:
+         *
+         * - likes
+         * - Instagram-style comments
+         * - saves
+         * - sharing
+         */
+
+        likes: 0,
+
+        likedBy: [],
+
+        comments: [],
+
+        savedBy: [],
+
+        shares: 0,
+
+        /*
+         * Feed ordering
+         */
+
+        createdAt:
+          Date.now(),
+
+        updatedAt:
+          Date.now(),
+      };
+
+      await addDoc(
+        collection(
+          db,
+          "feedPosts"
+        ),
+        postData
+      );
+
+      console.log(
+        "Feed post saved successfully:",
+        postData
+      );
+
+      /* =====================================================
+         SUCCESS
+      ===================================================== */
+
+      alert(
+        "Post created 🔥"
+      );
+
+      /*
+       * Return to Home Feed.
+       */
+
+      router.push("/home");
+
+      router.refresh();
+    } catch (error: any) {
+      console.error(
+        "Error creating post:",
+        error
+      );
+
+      console.error(
+        "Firebase error code:",
+        error?.code
+      );
+
+      console.error(
+        "Firebase error message:",
+        error?.message
+      );
+
+      alert(
+        error?.message
+          ? `Error uploading post:\n\n${error.message}`
+          : "Error uploading post. Please try again."
+      );
+    } finally {
+      setUploading(false);
+    }
+  };
 
   /* =========================================================
      RENDER
   ========================================================= */
 
   return (
-    <main className="min-h-screen bg-black text-white pt-28 px-6">
+    <main className="min-h-screen bg-black text-white pt-28 px-6 pb-16">
       <div className="max-w-4xl mx-auto">
 
-        {/* ===================================================
+        {/* =================================================
             TITLE
-        =================================================== */}
+        ================================================= */}
 
-        <h1 className="text-5xl font-black text-orange-500 mb-8">
-          Create Post
-        </h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-5xl font-black text-orange-500">
+            Create Post
+          </h1>
+
+          <button
+            type="button"
+            onClick={() =>
+              router.push("/home")
+            }
+            disabled={uploading || processing}
+            className="
+              px-5
+              py-3
+              rounded-xl
+              bg-zinc-800
+              hover:bg-zinc-700
+              transition
+              font-semibold
+              disabled:opacity-50
+            "
+          >
+            Cancel
+          </button>
+        </div>
 
         <div className="bg-zinc-900 rounded-3xl p-8">
 
@@ -1228,8 +1003,16 @@ export default function CreatePostPage() {
           {selectedFile && (
             <div className="mt-6">
 
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-
+              <div
+                className="
+                  flex
+                  flex-wrap
+                  items-center
+                  justify-between
+                  gap-2
+                  mb-3
+                "
+              >
                 <p className="text-green-500 font-bold">
                   Selected:
                 </p>
@@ -1237,15 +1020,12 @@ export default function CreatePostPage() {
                 {selectedFile.type.startsWith(
                   "video/"
                 ) &&
-                  videoDuration !==
-                    null && (
+                  videoDuration !== null && (
                     <span className="text-sm font-bold text-orange-400">
-                      {videoDuration.toFixed(
-                        1
-                      )}s / 30s
+                      {videoDuration.toFixed(1)}s /{" "}
+                      {MAX_VIDEO_DURATION}s
                     </span>
                   )}
-
               </div>
 
               <p className="mb-4 break-all">
@@ -1276,8 +1056,7 @@ export default function CreatePostPage() {
                   </strong>
                 </span>
 
-                {optimizedFileSize !==
-                    null &&
+                {optimizedFileSize !== null &&
                   optimizedFileSize <
                     originalFileSize && (
                     <span className="text-green-400">
@@ -1298,9 +1077,9 @@ export default function CreatePostPage() {
               ) ? (
                 <img
                   src={previewUrl}
-                  alt="Preview"
+                  alt="Post preview"
                   className="
-                    max-h-96
+                    max-h-[600px]
                     w-full
                     object-contain
                     rounded-2xl
@@ -1316,14 +1095,40 @@ export default function CreatePostPage() {
                   src={previewUrl}
                   controls
                   preload="metadata"
+                  playsInline
                   className="
-                    max-h-96
+                    max-h-[600px]
                     w-full
                     rounded-2xl
                     bg-black
                   "
                 />
               )}
+
+              {/* =================================================
+                  REMOVE MEDIA
+              ================================================= */}
+
+              <button
+                type="button"
+                onClick={() =>
+                  clearSelectedFile()
+                }
+                disabled={
+                  uploading ||
+                  processing
+                }
+                className="
+                  mt-4
+                  text-sm
+                  text-red-400
+                  hover:text-red-300
+                  font-semibold
+                  disabled:opacity-50
+                "
+              >
+                Remove selected media
+              </button>
 
             </div>
           )}
@@ -1358,6 +1163,7 @@ export default function CreatePostPage() {
               border-zinc-700
               mt-3
               outline-none
+              resize-none
               focus:border-orange-500
               disabled:opacity-50
             "
@@ -1368,9 +1174,8 @@ export default function CreatePostPage() {
           ================================================= */}
 
           <button
-            onClick={
-              createPost
-            }
+            type="button"
+            onClick={createPost}
             disabled={
               uploading ||
               processing ||

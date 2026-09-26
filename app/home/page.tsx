@@ -17,13 +17,13 @@ import {
   arrayRemove,
   runTransaction,
   addDoc,
-  deleteDoc,
-  setDoc,
   QueryDocumentSnapshot,
   DocumentData,
 } from "firebase/firestore";
 
-import { db } from "../firebase";
+import { onAuthStateChanged } from "firebase/auth";
+
+import { db, auth } from "../firebase";
 
 import {
   Heart,
@@ -34,21 +34,40 @@ import {
 
 type Comment = {
   user: string;
+  userId?: string;
   image?: string;
   text: string;
+  createdAt?: number;
 };
 
 type FeedPost = {
   id: string;
+
+  // Firebase Auth identity
+  userId?: string;
+
+  // Display information
   userName?: string;
   userImage?: string;
+
+  // Media
   mediaUrl?: string;
   mediaType?: string;
+  fileName?: string;
+
+  // Content
   caption?: string;
+
+  // Engagement
   likes?: number;
   likedBy?: string[];
   comments?: Comment[];
+  savedBy?: string[];
+  shares?: number;
+
+  // Dates
   createdAt?: number;
+  updatedAt?: number;
 };
 
 type AdminView = {
@@ -61,12 +80,30 @@ type AdminView = {
 
 const POSTS_PER_PAGE = 15;
 
+/*
+ * We fetch multiple Firestore pages when necessary.
+ *
+ * Example:
+ * Firestore returns 15 newest posts.
+ * Only 3 belong to people the user follows.
+ * We keep fetching until we have enough relevant posts
+ * or the entire feed has been exhausted.
+ */
+const MAX_PAGE_FETCHES_PER_LOAD = 10;
+
 export default function FeedPage() {
   /* =========================================================
      STATE
   ========================================================= */
 
   const [trips, setTrips] = useState<FeedPost[]>([]);
+
+  /*
+   * IDs of posts saved by the currently authenticated UID.
+   *
+   * This is intentionally separate from the old "savedTrips"
+   * collection. New feed saves use feedPosts.savedBy.
+   */
   const [savedTrips, setSavedTrips] = useState<string[]>([]);
 
   const [heartAnimation, setHeartAnimation] =
@@ -76,6 +113,9 @@ export default function FeedPage() {
     useState<FeedPost | null>(null);
 
   const [currentUserName, setCurrentUserName] =
+    useState<string>("");
+
+  const [currentUserUid, setCurrentUserUid] =
     useState<string>("");
 
   const [commentText, setCommentText] =
@@ -107,6 +147,13 @@ export default function FeedPage() {
   const feedInitializedRef =
     useRef(false);
 
+  /*
+   * Prevent duplicate posts when several Firestore pages
+   * are combined into one feed load.
+   */
+  const loadedPostIdsRef =
+    useRef<Set<string>>(new Set());
+
   /* =========================================================
      GET ACTIVE VIEW USER
   ========================================================= */
@@ -130,15 +177,26 @@ export default function FeedPage() {
               parsedAdminView.userName || ""
             );
 
+            /*
+             * In admin investigation mode, the UID belongs
+             * to the account being investigated.
+             */
+            setCurrentUserUid(
+              parsedAdminView.userId || ""
+            );
+
             return;
           }
         }
 
         const savedUser =
-          localStorage.getItem("ridemateUser");
+          localStorage.getItem(
+            "ridemateUser"
+          );
 
         if (savedUser) {
-          const user = JSON.parse(savedUser);
+          const user =
+            JSON.parse(savedUser);
 
           setAdminView(null);
 
@@ -147,6 +205,15 @@ export default function FeedPage() {
               user.username ||
               ""
           );
+
+          /*
+           * IMPORTANT:
+           *
+           * Do NOT use localStorage UID as the security
+           * source of truth.
+           *
+           * Firebase Auth is handled separately below.
+           */
         }
       } catch (error) {
         console.error(
@@ -189,7 +256,69 @@ export default function FeedPage() {
     adminView?.active === true;
 
   /* =========================================================
+     FIREBASE AUTH UID
+  ========================================================= */
+
+  useEffect(() => {
+    const unsubscribe =
+      onAuthStateChanged(
+        auth,
+        (firebaseUser) => {
+          /*
+           * Firebase Auth is the source of truth.
+           */
+          setCurrentUserUid(
+            firebaseUser?.uid || ""
+          );
+
+          /*
+           * If we are NOT in admin investigation mode,
+           * get the display name from local storage only
+           * for UI/following purposes.
+           */
+          if (!adminView?.active) {
+            try {
+              const savedUser =
+                localStorage.getItem(
+                  "ridemateUser"
+                );
+
+              if (savedUser) {
+                const user =
+                  JSON.parse(savedUser);
+
+                setCurrentUserName(
+                  user.name ||
+                    user.username ||
+                    firebaseUser?.displayName ||
+                    ""
+                );
+              } else {
+                setCurrentUserName(
+                  firebaseUser?.displayName ||
+                    ""
+                );
+              }
+            } catch {
+              setCurrentUserName(
+                firebaseUser?.displayName ||
+                  ""
+              );
+            }
+          }
+        }
+      );
+
+    return () => unsubscribe();
+  }, [adminView?.active]);
+
+  /* =========================================================
      GET ACTIVE USER NAME
+     
+     Username is used for existing FOLLOW relationship
+     compatibility and display only.
+     
+     UID is used for security-sensitive actions.
   ========================================================= */
 
   const getActiveUserName = () => {
@@ -239,126 +368,215 @@ export default function FeedPage() {
      LOAD FOLLOWING USERS
   ========================================================= */
 
-  const getFollowingUsers =
-    async (
-      userName: string
-    ): Promise<Set<string>> => {
-      const followingUsers =
-        new Set<string>();
+  const getFollowingUsers = async (
+    userName: string
+  ): Promise<Set<string>> => {
+    const followingUsers =
+      new Set<string>();
 
-      try {
-        /*
-         * We still use the existing follows structure.
-         *
-         * This is better than loading the entire feed first,
-         * but the follows collection itself can be optimized
-         * further later if it becomes very large.
-         */
+    try {
+      /*
+       * Existing RideMate follow structure uses usernames.
+       *
+       * We preserve this because changing the follow
+       * database structure here could break existing
+       * followers/following data.
+       */
+      const followsQuery =
+        query(
+          collection(
+            db,
+            "follows"
+          ),
+          where(
+            "follower",
+            "==",
+            userName
+          )
+        );
 
-        const followsQuery =
-          query(
-            collection(
-              db,
-              "follows"
-            ),
-            where(
-              "follower",
-              "==",
-              userName
-            )
-          );
+      const followsSnapshot =
+        await getDocs(
+          followsQuery
+        );
 
-        const followsSnapshot =
-          await getDocs(
-            followsQuery
-          );
+      followsSnapshot.forEach(
+        (followDoc) => {
+          const follow =
+            followDoc.data();
 
-        followsSnapshot.forEach(
-          (followDoc) => {
-            const follow =
-              followDoc.data();
-
-            if (
+          if (
+            follow.following
+          ) {
+            followingUsers.add(
               follow.following
-            ) {
-              followingUsers.add(
-                follow.following
-              );
-            }
+            );
           }
-        );
-      } catch (error) {
-        console.error(
-          "Failed to load following users:",
-          error
-        );
-      }
+        }
+      );
+    } catch (error) {
+      console.error(
+        "Failed to load following users:",
+        error
+      );
+    }
+
+    /*
+     * Always include own posts.
+     */
+    followingUsers.add(
+      userName
+    );
+
+    return followingUsers;
+  };
+
+  /* =========================================================
+     CONVERT FIRESTORE POST
+  ========================================================= */
+
+  const convertPost = (
+    postDoc: QueryDocumentSnapshot<DocumentData>
+  ): FeedPost => {
+    const post =
+      postDoc.data();
+
+    return {
+      id: postDoc.id,
 
       /*
-       * Always include own posts.
+       * UID is now explicitly retained.
        */
+      userId:
+        typeof post.userId === "string"
+          ? post.userId
+          : "",
 
-      followingUsers.add(
-        userName
-      );
+      userName:
+        post.userName || "",
 
-      return followingUsers;
+      userImage:
+        post.userImage || "",
+
+      mediaUrl:
+        post.mediaUrl || "",
+
+      mediaType:
+        post.mediaType || "",
+
+      fileName:
+        post.fileName || "",
+
+      caption:
+        post.caption || "",
+
+      likes:
+        typeof post.likes === "number"
+          ? post.likes
+          : 0,
+
+      likedBy:
+        Array.isArray(post.likedBy)
+          ? post.likedBy
+          : [],
+
+      comments:
+        Array.isArray(post.comments)
+          ? post.comments
+          : [],
+
+      /*
+       * New Create Post structure.
+       */
+      savedBy:
+        Array.isArray(post.savedBy)
+          ? post.savedBy
+          : [],
+
+      shares:
+        typeof post.shares === "number"
+          ? post.shares
+          : 0,
+
+      createdAt:
+        typeof post.createdAt === "number"
+          ? post.createdAt
+          : 0,
+
+      updatedAt:
+        typeof post.updatedAt === "number"
+          ? post.updatedAt
+          : 0,
     };
+  };
 
   /* =========================================================
      LOAD FEED POSTS
+     
+     IMPORTANT PAGINATION FIX:
+     
+     We do NOT assume that the newest 15 posts contain
+     posts from people the user follows.
+     
+     We continue fetching Firestore pages until:
+       1. enough relevant posts are found, OR
+       2. Firestore has no more posts.
   ========================================================= */
 
-  const loadFeedPosts =
-    async (
-      userName: string,
-      loadNextPage = false
-    ) => {
-      if (
-        !userName ||
-        loadingMoreRef.current
-      ) {
-        return;
+  const loadFeedPosts = async (
+    userName: string,
+    loadNextPage = false
+  ) => {
+    if (
+      !userName ||
+      loadingMoreRef.current
+    ) {
+      return;
+    }
+
+    if (
+      loadNextPage &&
+      !hasMorePosts
+    ) {
+      return;
+    }
+
+    try {
+      if (loadNextPage) {
+        loadingMoreRef.current =
+          true;
+
+        setLoadingMore(true);
+      } else {
+        setLoadingFeed(true);
+        setFeedError(false);
       }
 
-      if (
-        loadNextPage &&
-        !hasMorePosts
+      const followingUsers =
+        await getFollowingUsers(
+          userName
+        );
+
+      const newlyLoadedPosts: FeedPost[] =
+        [];
+
+      let pageFetchCount = 0;
+
+      let reachedEnd =
+        false;
+
+      while (
+        newlyLoadedPosts.length <
+          POSTS_PER_PAGE &&
+        !reachedEnd &&
+        pageFetchCount <
+          MAX_PAGE_FETCHES_PER_LOAD
       ) {
-        return;
-      }
-
-      try {
-        if (loadNextPage) {
-          loadingMoreRef.current =
-            true;
-
-          setLoadingMore(true);
-        } else {
-          setLoadingFeed(true);
-          setFeedError(false);
-        }
-
-        /*
-         * Get people this user follows.
-         */
-
-        const followingUsers =
-          await getFollowingUsers(
-            userName
-          );
-
-        /*
-         * Build paginated feed query.
-         *
-         * Only the latest 15 posts are
-         * downloaded per request.
-         */
+        pageFetchCount++;
 
         let postsQuery;
 
         if (
-          loadNextPage &&
           lastPostDocRef.current
         ) {
           postsQuery =
@@ -400,125 +618,100 @@ export default function FeedPage() {
             postsQuery
           );
 
-        /*
-         * Remember last document
-         * for pagination.
-         */
-
         if (
-          querySnapshot.docs.length >
+          querySnapshot.docs.length ===
           0
         ) {
-          lastPostDocRef.current =
-            querySnapshot.docs[
-              querySnapshot.docs.length - 1
-            ];
+          reachedEnd = true;
+          break;
         }
 
-        /*
-         * If fewer than 15 came back,
-         * there are no more pages.
-         */
+        lastPostDocRef.current =
+          querySnapshot.docs[
+            querySnapshot.docs.length - 1
+          ];
 
         if (
           querySnapshot.docs.length <
           POSTS_PER_PAGE
         ) {
-          setHasMorePosts(false);
+          reachedEnd = true;
         }
-
-        /*
-         * Filter only followed users.
-         */
-
-        const loadedTrips: FeedPost[] =
-          [];
 
         querySnapshot.forEach(
           (postDoc) => {
-            const post =
-              postDoc.data();
+            if (
+              loadedPostIdsRef.current.has(
+                postDoc.id
+              )
+            ) {
+              return;
+            }
 
+            const post =
+              convertPost(postDoc);
+
+            /*
+             * Existing follow system is username-based.
+             *
+             * UID remains the identity of the post owner,
+             * while userName is used to determine whether
+             * the post belongs in this user's current feed.
+             */
             if (
               post.userName &&
               followingUsers.has(
                 post.userName
               )
             ) {
-              loadedTrips.push({
-                id: postDoc.id,
+              newlyLoadedPosts.push(
+                post
+              );
 
-                userName:
-                  post.userName || "",
-
-                userImage:
-                  post.userImage || "",
-
-                mediaUrl:
-                  post.mediaUrl || "",
-
-                mediaType:
-                  post.mediaType || "",
-
-                caption:
-                  post.caption || "",
-
-                likes:
-                  typeof post.likes ===
-                  "number"
-                    ? post.likes
-                    : 0,
-
-                likedBy:
-                  Array.isArray(
-                    post.likedBy
-                  )
-                    ? post.likedBy
-                    : [],
-
-                comments:
-                  Array.isArray(
-                    post.comments
-                  )
-                    ? post.comments
-                    : [],
-
-                createdAt:
-                  post.createdAt || 0,
-              });
+              loadedPostIdsRef.current.add(
+                postDoc.id
+              );
             }
           }
         );
-
-        if (loadNextPage) {
-          setTrips(
-            (previous) => [
-              ...previous,
-              ...loadedTrips,
-            ]
-          );
-        } else {
-          setTrips(
-            loadedTrips
-          );
-        }
-
-        setFeedError(false);
-      } catch (error) {
-        console.error(
-          "Failed to load Home feed:",
-          error
-        );
-
-        setFeedError(true);
-      } finally {
-        setLoadingFeed(false);
-        setLoadingMore(false);
-
-        loadingMoreRef.current =
-          false;
       }
-    };
+
+      /*
+       * If Firestore was exhausted, remember that.
+       */
+      if (reachedEnd) {
+        setHasMorePosts(false);
+      }
+
+      if (loadNextPage) {
+        setTrips(
+          (previous) => [
+            ...previous,
+            ...newlyLoadedPosts,
+          ]
+        );
+      } else {
+        setTrips(
+          newlyLoadedPosts
+        );
+      }
+
+      setFeedError(false);
+    } catch (error) {
+      console.error(
+        "Failed to load Home feed:",
+        error
+      );
+
+      setFeedError(true);
+    } finally {
+      setLoadingFeed(false);
+      setLoadingMore(false);
+
+      loadingMoreRef.current =
+        false;
+    }
+  };
 
   /* =========================================================
      INITIAL FEED LOAD
@@ -541,12 +734,13 @@ export default function FeedPage() {
         }
 
         /*
-         * Reset pagination when
-         * changing user/view mode.
+         * Reset pagination.
          */
-
         lastPostDocRef.current =
           null;
+
+        loadedPostIdsRef.current =
+          new Set();
 
         setHasMorePosts(true);
 
@@ -565,48 +759,49 @@ export default function FeedPage() {
     startFeed();
 
     /*
-     * We intentionally depend on admin mode only.
-     * This prevents unnecessary Firebase reloads
-     * on ordinary state changes.
+     * Admin mode changes the active feed user.
      */
   }, [isAdminView]);
 
   /* =========================================================
      LOAD SAVED POSTS
+     
+     NEW SECURITY MODEL:
+     
+     New feed saves are stored in feedPosts.savedBy
+     using Firebase Auth UID.
+     
+     We query by UID rather than username.
   ========================================================= */
 
   useEffect(() => {
-    const loadSavedTrips =
+    const loadSavedPosts =
       async () => {
         try {
-          const userName =
-            getActiveUserName();
+          /*
+           * Admin investigation mode:
+           * use the investigated user's UID.
+           */
+          const targetUid =
+            isAdminView
+              ? adminView?.userId || ""
+              : auth.currentUser?.uid || "";
 
-          if (!userName) {
+          if (!targetUid) {
             setSavedTrips([]);
             return;
           }
-
-          /*
-           * IMPORTANT:
-           *
-           * Old code downloaded the entire
-           * savedTrips collection.
-           *
-           * Now Firestore only returns documents
-           * belonging to this user.
-           */
 
           const savedQuery =
             query(
               collection(
                 db,
-                "savedTrips"
+                "feedPosts"
               ),
               where(
-                "user",
-                "==",
-                userName
+                "savedBy",
+                "array-contains",
+                targetUid
               )
             );
 
@@ -615,72 +810,69 @@ export default function FeedPage() {
               savedQuery
             );
 
-          const saved: string[] =
+          const savedIds: string[] =
             [];
 
           snapshot.forEach(
             (savedDoc) => {
-              const data =
-                savedDoc.data();
-
-              if (
-                data.tripId
-              ) {
-                saved.push(
-                  data.tripId
-                );
-              }
+              savedIds.push(
+                savedDoc.id
+              );
             }
           );
 
           setSavedTrips(
-            saved
+            savedIds
           );
         } catch (error) {
           console.error(
             "Failed to load saved posts:",
             error
           );
+
+          /*
+           * Do not break the feed if the
+           * optional saved-post query fails.
+           */
+          setSavedTrips([]);
         }
       };
 
-    loadSavedTrips();
-  }, [isAdminView]);
+    loadSavedPosts();
+  }, [
+    isAdminView,
+    adminView?.userId,
+    currentUserUid,
+  ]);
 
   /* =========================================================
      INFINITE SCROLL
   ========================================================= */
 
-  const handleFeedScroll =
-    (
-      event: React.UIEvent<HTMLDivElement>
-    ) => {
-      const element =
-        event.currentTarget;
+  const handleFeedScroll = (
+    event: React.UIEvent<HTMLDivElement>
+  ) => {
+    const element =
+      event.currentTarget;
 
-      const distanceFromBottom =
-        element.scrollHeight -
-        element.scrollTop -
-        element.clientHeight;
+    const distanceFromBottom =
+      element.scrollHeight -
+      element.scrollTop -
+      element.clientHeight;
 
-      /*
-       * Start loading before the user
-       * reaches the absolute bottom.
-       */
-
-      if (
-        distanceFromBottom <
-          element.clientHeight * 1.5 &&
-        hasMorePosts &&
-        !loadingMoreRef.current &&
-        feedInitializedRef.current
-      ) {
-        loadFeedPosts(
-          getActiveUserName(),
-          true
-        );
-      }
-    };
+    if (
+      distanceFromBottom <
+        element.clientHeight * 1.5 &&
+      hasMorePosts &&
+      !loadingMoreRef.current &&
+      feedInitializedRef.current
+    ) {
+      loadFeedPosts(
+        getActiveUserName(),
+        true
+      );
+    }
+  };
 
   /* =========================================================
      ADMIN VIEW
@@ -702,52 +894,118 @@ export default function FeedPage() {
   };
 
   /* =========================================================
-     SAVE / UNSAVE
+     SAVE / UNSAVE POST
+     
+     SECURITY:
+     Uses Firebase Auth UID.
+     
+     No username-based save identity is created.
   ========================================================= */
 
-  const toggleSaveTrip =
-    async (
-      tripId: string
-    ) => {
-      if (
-        blockedAdminAction(
-          "save or unsave posts"
-        )
-      ) {
+  const toggleSaveTrip = async (
+    tripId: string
+  ) => {
+    if (
+      blockedAdminAction(
+        "save or unsave posts"
+      )
+    ) {
+      return;
+    }
+
+    try {
+      /*
+       * IMPORTANT:
+       *
+       * Normal users must come from Firebase Auth.
+       * Admin investigation mode is read-only and exits above.
+       */
+      const firebaseUser =
+        auth.currentUser;
+
+      if (!firebaseUser) {
+        alert(
+          "Please login first."
+        );
+
         return;
       }
 
+      const uid =
+        firebaseUser.uid;
+
+      const isCurrentlySaved =
+        savedTrips.includes(
+          tripId
+        );
+
+      /*
+       * Optimistic UI.
+       */
+      if (
+        isCurrentlySaved
+      ) {
+        setSavedTrips(
+          (prev) =>
+            prev.filter(
+              (id) =>
+                id !== tripId
+            )
+        );
+      } else {
+        setSavedTrips(
+          (prev) => [
+            ...prev,
+            tripId,
+          ]
+        );
+      }
+
       try {
-        const user =
-          JSON.parse(
-            localStorage.getItem(
-              "ridemateUser"
-            ) || "{}"
-          );
-
-        if (!user.name) {
-          alert(
-            "Please login first."
-          );
-          return;
-        }
-
-        const saveId =
-          `${user.name}_${tripId}`;
-
-        const isCurrentlySaved =
-          savedTrips.includes(
+        const postRef =
+          doc(
+            db,
+            "feedPosts",
             tripId
           );
-
-        /*
-         * Optimistic UI:
-         * change the button immediately.
-         */
 
         if (
           isCurrentlySaved
         ) {
+          await updateDoc(
+            postRef,
+            {
+              savedBy:
+                arrayRemove(
+                  uid
+                ),
+            }
+          );
+        } else {
+          await updateDoc(
+            postRef,
+            {
+              savedBy:
+                arrayUnion(
+                  uid
+                ),
+            }
+          );
+        }
+      } catch (firebaseError) {
+        /*
+         * Roll back optimistic UI.
+         */
+        if (
+          isCurrentlySaved
+        ) {
+          setSavedTrips(
+            (prev) => [
+              ...prev,
+              tripId,
+            ]
+          );
+        } else {
           setSavedTrips(
             (prev) =>
               prev.filter(
@@ -755,141 +1013,272 @@ export default function FeedPage() {
                   id !== tripId
               )
           );
-        } else {
-          setSavedTrips(
-            (prev) => [
-              ...prev,
-              tripId,
-            ]
-          );
         }
 
-        try {
-          if (
-            isCurrentlySaved
-          ) {
-            await deleteDoc(
-              doc(
-                db,
-                "savedTrips",
-                saveId
-              )
-            );
-          } else {
-            await setDoc(
-              doc(
-                db,
-                "savedTrips",
-                saveId
-              ),
-              {
-                user: user.name,
-                tripId,
-              }
-            );
-          }
-        } catch (firebaseError) {
-          /*
-           * Roll back optimistic UI
-           * if Firebase fails.
-           */
-
-          if (
-            isCurrentlySaved
-          ) {
-            setSavedTrips(
-              (prev) => [
-                ...prev,
-                tripId,
-              ]
-            );
-          } else {
-            setSavedTrips(
-              (prev) =>
-                prev.filter(
-                  (id) =>
-                    id !== tripId
-                )
-            );
-          }
-
-          throw firebaseError;
-        }
-      } catch (error) {
-        console.error(
-          "Save error:",
-          error
-        );
+        throw firebaseError;
       }
-    };
+    } catch (error) {
+      console.error(
+        "Save error:",
+        error
+      );
+    }
+  };
 
   /* =========================================================
      LIKE POST
+     
+     SECURITY:
+     Likes are associated with Firebase Auth UID.
+     
+     Older posts may contain usernames in likedBy.
+     We support those old values while all NEW likes
+     use UID.
   ========================================================= */
 
-  const likeTrip =
-    async (
-      id: string
-    ): Promise<boolean> => {
-      if (
-        blockedAdminAction(
-          "like posts"
-        )
-      ) {
+  const likeTrip = async (
+    id: string
+  ): Promise<boolean> => {
+    if (
+      blockedAdminAction(
+        "like posts"
+      )
+    ) {
+      return false;
+    }
+
+    try {
+      const firebaseUser =
+        auth.currentUser;
+
+      if (!firebaseUser) {
+        alert(
+          "Please login first."
+        );
+
         return false;
       }
 
-      try {
-        const savedUser =
-          localStorage.getItem(
-            "ridemateUser"
-          );
+      const uid =
+        firebaseUser.uid;
 
-        if (!savedUser) {
-          alert(
-            "Please login first."
-          );
+      const userName =
+        firebaseUser.displayName ||
+        getActiveUserName();
 
-          return false;
-        }
+      if (!uid) {
+        alert(
+          "Please login first."
+        );
 
-        const user =
-          JSON.parse(savedUser);
+        return false;
+      }
 
-        const userName =
-          user.name ||
-          user.username ||
-          "";
+      const trip =
+        trips.find(
+          (item) =>
+            item.id === id
+        );
 
-        if (!userName) {
-          alert(
-            "Please login first."
-          );
+      const likedBy =
+        Array.isArray(
+          trip?.likedBy
+        )
+          ? trip.likedBy
+          : [];
 
-          return false;
-        }
-
-        const trip =
-          trips.find(
-            (item) =>
-              item.id === id
-          );
-
-        const localLiked =
-          Array.isArray(
-            trip?.likedBy
-          ) &&
-          trip!.likedBy!.includes(
+      /*
+       * New system:
+       * UID is the real identity.
+       *
+       * Legacy:
+       * Some old posts may have username values.
+       */
+      const localLiked =
+        likedBy.includes(uid) ||
+        (!!userName &&
+          likedBy.includes(
             userName
-          );
+          ));
 
+      /*
+       * Optimistic UI.
+       */
+      setTrips(
+        (prevTrips) =>
+          prevTrips.map(
+            (post) => {
+              if (
+                post.id !== id
+              ) {
+                return post;
+              }
+
+              const currentLikedBy =
+                Array.isArray(
+                  post.likedBy
+                )
+                  ? post.likedBy
+                  : [];
+
+              if (
+                localLiked
+              ) {
+                return {
+                  ...post,
+
+                  likes:
+                    Math.max(
+                      0,
+                      (post.likes ||
+                        0) - 1
+                    ),
+
+                  likedBy:
+                    currentLikedBy.filter(
+                      (value) =>
+                        value !== uid &&
+                        value !== userName
+                    ),
+                };
+              }
+
+              return {
+                ...post,
+
+                likes:
+                  (post.likes ||
+                    0) + 1,
+
+                likedBy: [
+                  ...currentLikedBy,
+                  uid,
+                ],
+              };
+            }
+          )
+      );
+
+      const tripRef =
+        doc(
+          db,
+          "feedPosts",
+          id
+        );
+
+      let didLike =
+        !localLiked;
+
+      try {
+        await runTransaction(
+          db,
+          async (
+            transaction
+          ) => {
+            const tripDoc =
+              await transaction.get(
+                tripRef
+              );
+
+            if (
+              !tripDoc.exists()
+            ) {
+              throw new Error(
+                "Post no longer exists."
+              );
+            }
+
+            const data =
+              tripDoc.data();
+
+            const likedBy =
+              Array.isArray(
+                data.likedBy
+              )
+                ? data.likedBy
+                : [];
+
+            const currentLikes =
+              typeof data.likes ===
+              "number"
+                ? data.likes
+                : 0;
+
+            /*
+             * UID is authoritative.
+             *
+             * Username is checked only to
+             * support old data.
+             */
+            const alreadyLikedByUid =
+              likedBy.includes(
+                uid
+              );
+
+            const alreadyLikedByLegacyName =
+              !!userName &&
+              likedBy.includes(
+                userName
+              );
+
+            const alreadyLiked =
+              alreadyLikedByUid ||
+              alreadyLikedByLegacyName;
+
+            if (
+              alreadyLiked
+            ) {
+              didLike = false;
+
+              transaction.update(
+                tripRef,
+                {
+                  likes:
+                    Math.max(
+                      0,
+                      currentLikes -
+                        1
+                    ),
+
+                  /*
+                   * Remove both possible
+                   * representations.
+                   */
+                  likedBy:
+                    arrayRemove(
+                      uid,
+                      ...(userName
+                        ? [userName]
+                        : [])
+                    ),
+                }
+              );
+            } else {
+              didLike = true;
+
+              transaction.update(
+                tripRef,
+                {
+                  likes:
+                    currentLikes +
+                    1,
+
+                  /*
+                   * NEW likes are always UID.
+                   */
+                  likedBy:
+                    arrayUnion(
+                      uid
+                    ),
+                }
+              );
+            }
+          }
+        );
+      } catch (firebaseError) {
         /*
-         * OPTIMISTIC UI
-         *
-         * Update the screen immediately
-         * instead of waiting for Firebase.
+         * Roll back optimistic UI.
          */
-
         setTrips(
           (prevTrips) =>
             prevTrips.map(
@@ -900,7 +1289,7 @@ export default function FeedPage() {
                   return post;
                 }
 
-                const currentLikedBy =
+                const likedBy =
                   Array.isArray(
                     post.likedBy
                   )
@@ -914,18 +1303,13 @@ export default function FeedPage() {
                     ...post,
 
                     likes:
-                      Math.max(
-                        0,
-                        (post.likes ||
-                          0) - 1
-                      ),
+                      (post.likes ||
+                        0) + 1,
 
-                    likedBy:
-                      currentLikedBy.filter(
-                        (name) =>
-                          name !==
-                          userName
-                      ),
+                    likedBy: [
+                      ...likedBy,
+                      uid,
+                    ],
                   };
                 }
 
@@ -933,378 +1317,292 @@ export default function FeedPage() {
                   ...post,
 
                   likes:
-                    (post.likes ||
-                      0) + 1,
+                    Math.max(
+                      0,
+                      (post.likes ||
+                        0) - 1
+                    ),
 
-                  likedBy: [
-                    ...currentLikedBy,
-                    userName,
-                  ],
+                  likedBy:
+                    likedBy.filter(
+                      (value) =>
+                        value !== uid
+                    ),
                 };
               }
             )
         );
 
-        const tripRef =
-          doc(
-            db,
-            "feedPosts",
-            id
-          );
-
-        let didLike =
-          !localLiked;
-
-        try {
-          await runTransaction(
-            db,
-            async (
-              transaction
-            ) => {
-              const tripDoc =
-                await transaction.get(
-                  tripRef
-                );
-
-              if (
-                !tripDoc.exists()
-              ) {
-                throw new Error(
-                  "Post no longer exists."
-                );
-              }
-
-              const data =
-                tripDoc.data();
-
-              const likedBy =
-                Array.isArray(
-                  data.likedBy
-                )
-                  ? data.likedBy
-                  : [];
-
-              const currentLikes =
-                typeof data.likes ===
-                "number"
-                  ? data.likes
-                  : 0;
-
-              const alreadyLiked =
-                likedBy.includes(
-                  userName
-                );
-
-              if (
-                alreadyLiked
-              ) {
-                didLike = false;
-
-                transaction.update(
-                  tripRef,
-                  {
-                    likes:
-                      Math.max(
-                        0,
-                        currentLikes -
-                          1
-                      ),
-
-                    likedBy:
-                      arrayRemove(
-                        userName
-                      ),
-                  }
-                );
-              } else {
-                didLike = true;
-
-                transaction.update(
-                  tripRef,
-                  {
-                    likes:
-                      currentLikes +
-                      1,
-
-                    likedBy:
-                      arrayUnion(
-                        userName
-                      ),
-                  }
-                );
-              }
-            }
-          );
-        } catch (firebaseError) {
-          /*
-           * Roll back optimistic UI.
-           */
-
-          setTrips(
-            (prevTrips) =>
-              prevTrips.map(
-                (post) => {
-                  if (
-                    post.id !== id
-                  ) {
-                    return post;
-                  }
-
-                  const likedBy =
-                    Array.isArray(
-                      post.likedBy
-                    )
-                      ? post.likedBy
-                      : [];
-
-                  if (
-                    localLiked
-                  ) {
-                    return {
-                      ...post,
-
-                      likes:
-                        (post.likes ||
-                          0) + 1,
-
-                      likedBy: [
-                        ...likedBy,
-                        userName,
-                      ],
-                    };
-                  }
-
-                  return {
-                    ...post,
-
-                    likes:
-                      Math.max(
-                        0,
-                        (post.likes ||
-                          0) - 1
-                      ),
-
-                    likedBy:
-                      likedBy.filter(
-                        (name) =>
-                          name !==
-                          userName
-                      ),
-                  };
-                }
-              )
-          );
-
-          throw firebaseError;
-        }
-
-        /*
-         * Notify post owner.
-         */
-
-        if (
-          didLike &&
-          trip &&
-          trip.userName &&
-          trip.userName !==
-            userName
-        ) {
-          await addDoc(
-            collection(
-              db,
-              "notifications"
-            ),
-            {
-              user:
-                trip.userName,
-
-              text:
-                `${userName} liked your post ❤️`,
-
-              createdAt:
-                Date.now(),
-
-              read: false,
-            }
-          );
-        }
-
-        return didLike;
-      } catch (error) {
-        console.error(
-          "Like error:",
-          error
-        );
-
-        return false;
+        throw firebaseError;
       }
-    };
+
+      /*
+       * Notify post owner.
+       *
+       * Existing notification structure is preserved.
+       */
+      if (
+        didLike &&
+        trip &&
+        trip.userName &&
+        trip.userName !==
+          userName
+      ) {
+        await addDoc(
+          collection(
+            db,
+            "notifications"
+          ),
+          {
+            user:
+              trip.userName,
+
+            text:
+              `${userName || "Someone"} liked your post ❤️`,
+
+            createdAt:
+              Date.now(),
+
+            read: false,
+
+            /*
+             * Keep actor UID available for
+             * future notification security work.
+             */
+            actorUid:
+              uid,
+          }
+        );
+      }
+
+      return didLike;
+    } catch (error) {
+      console.error(
+        "Like error:",
+        error
+      );
+
+      return false;
+    }
+  };
 
   /* =========================================================
      ADD COMMENT
+     
+     SECURITY:
+     Every NEW comment carries userId.
+     
+     Existing comments without userId remain compatible.
   ========================================================= */
 
-  const addComment =
-    async (
-      tripId: string,
-      commentTextValue: string
-    ) => {
-      if (
-        blockedAdminAction(
-          "comment on posts"
-        )
-      ) {
+  const addComment = async (
+    tripId: string,
+    commentTextValue: string
+  ) => {
+    if (
+      blockedAdminAction(
+        "comment on posts"
+      )
+    ) {
+      return false;
+    }
+
+    if (
+      !commentTextValue.trim()
+    ) {
+      return false;
+    }
+
+    try {
+      const firebaseUser =
+        auth.currentUser;
+
+      if (!firebaseUser) {
+        alert(
+          "Please login first."
+        );
+
         return false;
       }
 
-      if (
-        !commentTextValue.trim()
-      ) {
+      const uid =
+        firebaseUser.uid;
+
+      const userName =
+        firebaseUser.displayName ||
+        getActiveUserName();
+
+      if (!uid) {
+        alert(
+          "Please login first."
+        );
+
         return false;
       }
 
+      const newComment: Comment =
+        {
+          /*
+           * Display information.
+           */
+          user:
+            userName ||
+            "RideMate User",
+
+          /*
+           * SECURITY / identity field.
+           */
+          userId:
+            uid,
+
+          image:
+            "",
+
+          text:
+            commentTextValue.trim(),
+
+          createdAt:
+            Date.now(),
+        };
+
+      /*
+       * Try to obtain the current user's
+       * profile image from local storage
+       * only as display information.
+       */
       try {
-        const user =
-          JSON.parse(
-            localStorage.getItem(
-              "ridemateUser"
-            ) || "{}"
+        const savedUser =
+          localStorage.getItem(
+            "ridemateUser"
           );
 
-        if (!user.name) {
-          alert(
-            "Please login first."
-          );
+        if (savedUser) {
+          const user =
+            JSON.parse(
+              savedUser
+            );
 
-          return false;
+          newComment.image =
+            user.image || "";
         }
+      } catch {
+        // Ignore profile image parsing errors.
+      }
 
-        const newComment: Comment =
+      const tripRef =
+        doc(
+          db,
+          "feedPosts",
+          tripId
+        );
+
+      await updateDoc(
+        tripRef,
+        {
+          comments:
+            arrayUnion(
+              newComment
+            ),
+        }
+      );
+
+      const trip =
+        trips.find(
+          (t) =>
+            t.id === tripId
+        );
+
+      /*
+       * Notify post owner.
+       */
+      if (
+        trip &&
+        trip.userName &&
+        trip.userName !==
+          userName
+      ) {
+        await addDoc(
+          collection(
+            db,
+            "notifications"
+          ),
           {
-            user: user.name,
-
-            image:
-              user.image || "",
+            user:
+              trip.userName,
 
             text:
-              commentTextValue.trim(),
-          };
+              `${userName || "Someone"} commented on your post 💬`,
 
-        const tripRef =
-          doc(
-            db,
-            "feedPosts",
-            tripId
-          );
+            createdAt:
+              Date.now(),
 
-        await updateDoc(
-          tripRef,
-          {
-            comments:
-              arrayUnion(
-                newComment
-              ),
+            read: false,
+
+            actorUid:
+              uid,
           }
         );
-
-        const trip =
-          trips.find(
-            (t) =>
-              t.id ===
-              tripId
-          );
-
-        /*
-         * Notify post owner.
-         */
-
-        if (
-          trip &&
-          trip.userName &&
-          trip.userName !==
-            user.name
-        ) {
-          await addDoc(
-            collection(
-              db,
-              "notifications"
-            ),
-            {
-              user:
-                trip.userName,
-
-              text:
-                `${user.name} commented on your post 💬`,
-
-              createdAt:
-                Date.now(),
-
-              read: false,
-            }
-          );
-        }
-
-        /*
-         * Update feed immediately.
-         */
-
-        setTrips(
-          (prevTrips) =>
-            prevTrips.map(
-              (trip) =>
-                trip.id ===
-                tripId
-                  ? {
-                      ...trip,
-
-                      comments: [
-                        ...(trip.comments ||
-                          []),
-
-                        newComment,
-                      ],
-                    }
-                  : trip
-            )
-        );
-
-        /*
-         * Update comment popup.
-         */
-
-        setCommentPost(
-          (current) => {
-            if (
-              current &&
-              current.id ===
-                tripId
-            ) {
-              return {
-                ...current,
-
-                comments: [
-                  ...(current.comments ||
-                    []),
-
-                  newComment,
-                ],
-              };
-            }
-
-            return current;
-          }
-        );
-
-        return true;
-      } catch (error) {
-        console.error(
-          "Comment error:",
-          error
-        );
-
-        return false;
       }
-    };
+
+      /*
+       * Update feed immediately.
+       */
+      setTrips(
+        (prevTrips) =>
+          prevTrips.map(
+            (trip) =>
+              trip.id ===
+              tripId
+                ? {
+                    ...trip,
+
+                    comments: [
+                      ...(trip.comments ||
+                        []),
+
+                      newComment,
+                    ],
+                  }
+                : trip
+          )
+      );
+
+      /*
+       * Update open comment popup.
+       */
+      setCommentPost(
+        (current) => {
+          if (
+            current &&
+            current.id ===
+              tripId
+          ) {
+            return {
+              ...current,
+
+              comments: [
+                ...(current.comments ||
+                  []),
+
+                newComment,
+              ],
+            };
+          }
+
+          return current;
+        }
+      );
+
+      return true;
+    } catch (error) {
+      console.error(
+        "Comment error:",
+        error
+      );
+
+      return false;
+    }
+  };
 
   /* =========================================================
      SEND COMMENT
@@ -1378,7 +1676,7 @@ export default function FeedPage() {
           />
 
           <p className="text-zinc-400">
-            Loading your rides...
+            Loading your feed...
           </p>
         </div>
       </main>
@@ -1565,7 +1863,7 @@ export default function FeedPage() {
                   }}
                 >
                   {/* =================================================
-                      IMAGE
+                      IMAGE / VIDEO
                   ================================================= */}
 
                   {trip.mediaUrl ? (
@@ -1683,17 +1981,14 @@ export default function FeedPage() {
                         src={
                           trip.userImage
                         }
-                        alt="Rider"
+                        alt="User"
                         className="
                           w-10
                           h-10
                           rounded-full
-                          border
-                          border-orange-500
                           object-cover
                         "
                         loading="lazy"
-                        decoding="async"
                       />
                     ) : (
                       <div
@@ -1701,8 +1996,6 @@ export default function FeedPage() {
                           w-10
                           h-10
                           rounded-full
-                          border
-                          border-orange-500
                           bg-zinc-800
                           flex
                           items-center
@@ -1820,8 +2113,16 @@ export default function FeedPage() {
                             Array.isArray(
                               trip.likedBy
                             ) &&
-                            trip.likedBy.includes(
-                              currentUserName
+                            (
+                              trip.likedBy.includes(
+                                currentUserUid
+                              ) ||
+                              (
+                                currentUserName &&
+                                trip.likedBy.includes(
+                                  currentUserName
+                                )
+                              )
                             )
                               ? "fill-red-500 text-red-500"
                               : "text-white"
@@ -2015,6 +2316,9 @@ export default function FeedPage() {
                         lastPostDocRef.current =
                           null;
 
+                        loadedPostIdsRef.current =
+                          new Set();
+
                         setHasMorePosts(
                           true
                         );
@@ -2196,7 +2500,7 @@ export default function FeedPage() {
                     index
                   ) => (
                     <div
-                      key={index}
+                      key={`${comment.userId || comment.user}-${comment.createdAt || index}-${index}`}
                       className="
                         flex
                         gap-3
@@ -2213,6 +2517,7 @@ export default function FeedPage() {
                             h-10
                             rounded-full
                             object-cover
+                            flex-shrink-0
                           "
                           loading="lazy"
                         />
