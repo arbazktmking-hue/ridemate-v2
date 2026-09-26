@@ -13,8 +13,10 @@ import {
   collection,
   getDocs,
   query,
+  where,
   orderBy,
   doc,
+  getDoc,
   updateDoc,
   arrayUnion,
   addDoc,
@@ -22,7 +24,10 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 
-import { db } from "../firebase";
+import {
+  db,
+  auth,
+} from "../firebase";
 
 import {
   Heart,
@@ -1572,86 +1577,274 @@ function FeedContent() {
      REQUEST TO JOIN
   ========================================================= */
 
-  const requestToJoin = async (
+  /* =========================================================
+   REQUEST TO JOIN
+========================================================= */
+
+const requestToJoin =
+  async (
     trip: any
   ) => {
-    if (
-      blockedAdminAction(
-        "join rides"
-      )
-    ) {
-      return;
-    }
 
     try {
-      const currentUser =
+
+      /* -----------------------------------------------------
+         1. GET AUTHENTICATED FIREBASE USER
+         -----------------------------------------------------
+         Firebase Auth UID is the real identity.
+         We do NOT use localStorage to decide who the user is.
+      ----------------------------------------------------- */
+
+      const firebaseUser =
+        auth.currentUser;
+
+
+      if (!firebaseUser) {
+
+        alert(
+          "Your login session has expired. Please login again."
+        );
+
+        return;
+
+      }
+
+
+      const currentUid =
+        firebaseUser.uid;
+
+
+      /* -----------------------------------------------------
+         2. GET USER PROFILE
+         -----------------------------------------------------
+         localStorage is used only as a fallback for display
+         information. The UID always comes from Firebase Auth.
+      ----------------------------------------------------- */
+
+      const localUser =
         JSON.parse(
           localStorage.getItem(
             "ridemateUser"
           ) || "{}"
         );
 
-      if (!currentUser.name) {
-        alert(
-          "Please login first."
+
+      const userRef =
+        doc(
+          db,
+          "users",
+          currentUid
         );
-        return;
+
+
+      const userSnap =
+        await getDoc(
+          userRef
+        );
+
+
+      const userData =
+        userSnap.exists()
+          ? userSnap.data()
+          : {};
+
+
+      const requesterName =
+        userData.username ||
+        localUser.name ||
+        firebaseUser.displayName ||
+        "RideMate user";
+
+
+      const requesterImage =
+        userData.image ||
+        localUser.image ||
+        firebaseUser.photoURL ||
+        "";
+
+
+      /* -----------------------------------------------------
+         3. DETERMINE THE TRIP OWNER UID
+         -----------------------------------------------------
+         New trips already contain:
+         
+         trip.uid
+
+         Older trips may not have uid yet.
+         For those older trips, temporarily look up the UID
+         through the usernames collection.
+      ----------------------------------------------------- */
+
+      let tripOwnerUid =
+        trip.uid ||
+        "";
+
+
+      if (!tripOwnerUid) {
+
+        if (!trip.userName) {
+
+          alert(
+            "This trip does not have a valid owner. Please try another trip."
+          );
+
+          return;
+
+        }
+
+
+        const usernameRef =
+          doc(
+            db,
+            "usernames",
+            trip.userName
+          );
+
+
+        const usernameSnap =
+          await getDoc(
+            usernameRef
+          );
+
+
+        if (
+          !usernameSnap.exists()
+        ) {
+
+          alert(
+            "We couldn't verify the trip owner. Please try another trip."
+          );
+
+          return;
+
+        }
+
+
+        const usernameData =
+          usernameSnap.data();
+
+
+        tripOwnerUid =
+          usernameData.uid ||
+          "";
+
       }
 
+
+      /* -----------------------------------------------------
+         4. MAKE SURE TRIP OWNER UID EXISTS
+      ----------------------------------------------------- */
+
+      if (!tripOwnerUid) {
+
+        alert(
+          "We couldn't verify the trip owner. Please try another trip."
+        );
+
+        return;
+
+      }
+
+
+      /* -----------------------------------------------------
+         5. PREVENT USER FROM JOINING THEIR OWN RIDE
+         -----------------------------------------------------
+         UID comparison is the important security check.
+      ----------------------------------------------------- */
+
       if (
-        currentUser.name ===
-        trip.userName
+        currentUid ===
+        tripOwnerUid
       ) {
+
         alert(
           "You cannot join your own ride."
         );
+
         return;
+
       }
 
-      /* =====================================================
-         CHECK EXISTING REQUEST
-      ===================================================== */
 
-      const existingRequests =
-        await getDocs(
+      /* -----------------------------------------------------
+         6. CHECK WHETHER THIS USER ALREADY HAS A PENDING
+            REQUEST FOR THIS TRIP
+         -----------------------------------------------------
+         IMPORTANT:
+         We query using requesterUid rather than downloading
+         every ride request in Firestore.
+      ----------------------------------------------------- */
+
+      const existingRequestsQuery =
+        query(
           collection(
             db,
             "rideRequests"
+          ),
+          where(
+            "requesterUid",
+            "==",
+            currentUid
           )
         );
+
+
+      const existingRequestsSnapshot =
+        await getDocs(
+          existingRequestsQuery
+        );
+
 
       let alreadyRequested =
         false;
 
-      existingRequests.forEach(
-        (requestDoc) => {
+
+      existingRequestsSnapshot.forEach(
+        (
+          requestDoc
+        ) => {
+
           const request =
             requestDoc.data();
+
 
           if (
             request.tripId ===
               trip.id &&
-            request.requester ===
-              currentUser.name &&
             request.status ===
               "pending"
           ) {
+
             alreadyRequested =
               true;
+
           }
+
         }
       );
 
-      if (alreadyRequested) {
+
+      if (
+        alreadyRequested
+      ) {
+
         alert(
           "Request already sent 🚀"
         );
+
         return;
+
       }
 
-      /* =====================================================
-         CREATE RIDE REQUEST
-      ===================================================== */
+
+      /* -----------------------------------------------------
+         7. CREATE UID-BASED RIDE REQUEST
+         -----------------------------------------------------
+         requesterUid = person sending request
+         tripOwnerUid = owner of the trip
+
+         Names are retained only for display / compatibility.
+      ----------------------------------------------------- */
 
       await addDoc(
         collection(
@@ -1659,56 +1852,79 @@ function FeedContent() {
           "rideRequests"
         ),
         {
+
           tripId:
             trip.id,
 
+          /* SECURITY IDENTITY */
+          tripOwnerUid:
+            tripOwnerUid,
+
+          requesterUid:
+            currentUid,
+
+
+          /* DISPLAY / COMPATIBILITY */
           tripOwner:
-            trip.userName,
+            trip.userName ||
+            "",
 
           requester:
-            currentUser.name,
+            requesterName,
 
           requesterImage:
-            currentUser.image || "",
+            requesterImage,
 
+
+          /* TRIP INFORMATION */
           destination:
-            trip.destination || "",
+            trip.destination ||
+            "",
 
           startLocation:
-            trip.startLocation || "",
-
-          startCity:
-            trip.startCity ||
-            trip.city ||
+            trip.startLocation ||
             "",
 
           distance:
-            trip.distance || "",
+            trip.distance ||
+            "",
 
           bike:
-            trip.bike || "",
+            trip.bike ||
+            "",
 
           tripDate:
-            trip.tripDate || "",
+            trip.tripDate ||
+            "",
 
           tripPrice:
-            trip.tripPrice || "",
+            trip.tripPrice ||
+            "",
 
           rideType:
             trip.rideType ||
             "individual",
 
+
+          /* REQUEST INFORMATION */
           createdAt:
             Date.now(),
 
           status:
             "pending",
+
         }
       );
 
-      /* =====================================================
-         NOTIFICATION
-      ===================================================== */
+
+      /* -----------------------------------------------------
+         8. CREATE NOTIFICATION
+         -----------------------------------------------------
+         For now we keep the existing notification structure
+         for compatibility, but ALSO store the UIDs.
+
+         We will update the Notifications system later.
+      ----------------------------------------------------- */
 
       await addDoc(
         collection(
@@ -1716,35 +1932,60 @@ function FeedContent() {
           "notifications"
         ),
         {
+
+          /* SECURITY IDENTITY */
+          recipientUid:
+            tripOwnerUid,
+
+          actorUid:
+            currentUid,
+
+
+          /* EXISTING DISPLAY DATA */
           user:
             trip.userName,
 
           text:
             trip.rideType ===
             "group"
-              ? `${currentUser.name} wants to join your group ride 🏍️`
-              : `${currentUser.name} wants to join as your pillion 🪖`,
+              ? `${requesterName} wants to join your group ride 🏍️`
+              : `${requesterName} wants to join as your pillion 🪖`,
 
           createdAt:
             Date.now(),
 
-          read: false,
+          read:
+            false,
+
         }
       );
+
+
+      /* -----------------------------------------------------
+         9. SUCCESS
+      ----------------------------------------------------- */
 
       alert(
         "Ride request sent 🚀"
       );
-    } catch (error) {
+
+
+    } catch (
+      error
+    ) {
+
       console.error(
-        "Join ride error:",
+        "Ride request error:",
         error
       );
 
+
       alert(
-        "Something went wrong. Please try again."
+        "Unable to send ride request. Please try again."
       );
+
     }
+
   };
 
   /* =========================================================

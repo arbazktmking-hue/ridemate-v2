@@ -12,9 +12,16 @@ import {
   setDoc,
   getDoc,
   arrayUnion,
+  query,
+  where,
 } from "firebase/firestore";
 
-import { db } from "../firebase";
+import {
+  onAuthStateChanged,
+  User,
+} from "firebase/auth";
+
+import { db, auth } from "../firebase";
 
 type AdminView = {
   active?: boolean;
@@ -53,91 +60,173 @@ export default function RequestsPage() {
 
   const [currentUserName, setCurrentUserName] =
     useState("");
-
+const [currentUserUid, setCurrentUserUid] =
+  useState("");
   /* =========================================================
-     LOAD ACTIVE USER / ADMIN VIEW
-  ========================================================= */
+   LOAD ACTIVE USER / ADMIN VIEW
+========================================================= */
 
-  useEffect(() => {
-    const loadViewUser = () => {
+useEffect(() => {
+  const unsubscribe = onAuthStateChanged(
+    auth,
+    (firebaseUser: User | null) => {
       try {
+        /*
+         * =====================================================
+         * ADMIN INVESTIGATION MODE
+         *
+         * This is only for the UI investigation feature.
+         * It does NOT establish security/authorization.
+         * Firestore Rules will remain the real security boundary.
+         * =====================================================
+         */
+
         const savedAdminView =
-          localStorage.getItem(
-            "ridemateAdminView"
-          );
+          localStorage.getItem("ridemateAdminView");
 
         if (savedAdminView) {
           const parsedAdminView =
             JSON.parse(savedAdminView);
 
           if (parsedAdminView?.active) {
-            setAdminView(
-              parsedAdminView
-            );
+  setAdminView(parsedAdminView);
 
-            setCurrentUserName(
-              parsedAdminView.userName ||
-                ""
-            );
+  setCurrentUserName(
+    parsedAdminView.userName || ""
+  );
 
-            return;
+  setCurrentUserUid(
+    parsedAdminView.userId || ""
+  );
+
+  return;
+}
+        }
+
+        /*
+         * =====================================================
+         * NORMAL USER
+         * =====================================================
+         */
+
+        setAdminView(null);
+
+       if (!firebaseUser) {
+  setCurrentUserName("");
+  setCurrentUserUid("");
+  return;
+}
+
+        /*
+         * Firebase Auth UID is the authoritative identity.
+         *
+         * We only use the username/name for display.
+         */
+        const savedUser =
+          localStorage.getItem("ridemateUser");
+
+        let displayName =
+          firebaseUser.displayName || "";
+
+        if (savedUser) {
+          try {
+            const parsedUser =
+              JSON.parse(savedUser);
+
+            displayName =
+              parsedUser.name ||
+              parsedUser.username ||
+              firebaseUser.displayName ||
+              "";
+          } catch {
+            // Keep Firebase display name
           }
         }
 
-        const savedUser =
-          localStorage.getItem(
-            "ridemateUser"
-          );
+        setCurrentUserName(displayName);
+setCurrentUserUid(firebaseUser.uid);
 
-        if (savedUser) {
-          const user =
-            JSON.parse(savedUser);
-
-          setAdminView(null);
-
-          setCurrentUserName(
-            user.name ||
-              user.username ||
-              ""
-          );
-        }
       } catch (error) {
         console.error(
           "Failed to load active user:",
           error
         );
       }
-    };
+    }
+  );
 
-    loadViewUser();
+  const handleAdminViewChange = () => {
+    /*
+     * Admin investigation is UI state only.
+     * Normal authentication still comes from Firebase Auth.
+     */
+    try {
+      const savedAdminView =
+        localStorage.getItem("ridemateAdminView");
 
-    const handleAdminViewChange =
-      () => {
-        loadViewUser();
-      };
+      if (savedAdminView) {
+        const parsedAdminView =
+          JSON.parse(savedAdminView);
 
-    window.addEventListener(
+        if (parsedAdminView?.active) {
+  setAdminView(parsedAdminView);
+
+  setCurrentUserName(
+    parsedAdminView.userName || ""
+  );
+
+  setCurrentUserUid(
+    parsedAdminView.userId || ""
+  );
+
+  return;
+}
+      }
+
+      setAdminView(null);
+
+      const firebaseUser =
+        auth.currentUser;
+
+      setCurrentUserName(
+  firebaseUser?.displayName || ""
+);
+
+setCurrentUserUid(
+  firebaseUser?.uid || ""
+);
+    } catch (error) {
+      console.error(
+        "Failed to update admin view:",
+        error
+      );
+    }
+  };
+
+  window.addEventListener(
+    "ridemateAdminViewChanged",
+    handleAdminViewChange
+  );
+
+  window.addEventListener(
+    "storage",
+    handleAdminViewChange
+  );
+
+  return () => {
+    unsubscribe();
+
+    window.removeEventListener(
       "ridemateAdminViewChanged",
       handleAdminViewChange
     );
 
-    window.addEventListener(
+    window.removeEventListener(
       "storage",
       handleAdminViewChange
     );
-
-    return () => {
-      window.removeEventListener(
-        "ridemateAdminViewChanged",
-        handleAdminViewChange
-      );
-
-      window.removeEventListener(
-        "storage",
-        handleAdminViewChange
-      );
-    };
-  }, []);
+  };
+}, []);
 
   const isAdminView =
     adminView?.active === true;
@@ -201,137 +290,156 @@ export default function RequestsPage() {
   };
 
   /* =========================================================
-     LOAD REQUESTS
-  ========================================================= */
+   LOAD REQUESTS
+   UID IS THE SOURCE OF TRUTH
+========================================================= */
 
-  useEffect(() => {
-    const loadRequests =
-      async () => {
+useEffect(() => {
+  const loadRequests = async () => {
+    try {
+      let activeUid = "";
+
+      /* ===============================================
+         ADMIN INVESTIGATION MODE
+      =============================================== */
+
+      const savedAdminView =
+        localStorage.getItem("ridemateAdminView");
+
+      if (savedAdminView) {
         try {
-          let activeUserName = "";
+          const parsedAdminView =
+            JSON.parse(savedAdminView);
 
-          /* ===============================================
-             ADMIN INVESTIGATION MODE
-          =============================================== */
-
-          const savedAdminView =
-            localStorage.getItem(
-              "ridemateAdminView"
-            );
-
-          if (savedAdminView) {
-            const parsedAdminView =
-              JSON.parse(
-                savedAdminView
-              );
-
-            if (
-              parsedAdminView?.active &&
-              parsedAdminView.userName
-            ) {
-              activeUserName =
-                parsedAdminView.userName;
-            }
+          if (
+            parsedAdminView?.active &&
+            parsedAdminView?.userId
+          ) {
+            activeUid =
+              parsedAdminView.userId;
           }
-
-          /* ===============================================
-             NORMAL USER
-          =============================================== */
-
-          if (!activeUserName) {
-            const currentUser =
-              JSON.parse(
-                localStorage.getItem(
-                  "ridemateUser"
-                ) || "{}"
-              );
-
-            activeUserName =
-              currentUser.name ||
-              currentUser.username ||
-              "";
-          }
-
-          setCurrentUserName(
-            activeUserName
-          );
-
-          if (!activeUserName) {
-            setReceivedRequests([]);
-            setSentRequests([]);
-            return;
-          }
-
-          console.log(
-            "Ride Requests active user:",
-            activeUserName
-          );
-
-          const snapshot =
-            await getDocs(
-              collection(
-                db,
-                "rideRequests"
-              )
-            );
-
-          const received: any[] =
-            [];
-
-          const sent: any[] = [];
-
-          snapshot.forEach(
-            (docSnap) => {
-              const request =
-                docSnap.data();
-
-              /* =========================================
-                 REQUESTS RECEIVED
-              ========================================= */
-
-              if (
-                request.tripOwner ===
-                activeUserName
-              ) {
-                received.push({
-                  id: docSnap.id,
-                  ...request,
-                });
-              }
-
-              /* =========================================
-                 REQUESTS SENT
-              ========================================= */
-
-              if (
-                request.requester ===
-                activeUserName
-              ) {
-                sent.push({
-                  id: docSnap.id,
-                  ...request,
-                });
-              }
-            }
-          );
-
-          setReceivedRequests(
-            received
-          );
-
-          setSentRequests(
-            sent
-          );
-        } catch (error) {
-          console.error(
-            "Failed to load requests:",
-            error
+        } catch {
+          console.warn(
+            "Invalid admin view data."
           );
         }
-      };
+      }
 
-    loadRequests();
-  }, [isAdminView]);
+      /* ===============================================
+         NORMAL USER
+      =============================================== */
+
+      if (!activeUid) {
+        const firebaseUser =
+          auth.currentUser;
+
+        if (!firebaseUser) {
+          setReceivedRequests([]);
+          setSentRequests([]);
+          return;
+        }
+
+        activeUid =
+          firebaseUser.uid;
+      }
+
+      /* ===============================================
+         STORE ACTIVE UID
+      =============================================== */
+
+      setCurrentUserUid(activeUid);
+
+      /* ===============================================
+         LOAD REQUESTS
+      =============================================== */
+
+      const snapshot =
+        await getDocs(
+          collection(
+            db,
+            "rideRequests"
+          )
+        );
+
+      const received: any[] = [];
+      const sent: any[] = [];
+
+      snapshot.forEach((docSnap) => {
+        const request =
+          docSnap.data();
+
+        /* =========================================
+           REQUESTS RECEIVED
+
+           The trip owner must match
+           the authenticated Firebase UID.
+        ========================================= */
+
+        if (
+          request.tripOwnerUid &&
+          request.tripOwnerUid ===
+            activeUid
+        ) {
+          received.push({
+            id: docSnap.id,
+            ...request,
+          });
+        }
+
+        /* =========================================
+           REQUESTS SENT
+
+           The requester must match
+           the authenticated Firebase UID.
+        ========================================= */
+
+        if (
+          request.requesterUid &&
+          request.requesterUid ===
+            activeUid
+        ) {
+          sent.push({
+            id: docSnap.id,
+            ...request,
+          });
+        }
+      });
+
+      setReceivedRequests(
+        received
+      );
+
+      setSentRequests(
+        sent
+      );
+
+      console.log(
+        "Ride Requests active UID:",
+        activeUid
+      );
+
+      console.log(
+        "Requests received:",
+        received.length
+      );
+
+      console.log(
+        "Requests sent:",
+        sent.length
+      );
+    } catch (error) {
+      console.error(
+        "Failed to load requests:",
+        error
+      );
+
+      setReceivedRequests([]);
+      setSentRequests([]);
+    }
+  };
+
+  loadRequests();
+}, [isAdminView]);
 
   /* =========================================================
      APPROVE / REJECT REQUEST
@@ -371,7 +479,34 @@ export default function RequestsPage() {
       if (!request) {
         return;
       }
+/* ===============================================
+   OWNER VERIFICATION
+   Only the Firebase UID that owns the trip
+   can approve/reject this request.
+=============================================== */
 
+const firebaseUser =
+  auth.currentUser;
+
+if (!firebaseUser) {
+  alert(
+    "Your login session has expired. Please login again."
+  );
+
+  return;
+}
+
+if (
+  request.tripOwnerUid &&
+  request.tripOwnerUid !==
+    firebaseUser.uid
+) {
+  alert(
+    "You are not allowed to manage this request."
+  );
+
+  return;
+}
       /* ===============================================
          UPDATE REQUEST STATUS
       =============================================== */
@@ -451,27 +586,30 @@ export default function RequestsPage() {
          SEND NOTIFICATION
       =============================================== */
 
-      await addDoc(
-        collection(
-          db,
-          "notifications"
-        ),
-        {
-          user:
-            request.requester,
+     await addDoc(
+  collection(
+    db,
+    "notifications"
+  ),
+  {
+    user:
+      request.requester,
 
-          text:
-            status ===
-            "approved"
-              ? `🎉 ${request.tripOwner} approved your ride request to ${request.destination}`
-              : `❌ ${request.tripOwner} rejected your ride request to ${request.destination}`,
+    userUid:
+      request.requesterUid || "",
 
-          createdAt:
-            Date.now(),
+    text:
+      status ===
+      "approved"
+        ? `🎉 ${request.tripOwner} approved your ride request to ${request.destination}`
+        : `❌ ${request.tripOwner} rejected your ride request to ${request.destination}`,
 
-          read: false,
-        }
-      );
+    createdAt:
+      Date.now(),
+
+    read: false,
+  }
+);
 
       /* ===============================================
          REMOVE FROM RECEIVED
