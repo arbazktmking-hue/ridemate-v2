@@ -2,108 +2,163 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  doc,
-  setDoc,
-  getDoc,
-} from "firebase/firestore";
-import { db } from "../firebase";
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { db, auth } from "../firebase";
 
 export default function CreateUsername() {
   const router = useRouter();
 
-  const [username, setUsername] =
-    useState("");
+  const [username, setUsername] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const createUsername = async () => {
-    if (!username.trim()) {
+    const cleanUsername = username.trim();
+
+    if (!cleanUsername) {
       alert("Enter a username");
       return;
     }
 
-    const pendingUser = JSON.parse(
-      localStorage.getItem(
-        "pendingUser"
-      ) || "{}"
-    );
-
-    const usernameRef = doc(
-      db,
-      "usernames",
-      username.toLowerCase()
-    );
-
-    const usernameDoc =
-      await getDoc(usernameRef);
-
-    if (usernameDoc.exists()) {
-      alert(
-        "Username already exists"
-      );
+    if (cleanUsername.length < 3) {
+      alert("Username must be at least 3 characters");
       return;
     }
 
-    await setDoc(usernameRef, {
-      uid: pendingUser.uid,
-    });
+    setLoading(true);
 
-    await setDoc(
-      doc(
-        db,
-        "users",
-        pendingUser.uid
-      ),
-      {
-        email: pendingUser.email,
-        username,
-        image: pendingUser.image,
-        createdAt: Date.now(),
+    try {
+      // Get the REAL logged-in Firebase user.
+      // We do NOT trust the UID stored in localStorage.
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) {
+        alert("Your login session has expired. Please login again.");
+        router.push("/login");
+        return;
       }
-    );
 
-    const finalUser = {
-      uid: pendingUser.uid,
-      email: pendingUser.email,
-      image: pendingUser.image,
-      name: username,
-    };
+      // Check whether this username already exists
+      const usernameKey = cleanUsername.toLowerCase();
 
-    localStorage.setItem(
-      "ridemateUser",
-      JSON.stringify(finalUser)
-    );
+      const usernameRef = doc(db, "usernames", usernameKey);
 
-    localStorage.removeItem(
-      "pendingUser"
-    );
+      const usernameDoc = await getDoc(usernameRef);
 
-    router.push("/profile");
+      if (usernameDoc.exists()) {
+        alert("Username already exists. Please choose another one.");
+        setLoading(false);
+        return;
+      }
+
+      // Keep pendingUser only for old onboarding data
+      // such as the Google profile image.
+      const pendingUser = JSON.parse(
+        localStorage.getItem("pendingUser") || "{}"
+      );
+
+      const email =
+        currentUser.email ||
+        pendingUser.email ||
+        "";
+
+      const image =
+        currentUser.photoURL ||
+        pendingUser.image ||
+        "";
+
+      // Create username record
+      await setDoc(usernameRef, {
+        uid: currentUser.uid,
+        username: cleanUsername,
+        createdAt: Date.now(),
+      });
+
+      // Create/update the user's profile
+      await setDoc(
+        doc(db, "users", currentUser.uid),
+        {
+          uid: currentUser.uid,
+          email,
+          username: cleanUsername,
+          image,
+          createdAt: Date.now(),
+        },
+        {
+          merge: true,
+        }
+      );
+
+      // Save local session information for the existing RideMate UI
+      const finalUser = {
+        uid: currentUser.uid,
+        email,
+        image,
+        name: cleanUsername,
+      };
+
+      localStorage.setItem(
+        "ridemateUser",
+        JSON.stringify(finalUser)
+      );
+
+      localStorage.removeItem("pendingUser");
+
+      // Continue to profile
+      router.push("/profile");
+    } catch (error: any) {
+      console.error("Username creation error:", error);
+
+      if (
+        error?.code === "permission-denied"
+      ) {
+        alert(
+          "Permission denied by Firebase. Please send me the exact error from the browser console."
+        );
+      } else {
+        alert(
+          error?.message ||
+            "Something went wrong while creating your username."
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <main className="min-h-screen bg-black text-white flex items-center justify-center">
-      <div className="bg-zinc-900 p-10 rounded-3xl w-full max-w-md">
-        <h1 className="text-3xl font-black text-orange-500 mb-6">
-          Create your username
+    <main className="min-h-screen bg-black text-white flex items-center justify-center px-6">
+      <div className="w-full max-w-md">
+
+        <h1 className="text-3xl font-bold text-center mb-3">
+          Choose your username
         </h1>
 
+        <p className="text-gray-400 text-center mb-8">
+          This is how other riders will find you on RideMate.
+        </p>
+
         <input
+          type="text"
           value={username}
-          onChange={(e) =>
-            setUsername(
-              e.target.value
-            )
-          }
+          onChange={(e) => setUsername(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !loading) {
+              createUsername();
+            }
+          }}
           placeholder="Enter username"
-          className="w-full p-4 rounded-xl bg-black border border-zinc-700"
+          disabled={loading}
+          className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-4 text-white outline-none focus:border-white"
         />
 
         <button
           onClick={createUsername}
-          className="w-full mt-5 bg-orange-500 p-4 rounded-xl font-black"
+          disabled={loading}
+          className="w-full mt-4 bg-white text-black font-semibold rounded-xl py-4 disabled:opacity-50"
         >
-          Continue
+          {loading ? "Creating..." : "Continue"}
         </button>
+
       </div>
     </main>
   );
