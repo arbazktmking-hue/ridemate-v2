@@ -15,7 +15,7 @@ import {
   where,
 } from "firebase/firestore";
 
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import { useRouter } from "next/navigation";
 
 /*
@@ -2141,24 +2141,60 @@ function CreateTripContent() {
         return;
       }
 
-      try {
-        const savedUser =
-          localStorage.getItem(
-            "ridemateUser"
-          );
+     try {
+  /*
+  =====================================================
+  FIREBASE AUTH USER
+  =====================================================
+  */
 
-        const user =
-          JSON.parse(
-            savedUser || "{}"
-          );
+  const firebaseUser = auth.currentUser;
 
-        if (!user.name) {
-          alert(
-            "Please login first."
-          );
+  if (!firebaseUser) {
+    alert(
+      "Your login session has expired. Please login again."
+    );
 
-          return;
-        }
+    router.push("/login");
+    return;
+  }
+
+  /*
+  =====================================================
+  DISPLAY USER
+  =====================================================
+  */
+
+  const savedUser =
+    localStorage.getItem(
+      "ridemateUser"
+    );
+
+  const user =
+    JSON.parse(
+      savedUser || "{}"
+    );
+
+  if (!user.name) {
+    alert(
+      "Please complete your profile first."
+    );
+
+    router.push("/profile");
+    return;
+  }
+
+  /*
+  IMPORTANT:
+
+  firebaseUser.uid is now the trusted identity.
+
+  localStorage is used only for display
+  information such as username/image.
+  */
+
+  const currentUid =
+    firebaseUser.uid;
 
         /*
         =====================================================
@@ -2378,10 +2414,22 @@ function CreateTripContent() {
             tripImage,
 
           userName:
-            user.name,
+  user.name,
 
-          userImage:
-            user.image || "",
+userImage:
+  user.image || "",
+
+/*
+=====================================================
+SECURITY IDENTITY
+=====================================================
+
+This UID comes directly from Firebase Authentication,
+NOT from localStorage.
+*/
+
+uid:
+  currentUid,
         };
 
         /*
@@ -2426,21 +2474,57 @@ function CreateTripContent() {
           ===================================================
           */
 
-          if (
-            existingTrip.userName &&
-            existingTrip.userName !==
-              user.name
-          ) {
-            alert(
-              "You are not allowed to edit this trip."
-            );
+         /*
+=====================================================
+OWNER PROTECTION
+=====================================================
 
-            router.push(
-              "/my-rides"
-            );
+New trips use Firebase UID.
 
-            return;
-          }
+Old trips may not have a UID yet, so we
+temporarily fall back to username for
+backward compatibility.
+*/
+
+if (
+  existingTrip.uid &&
+  existingTrip.uid !== currentUid
+) {
+  alert(
+    "You are not allowed to edit this trip."
+  );
+
+  router.push(
+    "/my-rides"
+  );
+
+  return;
+}
+
+/*
+=====================================================
+LEGACY TRIP SUPPORT
+=====================================================
+
+If this is an older trip without uid,
+keep the existing username protection.
+*/
+
+if (
+  !existingTrip.uid &&
+  existingTrip.userName &&
+  existingTrip.userName !== user.name
+) {
+  alert(
+    "You are not allowed to edit this trip."
+  );
+
+  router.push(
+    "/my-rides"
+  );
+
+  return;
+}
 
           /*
           ===================================================
@@ -2559,24 +2643,52 @@ function CreateTripContent() {
         return;
       }
 
-      try {
-        const savedUser =
-          localStorage.getItem(
-            "ridemateUser"
-          );
+     try {
+  /*
+  =====================================================
+  FIREBASE AUTH USER
+  =====================================================
+  */
 
-        const user =
-          JSON.parse(
-            savedUser || "{}"
-          );
+  const firebaseUser =
+    auth.currentUser;
 
-        if (!user.name) {
-          alert(
-            "Please login first."
-          );
+  if (!firebaseUser) {
+    alert(
+      "Your login session has expired. Please login again."
+    );
 
-          return;
-        }
+    router.push("/login");
+    return;
+  }
+
+  /*
+  =====================================================
+  DISPLAY USER
+  =====================================================
+  */
+
+  const savedUser =
+    localStorage.getItem(
+      "ridemateUser"
+    );
+
+  const user =
+    JSON.parse(
+      savedUser || "{}"
+    );
+
+  if (!user.name) {
+    alert(
+      "Please complete your profile first."
+    );
+
+    router.push("/profile");
+    return;
+  }
+
+  const currentUid =
+    firebaseUser.uid;
 
         const tripRef =
           doc(
@@ -2613,16 +2725,42 @@ function CreateTripContent() {
         =====================================================
         */
 
-        if (
-          trip.userName !==
-          user.name
-        ) {
-          alert(
-            "You are not allowed to delete this trip."
-          );
+       /*
+=====================================================
+OWNER PROTECTION
+=====================================================
+*/
 
-          return;
-        }
+if (
+  trip.uid &&
+  trip.uid !== currentUid
+) {
+  alert(
+    "You are not allowed to delete this trip."
+  );
+
+  return;
+}
+
+/*
+=====================================================
+LEGACY TRIP SUPPORT
+=====================================================
+
+Older trips may not have uid yet.
+*/
+
+if (
+  !trip.uid &&
+  trip.userName &&
+  trip.userName !== user.name
+) {
+  alert(
+    "You are not allowed to delete this trip."
+  );
+
+  return;
+}
 
         /*
         =====================================================
