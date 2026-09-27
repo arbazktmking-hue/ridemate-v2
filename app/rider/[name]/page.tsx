@@ -206,10 +206,13 @@ export default function RiderPage() {
    */
 
   const [riderImage, setRiderImage] =
-    useState("");
+  useState("");
 
-  const [isFollowing, setIsFollowing] =
-    useState(false);
+const [riderUid, setRiderUid] =
+  useState("");
+
+const [isFollowing, setIsFollowing] =
+  useState(false);
 
   const [followers, setFollowers] =
     useState(0);
@@ -1045,28 +1048,31 @@ export default function RiderPage() {
 
       try {
         await addDoc(
-          collection(
-            db,
-            "comments"
-          ),
-          {
-            postId:
-              selectedPost.id,
+  collection(
+    db,
+    "comments"
+  ),
+  {
+    postId:
+      selectedPost.id,
 
-            user:
-              currentUser.name,
+    user:
+      currentUser.name,
 
-            text:
-              newComment.trim(),
+    userId:
+      currentUser.uid,
 
-            image:
-              currentUser.image ||
-              "",
+    text:
+      newComment.trim(),
 
-            createdAt:
-              Date.now(),
-          }
-        );
+    image:
+      currentUser.image ||
+      "",
+
+    createdAt:
+      Date.now(),
+  }
+);
 
         setNewComment("");
 
@@ -1130,33 +1136,40 @@ export default function RiderPage() {
             );
           }
 
-          if (!savedUser?.name) {
-            return;
-          }
+         if (
+  !savedUser?.name ||
+  !savedUser?.uid ||
+  !riderUid
+) {
+  return;
+}
 
-          const viewingOwnProfile =
-            savedUser.name ===
-            riderName;
+const viewingOwnProfile =
+  savedUser.uid ===
+  riderUid;
 
           if (viewingOwnProfile) {
             setIsFollowing(false);
-          } else {
-            const followId =
-              `${savedUser.name}_${riderName}`;
+          } else if (
+  savedUser?.uid &&
+  riderUid
+) {
+  const followId =
+    `${savedUser.uid}_${riderUid}`;
 
-            const followDoc =
-              await getDoc(
-                doc(
-                  db,
-                  "follows",
-                  followId
-                )
-              );
+  const followDoc =
+    await getDoc(
+      doc(
+        db,
+        "follows",
+        followId
+      )
+    );
 
-            setIsFollowing(
-              followDoc.exists()
-            );
-          }
+  setIsFollowing(
+    followDoc.exists()
+  );
+}
 
           /*
            * FOLLOWERS + FOLLOWING
@@ -1174,10 +1187,10 @@ export default function RiderPage() {
                     "follows"
                   ),
                   where(
-                    "following",
-                    "==",
-                    riderName
-                  )
+  "followingUid",
+  "==",
+  riderUid
+)
                 )
               ),
 
@@ -1188,10 +1201,10 @@ export default function RiderPage() {
                     "follows"
                   ),
                   where(
-                    "follower",
-                    "==",
-                    riderName
-                  )
+  "followerUid",
+  "==",
+  riderUid
+)
                 )
               ),
             ]);
@@ -1213,9 +1226,10 @@ export default function RiderPage() {
 
     checkFollowStatus();
   }, [
-    riderName,
-    isAdminView,
-  ]);
+  riderName,
+  riderUid,
+  isAdminView,
+]);
 
   /* =========================================================
      LOAD RIDER DATA
@@ -1287,7 +1301,15 @@ export default function RiderPage() {
 
           let userProfileData:
             any = null;
-
+let targetRiderUid = "";
+if (
+  isAdminView &&
+  adminView?.userName === riderName &&
+  adminView?.userId
+) {
+  targetRiderUid =
+    adminView.userId;
+}
           /*
            * Own profile:
            * use UID directly.
@@ -1311,8 +1333,11 @@ export default function RiderPage() {
               if (
                 ownUserDoc.exists()
               ) {
-                userProfileData =
-                  ownUserDoc.data();
+               targetRiderUid =
+  ownUserDoc.id;
+
+userProfileData =
+  ownUserDoc.data();
               }
             } catch (error) {
               console.error(
@@ -1352,13 +1377,16 @@ export default function RiderPage() {
                 );
 
               if (
-                !usernameSnapshot.empty
-              ) {
-                userProfileData =
-                  usernameSnapshot
-                    .docs[0]
-                    .data();
-              }
+  !usernameSnapshot.empty
+) {
+  targetRiderUid =
+    usernameSnapshot.docs[0].id;
+
+  userProfileData =
+    usernameSnapshot
+      .docs[0]
+      .data();
+}
             } catch (error) {
               console.error(
                 "Username profile lookup failed:",
@@ -1397,13 +1425,16 @@ export default function RiderPage() {
                 );
 
               if (
-                !nameSnapshot.empty
-              ) {
-                userProfileData =
-                  nameSnapshot
-                    .docs[0]
-                    .data();
-              }
+  !nameSnapshot.empty
+) {
+  targetRiderUid =
+    nameSnapshot.docs[0].id;
+
+  userProfileData =
+    nameSnapshot
+      .docs[0]
+      .data();
+}
             } catch (error) {
               console.error(
                 "Name profile lookup failed:",
@@ -1411,7 +1442,14 @@ export default function RiderPage() {
               );
             }
           }
-
+if (
+  targetRiderUid &&
+  !cancelled
+) {
+  setRiderUid(
+    targetRiderUid
+  );
+}
           /*
            * Update profile image from Firestore.
            */
@@ -1504,11 +1542,11 @@ export default function RiderPage() {
                 tripDoc.data();
 
               if (
-                trip.userName ===
-                  riderName &&
-                trip.status ===
-                  "completed"
-              ) {
+  trip.uid ===
+    targetRiderUid &&
+  trip.status ===
+    "completed"
+) {
                 trips.push({
                   id:
                     tripDoc.id,
@@ -1567,10 +1605,10 @@ export default function RiderPage() {
                 postDoc.data();
 
               if (
-                post.userName ===
-                  riderName &&
-                post.mediaUrl
-              ) {
+  post.userId ===
+    targetRiderUid &&
+  post.mediaUrl
+) {
                 posts.push({
                   id:
                     postDoc.id,
@@ -1609,9 +1647,9 @@ export default function RiderPage() {
                 reviewDoc.data();
 
               if (
-                review.rider ===
-                riderName
-              ) {
+  review.riderUid ===
+  targetRiderUid
+) {
                 riderReviews.push(
                   review
                 );
@@ -1723,8 +1761,18 @@ export default function RiderPage() {
         return;
       }
 
-      const followId =
-        `${currentUser.name}_${riderName}`;
+      const currentUserUid =
+  currentUser?.uid;
+
+if (
+  !currentUserUid ||
+  !riderUid
+) {
+  return;
+}
+
+const followId =
+  `${currentUserUid}_${riderUid}`;
 
       try {
         if (isFollowing) {
@@ -1746,37 +1794,54 @@ export default function RiderPage() {
               )
           );
         } else {
-          await setDoc(
-            doc(
-              db,
-              "follows",
-              followId
-            ),
-            {
-              follower:
-                currentUser.name,
+         await setDoc(
+  doc(
+    db,
+    "follows",
+    followId
+  ),
+  {
+    followerUid:
+      currentUserUid,
 
-              following:
-                riderName,
-            }
-          );
+    followingUid:
+      riderUid,
 
-          await addDoc(
-            collection(
-              db,
-              "notifications"
-            ),
-            {
-              user:
-                riderName,
+    // Display information only
+    follower:
+      currentUser.name,
 
-              text:
-                `${currentUser.name} followed you 👥`,
+    following:
+      riderName,
 
-              createdAt:
-                Date.now(),
-            }
-          );
+    createdAt:
+      Date.now(),
+  }
+);
+
+        await addDoc(
+  collection(
+    db,
+    "notifications"
+  ),
+  {
+    recipientUid:
+      riderUid,
+
+    actorUid:
+      currentUserUid,
+
+    // Display information only
+    user:
+      riderName,
+
+    text:
+      `${currentUser.name} followed you 👥`,
+
+    createdAt:
+      Date.now(),
+  }
+);
 
           setIsFollowing(true);
 
@@ -1797,9 +1862,11 @@ export default function RiderPage() {
      PROFILE STATE
   ========================================================= */
 
-  const isOwnProfile =
-    currentUser?.name ===
-    riderName;
+ const isOwnProfile =
+  !!currentUser?.uid &&
+  !!riderUid &&
+  currentUser.uid ===
+    riderUid;
 
   const displayedProfileImage =
     riderImage ||

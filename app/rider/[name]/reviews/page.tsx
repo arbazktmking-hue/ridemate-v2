@@ -2,7 +2,13 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+  limit,
+} from "firebase/firestore";
 import { db } from "../../../firebase";
 
 export default function RiderReviewsPage() {
@@ -17,35 +23,109 @@ export default function RiderReviewsPage() {
 
   useEffect(() => {
     const loadReviews = async () => {
-      const snapshot = await getDocs(
-        collection(db, "rideReviews")
-      );
+      try {
+        /* ==================================================
+           FIND RIDER UID
+        ================================================== */
 
-      const riderReviews: any[] = [];
+        let riderUid = "";
 
-      let totalRating = 0;
+        // First try username
+        const usernameQuery = query(
+          collection(db, "users"),
+          where("username", "==", riderName),
+          limit(1)
+        );
 
-      snapshot.forEach((doc) => {
-        const review = doc.data();
+        const usernameSnapshot = await getDocs(
+          usernameQuery
+        );
 
-        if (review.rider === riderName) {
-          riderReviews.push(review);
-
-          totalRating += review.rating || 0;
+        if (!usernameSnapshot.empty) {
+          riderUid =
+            usernameSnapshot.docs[0].id;
         }
-      });
 
-      setReviews(
+        // Fallback to name
+        if (!riderUid) {
+          const nameQuery = query(
+            collection(db, "users"),
+            where("name", "==", riderName),
+            limit(1)
+          );
+
+          const nameSnapshot = await getDocs(
+            nameQuery
+          );
+
+          if (!nameSnapshot.empty) {
+            riderUid =
+              nameSnapshot.docs[0].id;
+          }
+        }
+
+        if (!riderUid) {
+          setReviews([]);
+          setAvgRating(0);
+          return;
+        }
+
+        /* ==================================================
+           LOAD REVIEWS
+        ================================================== */
+
+        const snapshot = await getDocs(
+          collection(db, "rideReviews")
+        );
+
+        const riderReviews: any[] = [];
+
+        let totalRating = 0;
+
+        snapshot.forEach((reviewDoc) => {
+          const review = reviewDoc.data();
+
+          /*
+           * Firebase UID is the real identity.
+           * rider is kept only as display information.
+           */
+          if (
+            review.riderUid === riderUid
+          ) {
+            riderReviews.push({
+              id: reviewDoc.id,
+              ...review,
+            });
+
+            totalRating += Number(
+              review.rating || 0
+            );
+          }
+        });
+
         riderReviews.sort(
-          (a, b) => b.createdAt - a.createdAt
-        )
-      );
+          (a, b) =>
+            Number(b.createdAt || 0) -
+            Number(a.createdAt || 0)
+        );
 
-      setAvgRating(
-        riderReviews.length
-          ? totalRating / riderReviews.length
-          : 0
-      );
+        setReviews(riderReviews);
+
+        setAvgRating(
+          riderReviews.length
+            ? totalRating /
+                riderReviews.length
+            : 0
+        );
+      } catch (error) {
+        console.error(
+          "Failed to load rider reviews:",
+          error
+        );
+
+        setReviews([]);
+        setAvgRating(0);
+      }
     };
 
     loadReviews();
@@ -53,19 +133,20 @@ export default function RiderReviewsPage() {
 
   return (
     <main className="min-h-screen bg-black text-white px-6 pt-24 pb-10">
-
       <div className="max-w-4xl mx-auto">
 
         <h1 className="text-4xl md:text-5xl font-black text-orange-500 mb-2">
-  Reviews
-</h1>
+          Reviews
+        </h1>
 
-<p className="text-zinc-400 mb-8">
-  What riders are saying about {riderName}
-</p>
+        <p className="text-zinc-400 mb-8">
+          What riders are saying about{" "}
+          {riderName}
+        </p>
 
         <p className="text-xl text-yellow-400 mb-8">
-          Average Rating: {avgRating.toFixed(1)} / 5
+          Average Rating:{" "}
+          {avgRating.toFixed(1)} / 5
         </p>
 
         {reviews.length === 0 ? (
@@ -75,9 +156,9 @@ export default function RiderReviewsPage() {
         ) : (
           <div className="space-y-4">
 
-            {reviews.map((review, index) => (
+            {reviews.map((review) => (
               <div
-                key={index}
+                key={review.id}
                 className="
                   bg-zinc-900
                   p-5
@@ -86,7 +167,9 @@ export default function RiderReviewsPage() {
                 "
               >
                 <div className="text-yellow-400 text-xl font-bold">
-                  {"⭐".repeat(review.rating)}
+                  {"⭐".repeat(
+                    Number(review.rating || 0)
+                  )}
                 </div>
 
                 <p className="mt-3 text-zinc-300">
@@ -103,7 +186,6 @@ export default function RiderReviewsPage() {
         )}
 
       </div>
-
     </main>
   );
 }
