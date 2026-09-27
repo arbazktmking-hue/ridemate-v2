@@ -38,14 +38,24 @@ type UserInfo = {
 type ChatData = {
   owner?: string;
   ownerUid?: string;
+
+  // Firebase Auth UIDs — authoritative identity
   participants?: string[];
+
+  // Display names — presentation only
   participantNames?: string[];
+
   tripId?: string;
 
   completed?: boolean;
 
   completionRequested?: boolean;
+
+  // Display name kept for UI compatibility
   completionPillionName?: string;
+
+  // Firebase UID of the pillion selected for completion
+  completionPillionUid?: string;
 
   completionRiderLatitude?: number;
   completionRiderLongitude?: number;
@@ -66,7 +76,10 @@ type ChatData = {
 
   messages?: {
     sender?: string;
+
+    // Firebase Auth UID — authoritative sender identity
     senderUid?: string;
+
     text?: string;
     createdAt?: number;
   }[];
@@ -74,6 +87,10 @@ type ChatData = {
 
 type TripData = {
   id: string;
+
+  // Firebase Auth UID of the trip owner
+  uid?: string;
+
   status?: string;
 
   destination?: string;
@@ -81,13 +98,19 @@ type TripData = {
   destinationLng?: number;
   destinationRadiusKm?: number;
 
+  // Display information only
   userName?: string;
   userImage?: string;
 
   tripDate?: string;
 
   completionRequested?: boolean;
+
+  // Display name kept for UI
   completionPillionName?: string;
+
+  // Firebase UID of the selected pillion
+  completionPillionUid?: string;
 
   completionRiderLatitude?: number;
   completionRiderLongitude?: number;
@@ -396,82 +419,108 @@ export default function TripChatPage() {
   // ------------------------------------------------------------
 
   const findPillionForTrip = async (
-    actualTripId: string
-  ): Promise<string | null> => {
-    try {
-      /*
-       * First inspect the trip chat.
-       */
+  actualTripId: string
+): Promise<{ uid: string; name: string } | null> => {
+  try {
+    /*
+     * First inspect the trip chat.
+     *
+     * participants = Firebase Auth UIDs
+     * participantNames = display names
+     */
 
-      if (chat) {
-        const possibleParticipants = [
-          ...(chat.participants || []),
-          ...(chat.participantNames || []),
-        ].filter(Boolean);
-
-        if (currentUser?.name) {
-          const otherParticipant = possibleParticipants.find(
-            (name) => name !== currentUser.name
-          );
-
-          if (otherParticipant) {
-            return otherParticipant;
-          }
-        }
-      }
+    if (chat) {
+      const participantUids = (chat.participants || []).filter(Boolean);
+      const participantNames = (chat.participantNames || []).filter(Boolean);
 
       /*
-       * Then inspect approved ride requests.
+       * Find another participant by UID.
+       *
+       * The current user's Firebase UID is the source of truth.
        */
-
-      const requestsQuery = query(
-        collection(db, "rideRequests"),
-        where("tripId", "==", actualTripId)
+      const otherParticipantUid = participantUids.find(
+        (uid) => uid !== currentUser?.uid
       );
 
-      const requestsSnap = await getDocs(requestsQuery);
+      if (otherParticipantUid) {
+        const index = participantUids.indexOf(otherParticipantUid);
 
-      const acceptedStatuses = [
-        "approved",
-        "accepted",
-        "confirmed",
-      ];
-
-      for (const requestDoc of requestsSnap.docs) {
-        const data = requestDoc.data();
-
-        const status = String(data.status || "").toLowerCase();
-
-        const accepted =
-          acceptedStatuses.includes(status) ||
-          data.approved === true ||
-          data.accepted === true ||
-          data.confirmed === true;
-
-        if (!accepted) continue;
-
-        const possibleName =
-          data.userName ||
-          data.username ||
-          data.name ||
-          data.requesterName ||
-          data.riderName ||
-          data.passengerName;
-
-        if (
-          possibleName &&
-          possibleName !== currentUser?.name
-        ) {
-          return possibleName;
-        }
+        return {
+          uid: otherParticipantUid,
+          name:
+            participantNames[index] ||
+            "Pillion",
+        };
       }
-
-      return null;
-    } catch (error) {
-      console.error("Error finding pillion:", error);
-      return null;
     }
-  };
+
+    /*
+     * Then inspect approved ride requests.
+     */
+
+    const requestsQuery = query(
+      collection(db, "rideRequests"),
+      where("tripId", "==", actualTripId)
+    );
+
+    const requestsSnap = await getDocs(requestsQuery);
+
+    const acceptedStatuses = [
+      "approved",
+      "accepted",
+      "confirmed",
+    ];
+
+    for (const requestDoc of requestsSnap.docs) {
+      const data = requestDoc.data();
+
+      const status = String(data.status || "").toLowerCase();
+
+      const accepted =
+        acceptedStatuses.includes(status) ||
+        data.approved === true ||
+        data.accepted === true ||
+        data.confirmed === true;
+
+      if (!accepted) continue;
+
+      /*
+       * UID is authoritative.
+       */
+      const requesterUid = data.requesterUid || "";
+
+      if (!requesterUid) continue;
+
+      /*
+       * Do not select the current user as the pillion.
+       */
+      if (requesterUid === currentUser?.uid) continue;
+
+      /*
+       * Display name is only used for presentation.
+       */
+      const requesterName =
+        data.requester ||
+        data.userName ||
+        data.username ||
+        data.name ||
+        data.requesterName ||
+        data.riderName ||
+        data.passengerName ||
+        "Pillion";
+
+      return {
+        uid: requesterUid,
+        name: requesterName,
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error finding pillion:", error);
+    return null;
+  }
+};
 
   // ------------------------------------------------------------
   // REQUEST TRIP COMPLETION — HOST
@@ -550,15 +599,17 @@ const actualTripId = trip?.id || chat.tripId || tripId;      /*
        * Find pillion.
        */
 
-      const pillionName =
-        await findPillionForTrip(actualTripId);
+      const pillion = await findPillionForTrip(actualTripId);
 
-      if (!pillionName) {
-        alert(
-          "No approved pillion was found for this trip. The host cannot complete the trip until an approved pillion is connected."
-        );
-        return;
-      }
+if (!pillion) {
+  alert(
+    "No approved pillion was found for this trip. The host cannot complete the trip until an approved pillion is connected."
+  );
+  return;
+}
+
+const pillionUid = pillion.uid;
+const pillionName = pillion.name;
 
       /*
        * Destination coordinates.
@@ -652,16 +703,21 @@ const actualTripId = trip?.id || chat.tripId || tripId;      /*
        */
 
       const completionData = {
-        completionRequested: true,
-        completionPillionName: pillionName,
+  completionRequested: true,
 
-        completionRiderLatitude: hostGPS.latitude,
-        completionRiderLongitude: hostGPS.longitude,
-        completionRiderAccuracy: hostGPS.accuracy,
-        completionRiderDistanceKm: hostDistanceKm,
+  // Display information
+  completionPillionName: pillionName,
 
-        completionRequestedAt: Date.now(),
-      };
+  // Security identity
+  completionPillionUid: pillionUid,
+
+  completionRiderLatitude: hostGPS.latitude,
+  completionRiderLongitude: hostGPS.longitude,
+  completionRiderAccuracy: hostGPS.accuracy,
+  completionRiderDistanceKm: hostDistanceKm,
+
+  completionRequestedAt: Date.now(),
+};
 
       await updateDoc(tripRef, completionData);
 
@@ -759,20 +815,20 @@ const actualTripId = trip?.id || chat.tripId || tripId;      /*
        * Verify this is the requested pillion.
        */
 
-      const requestedPillion =
-        freshTrip.completionPillionName ||
-        freshChat.completionPillionName ||
-        "";
+      const requestedPillionUid =
+  freshTrip.completionPillionUid ||
+  freshChat.completionPillionUid ||
+  "";
 
-      if (
-        requestedPillion &&
-        requestedPillion !== currentUser.name
-      ) {
-        alert(
-          "Only the approved pillion selected for this completion request can confirm the trip."
-        );
-        return;
-      }
+if (
+  requestedPillionUid &&
+  requestedPillionUid !== currentUser.uid
+) {
+  alert(
+    "Only the approved pillion selected for this completion request can confirm the trip."
+  );
+  return;
+}
 
       /*
        * Destination coordinates.
@@ -940,15 +996,20 @@ const actualTripId = trip?.id || chat.tripId || tripId;      /*
        */
 
       const completionData = {
-        status: "completed",
+  status: "completed",
 
-        completionRequested: false,
+  completionRequested: false,
 
-        completionPillionConfirmed: true,
-        completionPillionName: currentUser.name,
+  completionPillionConfirmed: true,
 
-        completionPillionLatitude:
-          pillionGPS.latitude,
+  // Display information
+  completionPillionName: currentUser.name,
+
+  // Security identity
+  completionPillionUid: currentUser.uid,
+
+  completionPillionLatitude:
+    pillionGPS.latitude,
         completionPillionLongitude:
           pillionGPS.longitude,
         completionPillionAccuracy:
@@ -1083,14 +1144,23 @@ const actualTripId = trip?.id || chat.tripId || tripId;      /*
     trip?.status === "completed";
 
   const isHost =
-    !!currentUser &&
-    !!trip?.userName &&
-    currentUser.name === trip.userName;
+  !!currentUser &&
+  !!trip?.uid &&
+  currentUser.uid === trip.uid;
 
   const isRequestedPillion =
-    !!currentUser &&
-    !!completionPillionName &&
-    currentUser.name === completionPillionName;
+  !!currentUser &&
+  !!completionRequested &&
+  !!(
+    trip?.completionPillionUid ||
+    chat?.completionPillionUid
+  ) &&
+  currentUser.uid ===
+    (
+      trip?.completionPillionUid ||
+      chat?.completionPillionUid ||
+      ""
+    );
 
   // ------------------------------------------------------------
   // UI
@@ -1238,47 +1308,6 @@ const actualTripId = trip?.id || chat.tripId || tripId;      /*
             </div>
           )}
 
-        {/* HOST REQUEST BUTTON */}
-
-        {!isTripCompleted &&
-          !completionRequested &&
-          isHost &&
-          !adminView && (
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5">
-                  <MapPin
-                    size={24}
-                    className="text-orange-500"
-                  />
-                </div>
-
-                <div className="flex-1">
-                  <h2 className="font-bold">
-                    Ready to complete the trip?
-                  </h2>
-
-                  <p className="text-sm text-zinc-400 mt-1">
-                    Your GPS must be within{" "}
-                    {trip?.destinationRadiusKm ||
-                      DEFAULT_DESTINATION_RADIUS_KM}{" "}
-                    km of the destination. The pillion will then verify their GPS location.
-                  </p>
-
-                  <button
-                    onClick={requestTripCompletion}
-                    disabled={completionLoading}
-                    className="mt-4 w-full sm:w-auto px-5 py-3 rounded-xl bg-orange-500 text-black font-bold hover:bg-orange-400 disabled:opacity-50 transition"
-                  >
-                    {completionLoading
-                      ? "Checking GPS..."
-                      : "🏁 Request Trip Completion"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
         {/* NON-HOST / NO REQUEST */}
 
         {!isTripCompleted &&
@@ -1311,13 +1340,14 @@ const actualTripId = trip?.id || chat.tripId || tripId;      /*
 
       {/* MESSAGES */}
 
-      <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-5">
+      <main className="flex-1 max-w-3xl w-full mx-auto px-4 pt-5 pb-48">
         <div className="space-y-3">
           {(chat.messages || []).map(
             (msg, index) => {
-              const mine =
-                currentUser?.name &&
-                msg.sender === currentUser.name;
+             const mine =
+  !!currentUser &&
+  !!msg.senderUid &&
+  msg.senderUid === currentUser.uid;
 
               return (
                 <div
@@ -1373,46 +1403,94 @@ const actualTripId = trip?.id || chat.tripId || tripId;      /*
 
       {/* MESSAGE INPUT */}
 
-      {!adminView && !isTripCompleted && (
-        <div className="sticky bottom-0 z-40 bg-zinc-950/95 backdrop-blur border-t border-zinc-800">
-          <div className="max-w-3xl mx-auto px-4 py-3">
-            <div className="flex items-end gap-2">
-              <textarea
-                value={message}
-                onChange={(e) =>
-                  setMessage(e.target.value)
-                }
-                onKeyDown={(e) => {
-                  if (
-                    e.key === "Enter" &&
-                    !e.shiftKey
-                  ) {
-                    e.preventDefault();
-                    sendMessage();
-                  }
-                }}
-                placeholder="Type a message..."
-                rows={1}
-                className="flex-1 resize-none rounded-2xl bg-zinc-900 border border-zinc-800 px-4 py-3 text-sm text-white outline-none focus:border-orange-500"
+{!adminView && !isTripCompleted && (
+  <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-950/95 backdrop-blur border-t border-zinc-800 shadow-2xl">
+
+    <div className="max-w-3xl mx-auto px-4">
+
+      {/* HOST TRIP COMPLETION ACTION */}
+
+      {!completionRequested && isHost && (
+        <div className="pt-3">
+          <div className="rounded-2xl border border-orange-500/30 bg-orange-950/20 p-3">
+            <div className="flex items-center gap-3">
+
+              <MapPin
+                size={20}
+                className="text-orange-500 shrink-0"
               />
 
-              <button
-                onClick={sendMessage}
-                disabled={
-                  sending || !message.trim()
-                }
-                className="w-12 h-12 rounded-full bg-orange-500 text-black flex items-center justify-center disabled:opacity-40 hover:bg-orange-400 transition"
-              >
-                <Send size={19} />
-              </button>
-            </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm text-white">
+                  Ready to complete the trip?
+                </p>
 
-            <p className="text-[10px] text-zinc-600 mt-2 text-center">
-              Press Enter to send • Shift + Enter for a new line
-            </p>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Your GPS will be checked at the destination.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={requestTripCompletion}
+                disabled={completionLoading}
+                className="shrink-0 px-4 py-2.5 rounded-xl bg-orange-500 text-black font-bold text-sm hover:bg-orange-400 disabled:opacity-50 transition"
+              >
+                {completionLoading
+                  ? "Checking..."
+                  : "🏁 Complete Trip"}
+              </button>
+
+            </div>
           </div>
         </div>
       )}
+
+      {/* MESSAGE COMPOSER */}
+
+      <div className="py-3">
+        <div className="flex items-end gap-2">
+
+          <textarea
+            value={message}
+            onChange={(e) =>
+              setMessage(e.target.value)
+            }
+            onKeyDown={(e) => {
+              if (
+                e.key === "Enter" &&
+                !e.shiftKey
+              ) {
+                e.preventDefault();
+                sendMessage();
+              }
+            }}
+            placeholder="Type a message..."
+            rows={1}
+            className="flex-1 resize-none rounded-2xl bg-zinc-900 border border-zinc-800 px-4 py-3 text-sm text-white outline-none focus:border-orange-500"
+          />
+
+          <button
+            type="button"
+            onClick={sendMessage}
+            disabled={
+              sending || !message.trim()
+            }
+            className="w-12 h-12 rounded-full bg-orange-500 text-black flex items-center justify-center disabled:opacity-40 hover:bg-orange-400 transition"
+          >
+            <Send size={19} />
+          </button>
+
+        </div>
+
+        <p className="text-[10px] text-zinc-600 mt-2 text-center">
+          Press Enter to send • Shift + Enter for a new line
+        </p>
+      </div>
+
+    </div>
+  </div>
+)}
 
       {/* COMPLETED CHAT FOOTER */}
 

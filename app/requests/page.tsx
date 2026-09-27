@@ -529,58 +529,43 @@ if (
          ONLY WHEN APPROVED
       =============================================== */
 
-      if (
-        status === "approved"
-      ) {
-        const chatRef =
-          doc(
-            db,
-            "tripChats",
-            tripId
-          );
+      if (status === "approved") {
+  const chatRef = doc(db, "tripChats", tripId);
 
-        const existingChat =
-          await getDoc(
-            chatRef
-          );
+  const existingChat = await getDoc(chatRef);
 
-        if (
-          !existingChat.exists()
-        ) {
-          await setDoc(
-            chatRef,
-            {
-              tripId,
+  if (!existingChat.exists()) {
+    await setDoc(chatRef, {
+      tripId,
 
-              destination:
-                request.destination,
+      // Trip owner
+      owner: request.tripOwner || "",
+      ownerUid: request.tripOwnerUid || "",
 
-              owner:
-                request.tripOwner,
+      // UID is the security identity.
+      // Names are only for display.
+      participants: [
+        request.tripOwnerUid || "",
+        request.requesterUid || "",
+      ].filter(Boolean),
 
-              members: [
-                request.tripOwner,
-                request.requester,
-              ],
+      participantNames: [
+        request.tripOwner || "",
+        request.requester || "",
+      ].filter(Boolean),
 
-              createdAt:
-                Date.now(),
+      destination: request.destination || "",
 
-              completed: false,
-            }
-          );
-        } else {
-          await updateDoc(
-            chatRef,
-            {
-              members:
-                arrayUnion(
-                  request.requester
-                ),
-            }
-          );
-        }
-      }
+      createdAt: Date.now(),
+      completed: false,
+    });
+  } else {
+    await updateDoc(chatRef, {
+      participants: arrayUnion(request.requesterUid),
+      participantNames: arrayUnion(request.requester),
+    });
+  }
+}
 
       /* ===============================================
          SEND NOTIFICATION
