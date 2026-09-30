@@ -74,34 +74,31 @@ export default function RiderReviewsPage() {
            LOAD REVIEWS
         ================================================== */
 
-        const snapshot = await getDocs(
-          collection(db, "rideReviews")
-        );
+        const reviewsQuery = query(
+  collection(db, "rideReviews"),
+  where("riderUid", "==", riderUid)
+);
 
-        const riderReviews: any[] = [];
+const snapshot = await getDocs(
+  reviewsQuery
+);
 
-        let totalRating = 0;
+const riderReviews: any[] = [];
 
-        snapshot.forEach((reviewDoc) => {
-          const review = reviewDoc.data();
+let totalRating = 0;
 
-          /*
-           * Firebase UID is the real identity.
-           * rider is kept only as display information.
-           */
-          if (
-            review.riderUid === riderUid
-          ) {
-            riderReviews.push({
-              id: reviewDoc.id,
-              ...review,
-            });
+snapshot.forEach((reviewDoc) => {
+  const review = reviewDoc.data();
 
-            totalRating += Number(
-              review.rating || 0
-            );
-          }
-        });
+  riderReviews.push({
+    id: reviewDoc.id,
+    ...review,
+  });
+
+  totalRating += Number(
+    review.rating || 0
+  );
+});
 
         riderReviews.sort(
           (a, b) =>

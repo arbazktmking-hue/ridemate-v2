@@ -214,7 +214,10 @@ export default function TripChatPage() {
   const [message, setMessage] = useState("");
 
   const [completionLoading, setCompletionLoading] = useState(false);
-
+const [reviewRating, setReviewRating] = useState(0);
+const [reviewText, setReviewText] = useState("");
+const [reviewSubmitting, setReviewSubmitting] = useState(false);
+const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [completionRequested, setCompletionRequested] = useState(false);
   const [completionPillionName, setCompletionPillionName] = useState("");
 
@@ -282,7 +285,12 @@ export default function TripChatPage() {
       }
 
       setChat(chatData);
+const hasReviewed =
+  !!currentUser?.uid &&
+  Array.isArray(chatData.reviewedUsers) &&
+  chatData.reviewedUsers.includes(currentUser.uid);
 
+setReviewSubmitted(hasReviewed);
       // IMPORTANT:
       // The trip document is the source of truth for completion.
       const actualTripId = chatData.tripId || tripId;
@@ -580,20 +588,20 @@ const actualTripId = trip?.id || chat.tripId || tripId;      /*
        * Verify host.
        */
 
-      const hostName =
-        freshTrip.userName ||
-        chat.owner ||
-        "";
+      const hostUid =
+  freshTrip.uid ||
+  chat.ownerUid ||
+  "";
 
-      if (
-        hostName &&
-        currentUser.name !== hostName
-      ) {
-        alert(
-          "Only the trip host can request trip completion."
-        );
-        return;
-      }
+if (
+  !hostUid ||
+  currentUser.uid !== hostUid
+) {
+  alert(
+    "Only the trip host can request trip completion."
+  );
+  return;
+}
 
       /*
        * Find pillion.
@@ -821,7 +829,7 @@ const pillionName = pillion.name;
   "";
 
 if (
-  requestedPillionUid &&
+  !requestedPillionUid ||
   requestedPillionUid !== currentUser.uid
 ) {
   alert(
@@ -1081,7 +1089,88 @@ if (
       setCompletionLoading(false);
     }
   };
+// ------------------------------------------------------------
+// SUBMIT RIDER REVIEW
+// ------------------------------------------------------------
 
+const submitRiderReview = async () => {
+  if (!currentUser || adminView) return;
+
+  if (!tripId || !trip) {
+    alert("Trip information is unavailable.");
+    return;
+  }
+
+  if (trip.status !== "completed") {
+    alert("You can only review a completed trip.");
+    return;
+  }
+
+  if (reviewRating < 1 || reviewRating > 5) {
+    alert("Please select a rating from 1 to 5 stars.");
+    return;
+  }
+
+  setReviewSubmitting(true);
+
+  try {
+    const riderUid = trip.uid || chat?.ownerUid || "";
+
+    if (!riderUid) {
+      alert("The rider's account could not be identified.");
+      return;
+    }
+
+    if (riderUid === currentUser.uid) {
+      alert("You cannot review yourself.");
+      return;
+    }
+
+    const reviewsQuery = query(
+      collection(db, "rideReviews"),
+      where("tripId", "==", tripId),
+      where("reviewerUid", "==", currentUser.uid)
+    );
+
+    const existingReviews = await getDocs(reviewsQuery);
+
+    if (!existingReviews.empty) {
+      setReviewSubmitted(true);
+      alert("You have already submitted a review for this trip.");
+      return;
+    }
+
+    await addDoc(collection(db, "rideReviews"), {
+      tripId,
+      riderUid,
+      reviewerUid: currentUser.uid,
+
+      // Display information only
+      rider: trip.userName || chat?.owner || "Rider",
+      reviewer: currentUser.name || "User",
+
+      rating: reviewRating,
+      review: reviewText.trim(),
+
+      createdAt: Date.now(),
+    });
+
+    await updateDoc(doc(db, "tripChats", tripId), {
+      reviewedUsers: arrayUnion(currentUser.uid),
+    });
+
+    setReviewSubmitted(true);
+    setReviewRating(0);
+    setReviewText("");
+
+    alert("Your review has been submitted successfully! ⭐");
+  } catch (error) {
+    console.error("Error submitting rider review:", error);
+    alert("Something went wrong while submitting your review.");
+  } finally {
+    setReviewSubmitting(false);
+  }
+};
   // ------------------------------------------------------------
   // BACK
   // ------------------------------------------------------------
@@ -1496,15 +1585,93 @@ if (
 
       {!adminView && isTripCompleted && (
         <div className="sticky bottom-0 bg-zinc-950/95 backdrop-blur border-t border-zinc-800">
-          <div className="max-w-3xl mx-auto px-4 py-3">
-            <div className="flex items-center justify-center gap-2 text-xs text-zinc-500">
-              <CheckCircle2
-                size={15}
-                className="text-green-500"
-              />
-              Trip chat is closed because the ride has been completed.
-            </div>
-          </div>
+          <div className="max-w-3xl mx-auto px-4 py-4">
+
+  {!isHost && !reviewSubmitted ? (
+    <div className="rounded-2xl border border-orange-500/30 bg-orange-950/20 p-4">
+
+      <div className="text-center mb-4">
+        <p className="text-orange-400 font-bold text-base">
+          ⭐ Rate your rider
+        </p>
+
+        <p className="text-xs text-zinc-500 mt-1">
+          How was your ride with the rider?
+        </p>
+      </div>
+
+      {/* STAR RATING */}
+
+      <div className="flex items-center justify-center gap-2 mb-4">
+
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            key={star}
+            type="button"
+            onClick={() => setReviewRating(star)}
+            className={`text-3xl transition-transform hover:scale-110 ${
+              star <= reviewRating
+                ? "text-yellow-400"
+                : "text-zinc-700"
+            }`}
+            aria-label={`Rate ${star} out of 5`}
+          >
+            ★
+          </button>
+        ))}
+
+      </div>
+
+      {/* REVIEW TEXT */}
+
+      <textarea
+        value={reviewText}
+        onChange={(e) => setReviewText(e.target.value)}
+        placeholder="Write a review about your ride... (optional)"
+        rows={3}
+        maxLength={500}
+        className="w-full resize-none rounded-xl bg-zinc-900 border border-zinc-800 px-4 py-3 text-sm text-white outline-none focus:border-orange-500"
+      />
+
+      <p className="text-[10px] text-zinc-600 text-right mt-1">
+        {reviewText.length}/500
+      </p>
+
+      {/* SUBMIT */}
+
+      <button
+        type="button"
+        onClick={submitRiderReview}
+        disabled={
+          reviewSubmitting ||
+          reviewRating < 1
+        }
+        className="w-full mt-3 py-3 rounded-xl bg-orange-500 text-black font-bold text-sm hover:bg-orange-400 disabled:opacity-40 disabled:cursor-not-allowed transition"
+      >
+        {reviewSubmitting
+          ? "Submitting..."
+          : "Submit Review ⭐"}
+      </button>
+
+    </div>
+  ) : (
+
+    <div className="flex items-center justify-center gap-2 text-xs text-zinc-500">
+
+      <CheckCircle2
+        size={15}
+        className="text-green-500"
+      />
+
+      {reviewSubmitted && !isHost
+        ? "Thanks for reviewing your rider! ⭐"
+        : "Trip chat is closed because the ride has been completed."}
+
+    </div>
+
+  )}
+
+</div>
         </div>
       )}
     </div>
