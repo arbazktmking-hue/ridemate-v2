@@ -1,8 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "../firebase";
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+} from "firebase/firestore";
+
+import { db, auth } from "../firebase";
 import { useRouter } from "next/navigation";
 
 import {
@@ -136,46 +142,74 @@ export default function Navbar() {
   };
 
   // =========================================================
-  // LOAD NOTIFICATIONS
-  // =========================================================
+// LOAD NOTIFICATIONS
+// =========================================================
 
-  useEffect(() => {
-    const loadNotifications = async () => {
-      try {
-        const currentUser = JSON.parse(
-          localStorage.getItem("ridemateUser") || "{}"
-        );
+useEffect(() => {
+  const loadNotifications = async () => {
+    try {
+      const firebaseUser = auth.currentUser;
 
-        if (!currentUser.name) return;
-
-        const snapshot = await getDocs(
-          collection(db, "notifications")
-        );
-
-        let unread = 0;
-
-        snapshot.forEach((docSnap) => {
-          const notification = docSnap.data();
-
-          if (
-            notification.user === currentUser.name &&
-            notification.read === false
-          ) {
-            unread++;
-          }
-        });
-
-        setNotificationCount(unread);
-      } catch (error) {
-        console.error(
-          "Failed to load notifications:",
-          error
-        );
+      // No authenticated Firebase user
+      if (!firebaseUser) {
+        setNotificationCount(0);
+        return;
       }
-    };
 
-    loadNotifications();
-  }, []);
+      // ---------------------------------------------------
+      // ADMIN INVESTIGATION MODE
+      // ---------------------------------------------------
+      // Admin is viewing another user's account.
+      // We will secure admin notification access separately.
+      // Do not query another user's notifications here.
+      // ---------------------------------------------------
+
+      if (adminView?.active) {
+        setNotificationCount(0);
+        return;
+      }
+
+      const notificationsQuery = query(
+        collection(db, "notifications"),
+        where(
+          "recipientUid",
+          "==",
+          firebaseUser.uid
+        )
+      );
+
+      const snapshot = await getDocs(
+        notificationsQuery
+      );
+
+      let unread = 0;
+
+      snapshot.forEach((docSnap) => {
+        const notification =
+          docSnap.data();
+
+        if (
+          notification.read === false
+        ) {
+          unread++;
+        }
+      });
+
+      setNotificationCount(unread);
+
+    } catch (error) {
+      console.error(
+        "Failed to load notifications:",
+        error
+      );
+
+      setNotificationCount(0);
+    }
+  };
+
+  loadNotifications();
+
+}, [adminView]);
 
   // =========================================================
   // LOAD TOTAL RIDES

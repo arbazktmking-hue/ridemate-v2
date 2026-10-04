@@ -1128,117 +1128,103 @@ function FeedContent() {
   ]);
 
   /* =========================================================
-     LOAD SAVED TRIPS
-  ========================================================= */
+   LOAD SAVED TRIPS
+========================================================= */
 
-  useEffect(() => {
-    const loadSavedTrips =
-      async () => {
+useEffect(() => {
+  const loadSavedTrips = async () => {
+    try {
+      const firebaseUser = auth.currentUser;
+
+      // No authenticated user
+      if (!firebaseUser) {
+        setSavedTrips([]);
+        return;
+      }
+
+      const currentUid = firebaseUser.uid;
+
+      // ---------------------------------------------------
+      // ADMIN INVESTIGATION MODE
+      // ---------------------------------------------------
+
+      let targetUid = currentUid;
+
+      const savedAdminView =
+        localStorage.getItem(
+          "ridemateAdminView"
+        );
+
+      if (savedAdminView) {
         try {
-          let userName = "";
-
-          /* ===================================================
-             ADMIN INVESTIGATION MODE
-          =================================================== */
-
-          const savedAdminView =
-            localStorage.getItem(
-              "ridemateAdminView"
+          const parsedAdminView =
+            JSON.parse(
+              savedAdminView
             );
 
-          if (savedAdminView) {
-            try {
-              const parsedAdminView =
-                JSON.parse(
-                  savedAdminView
-                );
-
-              if (
-                parsedAdminView?.active
-              ) {
-                userName =
-                  parsedAdminView.userName ||
-                  "";
-              }
-            } catch {
-              // Ignore malformed admin view
-            }
+          if (
+            parsedAdminView?.active &&
+            parsedAdminView?.userId
+          ) {
+            targetUid =
+              parsedAdminView.userId;
           }
-
-          /* ===================================================
-             NORMAL USER
-          =================================================== */
-
-          if (!userName) {
-            const savedUser =
-              localStorage.getItem(
-                "ridemateUser"
-              );
-
-            if (savedUser) {
-              try {
-                const user =
-                  JSON.parse(
-                    savedUser
-                  );
-
-                userName =
-                  user.name ||
-                  user.username ||
-                  "";
-              } catch {
-                userName = "";
-              }
-            }
-          }
-
-          if (!userName) {
-            setSavedTrips([]);
-            return;
-          }
-
-          const snapshot =
-            await getDocs(
-              collection(
-                db,
-                "savedTrips"
-              )
-            );
-
-          const saved: string[] =
-            [];
-
-          snapshot.forEach(
-            (docSnap) => {
-              const data =
-                docSnap.data();
-
-              if (
-                data.user ===
-                userName
-              ) {
-                if (
-                  data.tripId
-                ) {
-                  saved.push(
-                    data.tripId
-                  );
-                }
-              }
-            }
-          );
-
-          setSavedTrips(saved);
-        } catch (error) {
-          console.error(
-            "Failed to load saved trips:",
-            error
-          );
+        } catch {
+          // Ignore invalid admin-view data
         }
-      };
+      }
 
-    loadSavedTrips();
-  }, [isAdminView]);
+      // ---------------------------------------------------
+      // UID-BASED SAVED TRIPS QUERY
+      // ---------------------------------------------------
+
+      const savedQuery = query(
+        collection(
+          db,
+          "savedTrips"
+        ),
+        where(
+          "userUid",
+          "==",
+          targetUid
+        )
+      );
+
+      const snapshot =
+        await getDocs(
+          savedQuery
+        );
+
+      const saved: string[] = [];
+
+      snapshot.forEach(
+        (savedDoc) => {
+          const data =
+            savedDoc.data();
+
+          if (data.tripId) {
+            saved.push(
+              data.tripId
+            );
+          }
+        }
+      );
+
+      setSavedTrips(saved);
+
+    } catch (error) {
+      console.error(
+        "Failed to load saved trips:",
+        error
+      );
+
+      setSavedTrips([]);
+    }
+  };
+
+  loadSavedTrips();
+
+}, [isAdminView]);
 
   /* =========================================================
      EXPAND / COLLAPSE
@@ -1260,81 +1246,106 @@ function FeedContent() {
   ========================================================= */
 
   const toggleSaveTrip = async (
-    tripId: string
-  ) => {
-    if (
-      blockedAdminAction(
-        "save or unsave rides"
-      )
-    ) {
+  tripId: string
+) => {
+  if (
+    blockedAdminAction(
+      "save or unsave rides"
+    )
+  ) {
+    return;
+  }
+
+  try {
+    /*
+     * Firebase Auth UID is the authoritative identity.
+     */
+    const firebaseUser =
+      auth.currentUser;
+
+    if (!firebaseUser) {
+      alert(
+        "Your login session has expired. Please login again."
+      );
       return;
     }
 
-    try {
-      const user =
+    const currentUid =
+      firebaseUser.uid;
+
+    /*
+     * Keep the existing document-ID pattern
+     * for compatibility, but use UID instead
+     * of the editable username.
+     */
+    const saveId =
+      `${currentUid}_${tripId}`;
+
+    if (
+      savedTrips.includes(tripId)
+    ) {
+      await deleteDoc(
+        doc(
+          db,
+          "savedTrips",
+          saveId
+        )
+      );
+
+      setSavedTrips(
+        (prev) =>
+          prev.filter(
+            (id) =>
+              id !== tripId
+          )
+      );
+    } else {
+      /*
+       * Display name is optional presentation data.
+       * UID is the security identity.
+       */
+      const localUser =
         JSON.parse(
           localStorage.getItem(
             "ridemateUser"
           ) || "{}"
         );
 
-      if (!user.name) {
-        alert(
-          "Please login first."
-        );
-        return;
-      }
+      await setDoc(
+        doc(
+          db,
+          "savedTrips",
+          saveId
+        ),
+        {
+          userUid: currentUid,
+          user:
+            localUser.name ||
+            firebaseUser.displayName ||
+            "",
+          tripId,
+          createdAt: Date.now(),
+        }
+      );
 
-      const saveId =
-        `${user.name}_${tripId}`;
-
-      if (
-        savedTrips.includes(
-          tripId
-        )
-      ) {
-        await deleteDoc(
-          doc(
-            db,
-            "savedTrips",
-            saveId
-          )
-        );
-
-        setSavedTrips(
-          (prev) =>
-            prev.filter(
-              (id) =>
-                id !== tripId
-            )
-        );
-      } else {
-        await setDoc(
-          doc(
-            db,
-            "savedTrips",
-            saveId
-          ),
-          {
-            user: user.name,
-            tripId,
-          }
-        );
-
-        setSavedTrips(
-          (prev) => [
-            ...prev,
-            tripId,
-          ]
-        );
-      }
-    } catch (error) {
-      console.error(
-        "Save error:",
-        error
+      setSavedTrips(
+        (prev) => [
+          ...prev,
+          tripId,
+        ]
       );
     }
-  };
+  } catch (error) {
+    console.error(
+      "Save error:",
+      error
+    );
+
+    alert(
+      "Unable to save this ride. Please try again."
+    );
+  }
+};
 
   /* =========================================================
      LIKE
@@ -1370,7 +1381,8 @@ function FeedContent() {
             newLikeCount,
         }
       );
-
+const firebaseUser =
+  auth.currentUser;
       const currentUser =
         JSON.parse(
           localStorage.getItem(
@@ -1385,27 +1397,49 @@ function FeedContent() {
         );
 
       if (
-        trip &&
-        trip.userName &&
-        trip.userName !==
-          currentUser.name &&
-        currentUser.name
-      ) {
-        await addDoc(
-          collection(
-            db,
-            "notifications"
-          ),
-          {
-            user:
-              trip.userName,
-            text: `${currentUser.name} liked your trip ❤️`,
-            createdAt:
-              Date.now(),
-            read: false,
-          }
-        );
-      }
+  trip &&
+  trip.uid &&
+  firebaseUser &&
+  trip.uid !== firebaseUser.uid
+) {
+  const firebaseUser =
+  auth.currentUser;
+
+if (
+  trip &&
+  trip.uid &&
+  firebaseUser &&
+  trip.uid !== firebaseUser.uid
+) {
+  await addDoc(
+    collection(
+      db,
+      "notifications"
+    ),
+    {
+      recipientUid:
+        trip.uid,
+
+      actorUid:
+        firebaseUser.uid,
+
+      user:
+        currentUser.name ||
+        firebaseUser.displayName ||
+        "Someone",
+
+      text:
+        `${currentUser.name || firebaseUser.displayName || "Someone"} liked your trip ❤️`,
+
+      createdAt:
+        Date.now(),
+
+      read:
+        false,
+    }
+  );
+}
+}
 
       setTrips(
         (prevTrips) =>
@@ -1508,27 +1542,42 @@ function FeedContent() {
             t.id === tripId
         );
 
-      if (
-        trip &&
-        trip.userName &&
-        trip.userName !==
-          user.name
-      ) {
-        await addDoc(
-          collection(
-            db,
-            "notifications"
-          ),
-          {
-            user:
-              trip.userName,
-            text: `${user.name} commented on your trip 💬`,
-            createdAt:
-              Date.now(),
-            read: false,
-          }
-        );
-      }
+      const firebaseUser =
+  auth.currentUser;
+if (
+  trip &&
+  trip.uid &&
+  firebaseUser &&
+  trip.uid !== firebaseUser.uid
+) {
+  await addDoc(
+    collection(
+      db,
+      "notifications"
+    ),
+    {
+      recipientUid:
+        trip.uid,
+
+      actorUid:
+        firebaseUser.uid,
+
+      user:
+        user.name ||
+        firebaseUser.displayName ||
+        "Someone",
+
+      text:
+        `${user.name || firebaseUser.displayName || "Someone"} commented on your trip 💬`,
+
+      createdAt:
+        Date.now(),
+
+      read:
+        false,
+    }
+  );
+}
 
       setTrips(
         (prevTrips) =>

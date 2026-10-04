@@ -10,7 +10,7 @@ import {
   updateDoc,
   orderBy,
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { auth, db } from "../firebase";
 import { useRouter } from "next/navigation";
 
 type Feedback = {
@@ -139,12 +139,9 @@ export default function AdminPage() {
         localStorage.getItem("ridemateUser") || "{}"
       );
 
-      if (
-        user.email !==
-        "arbazktmking@gmail.com"
-      ) {
-        router.replace("/home");
-      }
+      if (auth.currentUser?.uid !== "OJ1wZSBpPIZIOXfFWH3g4kc42Io1") {
+  router.replace("/home");
+}
     } catch {
       router.replace("/home");
     }

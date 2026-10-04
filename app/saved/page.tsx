@@ -17,6 +17,7 @@ import {
   collection,
   getDocs,
   query,
+  where,
   orderBy,
   doc,
   updateDoc,
@@ -25,7 +26,7 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 
 import {
   Heart,
@@ -209,301 +210,201 @@ function SavedTripsContent() {
 
   };
 
+/* =========================================================
+   LOAD SAVED TRIPS
+========================================================= */
 
-  /* =========================================================
-     LOAD SAVED TRIPS
-  ========================================================= */
+useEffect(() => {
+  const fetchSavedTrips = async () => {
+    try {
+      setLoading(true);
 
-  useEffect(() => {
+      const firebaseUser = auth.currentUser;
 
-    const fetchSavedTrips = async () => {
+      if (!firebaseUser) {
+        setTrips([]);
+        setSavedTrips([]);
+        return;
+      }
 
-      try {
+      const currentUid = firebaseUser.uid;
 
-        setLoading(true);
+      let targetUid = currentUid;
 
+      /* =====================================================
+         ADMIN INVESTIGATION MODE
+      ===================================================== */
 
-        /* =====================================================
-           DETERMINE ACTIVE USER
-        ===================================================== */
+      const savedAdminView =
+        localStorage.getItem("ridemateAdminView");
 
-        let userName = "";
-
-
-        const savedAdminView =
-          localStorage.getItem(
-            "ridemateAdminView"
-          );
-
-
-        if (savedAdminView) {
-
+      if (savedAdminView) {
+        try {
           const parsedAdminView =
-            JSON.parse(
-              savedAdminView
-            );
-
+            JSON.parse(savedAdminView);
 
           if (
-            parsedAdminView?.active
+            parsedAdminView?.active &&
+            parsedAdminView?.userId
           ) {
-
-            userName =
-              parsedAdminView.userName ||
-              "";
-
+            targetUid =
+              parsedAdminView.userId;
           }
-
+        } catch {
+          // Ignore malformed admin-view data
         }
+      }
 
+      console.log(
+        "Saved Trips active UID:",
+        targetUid
+      );
 
-        /* =====================================================
-           NORMAL USER FALLBACK
-        ===================================================== */
+      /* =====================================================
+         GET SAVED TRIP IDs FOR THIS UID ONLY
+      ===================================================== */
 
-        if (!userName) {
+      const savedQuery = query(
+        collection(db, "savedTrips"),
+        where("userUid", "==", targetUid)
+      );
 
-          const user =
-            JSON.parse(
-              localStorage.getItem(
-                "ridemateUser"
-              ) || "{}"
-            );
+      const savedSnapshot =
+        await getDocs(savedQuery);
 
+      const savedIds: string[] = [];
 
-          userName =
-            user.name ||
-            user.username ||
-            "";
+      savedSnapshot.forEach(
+        (savedDoc) => {
+          const data =
+            savedDoc.data();
 
-        }
-
-
-        /* =====================================================
-           NO USER
-        ===================================================== */
-
-        if (!userName) {
-
-          setTrips([]);
-
-          setSavedTrips([]);
-
-          return;
-
-        }
-
-
-        console.log(
-          "Saved Trips active user:",
-          userName
-        );
-
-
-        /* =====================================================
-           GET SAVED TRIP IDs
-        ===================================================== */
-
-        const savedSnapshot =
-          await getDocs(
-            collection(
-              db,
-              "savedTrips"
-            )
-          );
-
-
-        const savedIds: string[] =
-          [];
-
-
-        savedSnapshot.forEach(
-          (savedDoc) => {
-
-            const data =
-              savedDoc.data();
-
-
-            if (
-              data.user ===
-                userName &&
+          if (data.tripId) {
+            savedIds.push(
               data.tripId
-            ) {
-
-              savedIds.push(
-                data.tripId
-              );
-
-            }
-
+            );
           }
-        );
-
-
-        setSavedTrips(
-          savedIds
-        );
-
-
-        /* =====================================================
-           NO SAVED TRIPS
-        ===================================================== */
-
-        if (
-          savedIds.length === 0
-        ) {
-
-          setTrips([]);
-
-          return;
-
         }
+      );
 
+      setSavedTrips(savedIds);
 
-        /* =====================================================
-           GET ALL TRIPS
-        ===================================================== */
+      /* =====================================================
+         NO SAVED TRIPS
+      ===================================================== */
 
-        const tripsQuery =
-          query(
-            collection(
-              db,
-              "trips"
-            ),
-            orderBy(
-              "createdAt",
-              "desc"
+      if (savedIds.length === 0) {
+        setTrips([]);
+        return;
+      }
+
+      /* =====================================================
+         GET ALL TRIPS
+      ===================================================== */
+
+      const tripsQuery = query(
+        collection(db, "trips"),
+        orderBy("createdAt", "desc")
+      );
+
+      const tripSnapshot =
+        await getDocs(tripsQuery);
+
+      const loadedTrips: any[] = [];
+
+      tripSnapshot.forEach(
+        (tripDoc) => {
+          const trip =
+            tripDoc.data();
+
+          if (
+            savedIds.includes(
+              tripDoc.id
             )
-          );
-
-
-        const tripSnapshot =
-          await getDocs(
-            tripsQuery
-          );
-
-
-        const loadedTrips: any[] =
-          [];
-
-
-        tripSnapshot.forEach(
-          (tripDoc) => {
-
-            const trip =
-              tripDoc.data();
-
-
-            if (
-              savedIds.includes(
-                tripDoc.id
-              )
-            ) {
-
-              loadedTrips.push({
-                id:
-                  tripDoc.id,
-                ...trip,
-              });
-
-            }
-
+          ) {
+            loadedTrips.push({
+              id: tripDoc.id,
+              ...trip,
+            });
           }
+        }
+      );
+
+      /* =====================================================
+         REMOVE DUPLICATES
+      ===================================================== */
+
+      const uniqueTrips =
+        loadedTrips.filter(
+          (
+            trip,
+            index,
+            self
+          ) =>
+            index ===
+            self.findIndex(
+              (t) =>
+                t.id ===
+                trip.id
+            )
         );
 
+      /* =====================================================
+         SHARED TRIP
+      ===================================================== */
 
-        /* =====================================================
-           REMOVE DUPLICATES
-        ===================================================== */
-
-        const uniqueTrips =
-          loadedTrips.filter(
-            (
-              trip,
-              index,
-              self
-            ) =>
-              index ===
-              self.findIndex(
-                (t) =>
-                  t.id ===
-                  trip.id
-              )
+      if (sharedTripId) {
+        const sharedTrip =
+          uniqueTrips.find(
+            (trip) =>
+              trip.id ===
+              sharedTripId
           );
 
+        const otherTrips =
+          uniqueTrips.filter(
+            (trip) =>
+              trip.id !==
+              sharedTripId
+          );
 
-        /* =====================================================
-           SHARED TRIP
-        ===================================================== */
+        if (sharedTrip) {
+          setTrips([
+            sharedTrip,
+            ...otherTrips,
+          ]);
 
-        if (sharedTripId) {
-
-          const sharedTrip =
-            uniqueTrips.find(
-              (trip) =>
-                trip.id ===
-                sharedTripId
-            );
-
-
-          const otherTrips =
-            uniqueTrips.filter(
-              (trip) =>
-                trip.id !==
-                sharedTripId
-            );
-
-
-          if (sharedTrip) {
-
-            setTrips([
-              sharedTrip,
-              ...otherTrips,
-            ]);
-
-
-            setExpandedTrip(
-              sharedTrip.id
-            );
-
-          } else {
-
-            setTrips(
-              uniqueTrips
-            );
-
-          }
-
+          setExpandedTrip(
+            sharedTrip.id
+          );
         } else {
-
           setTrips(
             uniqueTrips
           );
-
         }
-
-      } catch (error) {
-
-        console.error(
-          "Failed to load saved trips:",
-          error
+      } else {
+        setTrips(
+          uniqueTrips
         );
-
-      } finally {
-
-        setLoading(false);
-
       }
+    } catch (error) {
+      console.error(
+        "Failed to load saved trips:",
+        error
+      );
 
-    };
+      setTrips([]);
+      setSavedTrips([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-
-    fetchSavedTrips();
-
-  }, [
-    sharedTripId,
-    isAdminView,
-  ]);
+  fetchSavedTrips();
+}, [
+  sharedTripId,
+  isAdminView,
+]);
 
 
   /* =========================================================
@@ -529,81 +430,67 @@ function SavedTripsContent() {
   ========================================================= */
 
   const toggleSaveTrip = async (
-    tripId: string
-  ) => {
+  tripId: string
+) => {
+  if (
+    blockedAdminAction(
+      "save or unsave trips"
+    )
+  ) {
+    return;
+  }
 
-    if (
-      blockedAdminAction(
-        "save or unsave trips"
-      )
-    ) {
+  try {
+    const firebaseUser =
+      auth.currentUser;
 
+    if (!firebaseUser) {
+      alert(
+        "Your login session has expired. Please login again."
+      );
       return;
-
     }
 
+    const currentUid =
+      firebaseUser.uid;
 
-    try {
+    const saveId =
+      `${currentUid}_${tripId}`;
 
-      const user =
-        JSON.parse(
-          localStorage.getItem(
-            "ridemateUser"
-          ) || "{}"
-        );
+    await deleteDoc(
+      doc(
+        db,
+        "savedTrips",
+        saveId
+      )
+    );
 
-
-      if (!user.name) {
-
-        alert(
-          "Please login first."
-        );
-
-        return;
-
-      }
-
-
-      const saveId =
-        `${user.name}_${tripId}`;
-
-
-      await deleteDoc(
-        doc(
-          db,
-          "savedTrips",
-          saveId
+    setSavedTrips(
+      (prev) =>
+        prev.filter(
+          (id) =>
+            id !== tripId
         )
-      );
+    );
 
+    setTrips(
+      (prev) =>
+        prev.filter(
+          (trip) =>
+            trip.id !== tripId
+        )
+    );
+  } catch (error) {
+    console.error(
+      "Unsave error:",
+      error
+    );
 
-      setSavedTrips(
-        (prev) =>
-          prev.filter(
-            (id) =>
-              id !== tripId
-          )
-      );
-
-
-      setTrips(
-        (prev) =>
-          prev.filter(
-            (trip) =>
-              trip.id !== tripId
-          )
-      );
-
-    } catch (error) {
-
-      console.error(
-        "Unsave error:",
-        error
-      );
-
-    }
-
-  };
+    alert(
+      "Unable to unsave this trip. Please try again."
+    );
+  }
+};
 
 
   /* =========================================================

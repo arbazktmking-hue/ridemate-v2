@@ -2,8 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "../firebase";
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+} from "firebase/firestore";
+import { auth, db } from "../firebase";
 
 import {
   ShieldCheck,
@@ -122,70 +127,39 @@ export default function LiveTripChatsPage() {
            DETERMINE USER TO INVESTIGATE
         ===================================================== */
 
-        let currentUserName = "";
+        let currentUserUid = "";
 
+if (
+  activeAdminView?.active &&
+  activeAdminView.userName
+) {
+  /*
+   * ADMIN INVESTIGATION MODE
+   *
+   * The admin session already contains
+   * the UID of the user being investigated.
+   */
 
-        if (
-          activeAdminView?.active &&
-          activeAdminView.userName
-        ) {
+  currentUserUid =
+    activeAdminView.userId || "";
 
-          /*
-           * ADMIN INVESTIGATION MODE
-           *
-           * Inspect the selected user's
-           * Live Trip Chats.
-           */
+} else {
 
-          currentUserName =
-            activeAdminView.userName;
+  /*
+   * NORMAL USER MODE
+   *
+   * Firebase Auth UID is the
+   * authoritative identity.
+   */
 
-        } else {
-
-          /*
-           * NORMAL USER MODE
-           */
-
-          try {
-
-            const savedUser =
-              localStorage.getItem(
-                "ridemateUser"
-              );
-
-
-            if (savedUser) {
-
-              const currentUser =
-                JSON.parse(
-                  savedUser
-                );
-
-
-              currentUserName =
-                currentUser.name ||
-                currentUser.username ||
-                "";
-
-            }
-
-          } catch (error) {
-
-            console.error(
-              "Failed to read current user:",
-              error
-            );
-
-          }
-
-        }
-
-
+  currentUserUid =
+    auth.currentUser?.uid || "";
+}
         /* =====================================================
            USER NOT AVAILABLE
         ===================================================== */
 
-        if (!currentUserName) {
+        if (!currentUserUid) {
 
           if (mounted) {
 
@@ -203,13 +177,12 @@ export default function LiveTripChatsPage() {
            LOAD TRIP CHATS
         ===================================================== */
 
-        const snapshot =
-          await getDocs(
-            collection(
-              db,
-              "tripChats"
-            )
-          );
+        const chatsQuery = query(
+  collection(db, "tripChats"),
+  where("participants", "array-contains", currentUserUid)
+);
+
+const snapshot = await getDocs(chatsQuery);
 
 
         const loaded: any[] =
@@ -228,12 +201,12 @@ export default function LiveTripChatsPage() {
             ================================================= */
 
             const hasReviewed =
-              Array.isArray(
-                chat.reviewedUsers
-              ) &&
-              chat.reviewedUsers.includes(
-                currentUserName
-              );
+  Array.isArray(
+    chat.reviewedUsers
+  ) &&
+  chat.reviewedUsers.includes(
+    currentUserUid
+  );
 
 
             /* =================================================
@@ -241,12 +214,12 @@ export default function LiveTripChatsPage() {
             ================================================= */
 
             const isMember =
-              Array.isArray(
-                chat.members
-              ) &&
-              chat.members.includes(
-                currentUserName
-              );
+  Array.isArray(
+    chat.participants
+  ) &&
+  chat.participants.includes(
+    currentUserUid
+  );
 
 
             /* =================================================
@@ -266,9 +239,9 @@ export default function LiveTripChatsPage() {
 
                 (
                   chat.completed === true &&
-                  currentUserName !==
-                    chat.owner &&
-                  !hasReviewed
+currentUserUid !==
+  chat.ownerUid &&
+!hasReviewed
                 )
 
               );
