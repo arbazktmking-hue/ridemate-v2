@@ -57,9 +57,12 @@ const compressProfileImage = (
   file: File
 ): Promise<Blob> => {
   return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
     const image = new Image();
 
-    const objectUrl = URL.createObjectURL(file);
+    const cleanup = () => {
+      URL.revokeObjectURL(objectUrl);
+    };
 
     image.onload = () => {
       try {
@@ -67,6 +70,18 @@ const compressProfileImage = (
 
         let width = image.naturalWidth;
         let height = image.naturalHeight;
+
+        if (!width || !height) {
+          cleanup();
+
+          reject(
+            new Error(
+              "The selected image could not be decoded."
+            )
+          );
+
+          return;
+        }
 
         if (
           width > maxSize ||
@@ -87,9 +102,7 @@ const compressProfileImage = (
         }
 
         const canvas =
-          document.createElement(
-            "canvas"
-          );
+          document.createElement("canvas");
 
         canvas.width = width;
         canvas.height = height;
@@ -98,9 +111,7 @@ const compressProfileImage = (
           canvas.getContext("2d");
 
         if (!context) {
-          URL.revokeObjectURL(
-            objectUrl
-          );
+          cleanup();
 
           reject(
             new Error(
@@ -111,11 +122,8 @@ const compressProfileImage = (
           return;
         }
 
-        context.imageSmoothingEnabled =
-          true;
-
-        context.imageSmoothingQuality =
-          "high";
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
 
         context.drawImage(
           image,
@@ -127,9 +135,7 @@ const compressProfileImage = (
 
         canvas.toBlob(
           (blob) => {
-            URL.revokeObjectURL(
-              objectUrl
-            );
+            cleanup();
 
             if (!blob) {
               reject(
@@ -147,22 +153,17 @@ const compressProfileImage = (
           0.82
         );
       } catch (error) {
-        URL.revokeObjectURL(
-          objectUrl
-        );
-
+        cleanup();
         reject(error);
       }
     };
 
     image.onerror = () => {
-      URL.revokeObjectURL(
-        objectUrl
-      );
+      cleanup();
 
       reject(
         new Error(
-          "Could not read the selected image."
+          "The selected image could not be decoded by the browser."
         )
       );
     };
