@@ -4,12 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   collection,
-  addDoc,
   arrayUnion,
   doc,
   getDoc,
   getDocs,
   query,
+  setDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
@@ -1140,20 +1140,22 @@ const submitRiderReview = async () => {
       return;
     }
 
-    await addDoc(collection(db, "rideReviews"), {
-      tripId,
-      riderUid,
-      reviewerUid: currentUser.uid,
+    const reviewId = `${tripId}_${currentUser.uid}`;
 
-      // Display information only
-      rider: trip.userName || chat?.owner || "Rider",
-      reviewer: currentUser.name || "User",
+await setDoc(doc(db, "rideReviews", reviewId), {
+  tripId,
+  riderUid,
+  reviewerUid: currentUser.uid,
 
-      rating: reviewRating,
-      review: reviewText.trim(),
+  // Display information only
+  rider: trip.userName || chat?.owner || "Rider",
+  reviewer: currentUser.name || "User",
 
-      createdAt: Date.now(),
-    });
+  rating: reviewRating,
+  review: reviewText.trim(),
+
+  createdAt: Date.now(),
+});
 
     await updateDoc(doc(db, "tripChats", tripId), {
       reviewedUsers: arrayUnion(currentUser.uid),
