@@ -28,7 +28,11 @@ import {
 
 import { db, auth, app } from "../../firebase";
 
-import { signOut } from "firebase/auth";
+import {
+  signOut,
+  GoogleAuthProvider,
+  reauthenticateWithPopup,
+} from "firebase/auth";
 
 /* =========================================================
    ADMIN INVESTIGATION MODE
@@ -275,7 +279,8 @@ const [isFollowing, setIsFollowing] =
 
   const [deletingPost, setDeletingPost] =
     useState(false);
-
+const [deletingAccount, setDeletingAccount] =
+    useState(false);
   /* =========================================================
      PROFILE IMAGE VIEWER
   ========================================================= */
@@ -471,7 +476,71 @@ const [isFollowing, setIsFollowing] =
       alert("Logout failed");
     }
   };
+/* =========================================================
+   DELETE ACCOUNT
+========================================================= */
 
+const deleteAccount = async () => {
+  if (blockedAdminAction("delete an account")) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    "Are you sure you want to permanently delete your RideMate account?\n\nYour account and associated data will be deleted. This action cannot be undone."
+  );
+
+  if (!confirmed) return;
+
+  const firebaseUser = auth.currentUser;
+
+  if (!firebaseUser) {
+    alert("Your login session has expired. Please login again.");
+    return;
+  }
+
+  try {
+  setDeletingAccount(true);
+
+  // Verify the user's Google account again
+  const provider = new GoogleAuthProvider();
+  await reauthenticateWithPopup(firebaseUser, provider);
+
+  // Get a fresh ID token
+  const idToken = await firebaseUser.getIdToken(true);
+
+    const response = await fetch("/api/delete-account", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || "Account deletion failed."
+      );
+    }
+
+    await signOut(auth);
+    localStorage.clear();
+
+    alert("Your RideMate account has been deleted.");
+
+    router.replace("/login");
+  } catch (error: any) {
+    console.error("Account deletion error:", error);
+
+    alert(
+      error.message ||
+        "Unable to delete your account. Please try again."
+    );
+  } finally {
+    setDeletingAccount(false);
+  }
+};
   /* =========================================================
      CHANGE PROFILE PICTURE
   ========================================================= */
@@ -2617,30 +2686,52 @@ const followId =
 
           </div>
 
-          {/* LOGOUT */}
+          {/* LOGOUT + DELETE ACCOUNT */}
 
-          {isOwnProfile &&
-            !isAdminView && (
-              <div className="mt-12">
+{isOwnProfile && !isAdminView && (
+  <div className="mt-12 flex flex-col sm:flex-row gap-3">
 
-                <button
-                  onClick={logout}
-                  className="
-                    w-full
-                    bg-red-600
-                    hover:bg-red-700
-                    py-4
-                    rounded-2xl
-                    text-xl
-                    font-black
-                    transition
-                  "
-                >
-                  🚪 Logout
-                </button>
+    <button
+      onClick={logout}
+      className="
+        flex-1
+        bg-red-600
+        hover:bg-red-700
+        py-4
+        rounded-2xl
+        text-lg
+        font-black
+        transition
+      "
+    >
+      🚪 Logout
+    </button>
 
-              </div>
-            )}
+    <button
+      onClick={deleteAccount}
+      disabled={deletingAccount}
+      className="
+        flex-1
+        bg-zinc-900
+        border-2
+        border-red-600
+        text-red-500
+        hover:bg-red-950
+        py-4
+        rounded-2xl
+        text-lg
+        font-black
+        transition
+        disabled:opacity-50
+      "
+    >
+      {deletingAccount
+        ? "Deleting Account..."
+        : "🗑️ Delete Account"}
+    </button>
+
+  </div>
+)}
 
         </div>
 
