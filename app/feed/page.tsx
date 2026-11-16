@@ -234,6 +234,9 @@ function FeedContent() {
   const [openComments, setOpenComments] =
     useState<string[]>([]);
 
+const [commentDrafts, setCommentDrafts] =
+  useState<Record<string, string>>({});
+
   const [expandedTrip, setExpandedTrip] =
     useState<string | null>(null);
 
@@ -4071,71 +4074,116 @@ const requestToJoin =
                           e.stopPropagation()
                         }
                       >
-                        {/* ADMIN READ-ONLY COMMENT NOTICE */}
+                        
+{/* ADMIN READ-ONLY COMMENT NOTICE */}
 
-                        {isAdminView ? (
-                          <div
-                            className="
-                              rounded-xl
-                              border
-                              border-orange-500/20
-                              bg-orange-500/5
-                              px-4
-                              py-3
-                              text-xs
-                              text-orange-300
-                            "
-                          >
-                            🛡️ Investigation Mode —
-                            comments are read-only.
-                            You can view this user's
-                            ride comments but cannot
-                            add a comment.
-                          </div>
-                        ) : (
-                          <input
-                            type="text"
-                            placeholder="Write a comment and press Enter..."
-                            className={`
-                              w-full
-                              p-4
-                              rounded-xl
-                              bg-black
-                              border
-                              border-zinc-700
-                              text-white
-                              outline-none
-                              ${
-                                femaleTheme
-                                  ? "focus:border-pink-300"
-                                  : "focus:border-orange-500"
-                              }
-                            `}
-                            onKeyDown={(e) => {
-                              if (
-                                e.key ===
-                                "Enter"
-                              ) {
-                                const value =
-                                  e
-                                    .currentTarget
-                                    .value;
+{isAdminView ? (
+  <div
+    className="
+      rounded-xl
+      border
+      border-orange-500/20
+      bg-orange-500/5
+      px-4
+      py-3
+      text-xs
+      text-orange-300
+    "
+  >
+    🛡️ Investigation Mode —
+    comments are read-only.
+    You can view this user's
+    ride comments but cannot
+    add a comment.
+  </div>
+) : (
+  <div className="flex gap-2 items-center">
 
-                                if (
-                                  value.trim()
-                                ) {
-                                  addComment(
-                                    trip.id,
-                                    value
-                                  );
+    <input
+      type="text"
+      value={commentDrafts[trip.id] || ""}
+      placeholder="Write a comment..."
+      className={`
+        flex-1
+        min-w-0
+        p-4
+        rounded-xl
+        bg-black
+        border
+        border-zinc-700
+        text-white
+        outline-none
+        ${
+          femaleTheme
+            ? "focus:border-pink-300"
+            : "focus:border-orange-500"
+        }
+      `}
+      onChange={(e) => {
+        setCommentDrafts((prev) => ({
+          ...prev,
+          [trip.id]: e.target.value,
+        }));
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
 
-                                  e.currentTarget.value =
-                                    "";
-                                }
-                              }
-                            }}
-                          />
-                        )}
+          const value =
+            commentDrafts[trip.id] || "";
+
+          if (value.trim()) {
+            addComment(trip.id, value);
+
+            setCommentDrafts((prev) => ({
+              ...prev,
+              [trip.id]: "",
+            }));
+          }
+        }
+      }}
+    />
+
+    <button
+      type="button"
+      disabled={
+        !(commentDrafts[trip.id] || "").trim()
+      }
+      onClick={() => {
+        const value =
+          commentDrafts[trip.id] || "";
+
+        if (!value.trim()) return;
+
+        addComment(trip.id, value);
+
+        setCommentDrafts((prev) => ({
+          ...prev,
+          [trip.id]: "",
+        }));
+      }}
+      className={`
+        px-5
+        py-4
+        rounded-xl
+        font-black
+        text-sm
+        transition
+        disabled:opacity-40
+        disabled:cursor-not-allowed
+        ${
+          femaleTheme
+            ? "bg-pink-300 hover:bg-pink-200 text-black"
+            : "bg-orange-500 hover:bg-orange-400 text-black"
+        }
+      `}
+    >
+      Submit
+    </button>
+
+  </div>
+)}
+
 
                         <div
                           className="
