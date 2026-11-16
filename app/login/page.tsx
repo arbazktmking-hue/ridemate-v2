@@ -277,10 +277,18 @@ export default function LoginPage() {
             user.name ||
             cleanUsername;
 
-          const existingImage =
-            user.image ||
-            firebaseUser.photoURL ||
-            "";
+          // Preserve a profile picture uploaded through RideMate.
+// Otherwise, use the latest Google profile picture.
+const isUploadedProfileImage =
+  typeof user.image === "string" &&
+  user.image.startsWith(
+    "https://firebasestorage.googleapis.com/"
+  );
+
+const existingImage =
+  isUploadedProfileImage
+    ? user.image
+    : firebaseUser.photoURL || "";
 
           const existingEmail =
             user.email ||

@@ -385,31 +385,36 @@ export default function SearchPage() {
                           transition
                         "
                       >
+{/* Default icon stays behind the profile image */}
+<div
+  className="
+    absolute
+    inset-0
+    flex
+    items-center
+    justify-center
+    text-zinc-500
+  "
+>
+  <UserRound size={27} />
+</div>
 
-                        {rider.image ? (
-                          <img
-                            src={rider.image}
-                            alt={rider.name}
-                            className="
-                              w-full
-                              h-full
-                              object-cover
-                            "
-                          />
-                        ) : (
-                          <div
-                            className="
-                              w-full
-                              h-full
-                              flex
-                              items-center
-                              justify-center
-                              text-zinc-500
-                            "
-                          >
-                            <UserRound size={27} />
-                          </div>
-                        )}
+{/* Display profile image when available */}
+{rider.image && (
+  <img
+    src={rider.image}
+    alt={rider.name}
+    className="
+      relative
+      w-full
+      h-full
+      object-cover
+    "
+    onError={(e) => {
+      e.currentTarget.style.display = "none";
+    }}
+  />
+)}
 
                       </div>
 
