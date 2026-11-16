@@ -4,8 +4,11 @@ import { useEffect, useState } from "react";
 import {
   collection,
   getDocs,
+  query,
+  where,
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { db, auth } from "../firebase";
 import { useRouter } from "next/navigation";
 
 type AdminView = {
@@ -138,271 +141,182 @@ export default function MyRidesPage() {
      LOAD RIDES
   ========================================================= */
 
+  
   useEffect(() => {
     const loadRides = async () => {
       try {
         setLoading(true);
 
-        /* =====================================================
-           DETERMINE ACTIVE USER
-        ===================================================== */
-
-        let activeUserName = "";
-
-        const savedAdminView =
-          localStorage.getItem(
-            "ridemateAdminView"
-          );
-
-        if (savedAdminView) {
-          const parsedAdminView =
-            JSON.parse(
-              savedAdminView
-            );
-
-          if (
-            parsedAdminView?.active &&
-            parsedAdminView.userName
-          ) {
-            activeUserName =
-              parsedAdminView.userName;
-          }
-        }
-
-        if (!activeUserName) {
-          const currentUser =
-            JSON.parse(
-              localStorage.getItem(
-                "ridemateUser"
-              ) || "{}"
-            );
-
-          activeUserName =
-            currentUser.name ||
-            currentUser.username ||
-            "";
-        }
-
-        setCurrentUserName(
-          activeUserName
+        // Determine the account being viewed.
+        const savedAdminView = localStorage.getItem(
+          "ridemateAdminView"
         );
 
-        if (!activeUserName) {
+        const parsedAdminView = savedAdminView
+          ? JSON.parse(savedAdminView)
+          : null;
+
+        const isViewingAsAdmin =
+          parsedAdminView?.active === true;
+
+        const savedUser = JSON.parse(
+          localStorage.getItem("ridemateUser") || "{}"
+        );
+
+        const activeUserUid = isViewingAsAdmin
+          ? parsedAdminView?.userId || ""
+          : savedUser?.uid || "";
+
+        const activeUserName = isViewingAsAdmin
+          ? parsedAdminView?.userName || ""
+          : savedUser?.name || savedUser?.username || "";
+
+        setCurrentUserName(activeUserName);
+
+        if (!activeUserUid) {
+          console.error("My Rides: Active user UID is missing.");
           setUpcomingRides([]);
           setRideHistory([]);
-          setLoading(false);
           return;
         }
 
-        console.log(
-          "My Rides active user:",
-          activeUserName
+        console.log("My Rides active UID:", activeUserUid);
+
+        // Load trips. Your current rules allow authenticated users
+        // to read trips.
+        const tripsSnapshot = await getDocs(
+          collection(db, "trips")
         );
 
-        /* =====================================================
-           LOAD ALL TRIPS
-        ===================================================== */
+        const tripsMap = new Map<string, Ride>();
 
-        const tripsSnapshot =
-          await getDocs(
-            collection(
-              db,
-              "trips"
+        tripsSnapshot.forEach((tripDoc) => {
+          const tripData = tripDoc.data();
+
+          tripsMap.set(tripDoc.id, {
+            id: tripDoc.id,
+            ...tripData,
+          });
+        });
+
+        // Load only ride requests permitted by Firestore rules.
+        // Admin investigation view cannot read another user's
+        // rideRequests under the current rules.
+        const requestsMap = new Map<string, any>();
+
+        if (!isViewingAsAdmin) {
+          const requesterSnapshot = await getDocs(
+            query(
+              collection(db, "rideRequests"),
+              where("requesterUid", "==", activeUserUid)
             )
           );
 
-        const tripsMap =
-          new Map<string, Ride>();
-
-        tripsSnapshot.forEach(
-          (tripDoc) => {
-            tripsMap.set(
-              tripDoc.id,
-              {
-                id: tripDoc.id,
-                ...tripDoc.data(),
-              }
-            );
-          }
-        );
-
-        /* =====================================================
-           LOAD ALL RIDE REQUESTS
-        ===================================================== */
-
-        const requestsSnapshot =
-          await getDocs(
-            collection(
-              db,
-              "rideRequests"
+          const ownerSnapshot = await getDocs(
+            query(
+              collection(db, "rideRequests"),
+              where("tripOwnerUid", "==", activeUserUid)
             )
           );
 
-        /* =====================================================
-           APPROVED MEMBER MAP
-           tripId -> approved rider
-        ===================================================== */
+          requesterSnapshot.forEach((requestDoc) => {
+            requestsMap.set(requestDoc.id, {
+              id: requestDoc.id,
+              ...requestDoc.data(),
+            });
+          });
 
-        const approvedMembersMap =
-          new Map<
-            string,
-            {
-              name: string;
-              image: string;
-            }
-          >();
+          ownerSnapshot.forEach((requestDoc) => {
+            requestsMap.set(requestDoc.id, {
+              id: requestDoc.id,
+              ...requestDoc.data(),
+            });
+          });
+        }
 
-        requestsSnapshot.forEach(
-          (requestDoc) => {
-            const request =
-              requestDoc.data();
+        // Map approved riders to their hosted trips.
+        const approvedMembersMap = new Map<
+          string,
+          { name: string; image: string }
+        >();
 
-            if (
-              request.status ===
-                "approved" &&
-              request.tripId
-            ) {
-              approvedMembersMap.set(
-                request.tripId,
-                {
-                  name:
-                    request.requester ||
-                    request.requesterName ||
-                    request.userName ||
-                    request.name ||
-                    "",
-                  image:
-                    request.requesterImage ||
-                    request.userImage ||
-                    "",
-                }
-              );
+        requestsMap.forEach((request) => {
+          if (
+            request.status === "approved" &&
+            request.tripId
+          ) {
+            // This request belongs to a rider joining this user's trip.
+            if (request.tripOwnerUid === activeUserUid) {
+              approvedMembersMap.set(request.tripId, {
+                name:
+                  request.requester ||
+                  request.requesterName ||
+                  request.userName ||
+                  request.name ||
+                  "",
+                image:
+                  request.requesterImage ||
+                  request.userImage ||
+                  "",
+              });
             }
           }
-        );
+        });
 
-        /* =====================================================
-           ONE MAP FOR ALL USER RIDES
-           
-           IMPORTANT:
-           One trip ID = one My Rides entry.
-        ===================================================== */
+        // One trip ID = one My Rides entry.
+        const userRides = new Map<string, Ride>();
 
-        const userRides =
-          new Map<string, Ride>();
+        // HOSTED TRIPS: match by Firebase UID.
+        tripsSnapshot.forEach((tripDoc) => {
+          const trip = tripDoc.data();
 
-        /* =====================================================
-           HOSTED TRIPS
-        ===================================================== */
-
-        tripsSnapshot.forEach(
-          (tripDoc) => {
-            const trip =
-              tripDoc.data();
-
-            if (
-              trip.userName !==
-              activeUserName
-            ) {
-              return;
-            }
-
-            const approvedMember =
-              approvedMembersMap.get(
-                tripDoc.id
-              );
-
-            const ride: Ride = {
-              id: tripDoc.id,
-              ...trip,
-
-              role: "Host",
-
-              canEdit:
-                !isAdminView,
-
-              acceptedMember:
-                approvedMember?.name ||
-                "",
-
-              acceptedMemberImage:
-                approvedMember?.image ||
-                "",
-            };
-
-            /*
-             * Store by actual Firestore trip ID.
-             */
-
-            userRides.set(
-              tripDoc.id,
-              ride
-            );
+          if (trip.uid !== activeUserUid) {
+            return;
           }
-        );
 
-        /* =====================================================
-           JOINED / APPROVED RIDER TRIPS
-        ===================================================== */
+          const approvedMember = approvedMembersMap.get(
+            tripDoc.id
+          );
 
-        requestsSnapshot.forEach(
-          (requestDoc) => {
-            const request =
-              requestDoc.data();
+          userRides.set(tripDoc.id, {
+            id: tripDoc.id,
+            ...trip,
+            role: "Host",
+            canEdit: !isViewingAsAdmin,
+            acceptedMember: approvedMember?.name || "",
+            acceptedMemberImage: approvedMember?.image || "",
+          });
+        });
 
-            /*
-             * Only approved requests
-             * belonging to active user.
-             */
+        // JOINED TRIPS: only approved requests belonging to this user.
+        requestsMap.forEach((request) => {
+          if (
+            request.requesterUid !== activeUserUid ||
+            request.status !== "approved"
+          ) {
+            return;
+          }
 
-            if (
-              request.requester !==
-                activeUserName ||
-              request.status !==
-                "approved"
-            ) {
+          const tripId = request.tripId;
+
+          if (!tripId) {
+            return;
+          }
+
+          const actualTrip = tripsMap.get(tripId);
+
+          if (actualTrip) {
+            // Do not duplicate a trip hosted by this user.
+            if (actualTrip.uid === activeUserUid) {
               return;
             }
 
-            const tripId =
-              request.tripId;
-
-            if (!tripId) {
-              return;
-            }
-
-            const actualTrip =
-              tripsMap.get(
-                tripId
-              );
-
-            /*
-             * Actual trip exists.
-             */
-
-            if (actualTrip) {
-              /*
-               * If the user is already the host,
-               * keep the host record.
-               */
-              if (
-                actualTrip.userName ===
-                activeUserName
-              ) {
-                return;
-              }
-
-              const joinedTrip: Ride = {
+            if (!userRides.has(tripId)) {
+              userRides.set(tripId, {
                 ...actualTrip,
-
-                id:
-                  actualTrip.id,
-
-                role:
-                  "Rider",
-
-                canEdit:
-                  false,
+                id: tripId,
+                role: "Rider",
+                canEdit: false,
 
                 tripOwner:
                   actualTrip.userName ||
@@ -414,41 +328,6 @@ export default function MyRidesPage() {
                   request.tripOwnerImage ||
                   "",
 
-                destination:
-                  actualTrip.destination ||
-                  request.destination ||
-                  "RideMate Trip",
-
-                tripDate:
-                  actualTrip.tripDate ||
-                  request.tripDate ||
-                  null,
-
-                bike:
-                  actualTrip.bike ||
-                  request.bike ||
-                  "RideMate Trip",
-
-                startLocation:
-                  actualTrip.startLocation ||
-                  request.startLocation ||
-                  "",
-
-                distance:
-                  actualTrip.distance ||
-                  request.distance ||
-                  "",
-
-                tripPrice:
-                  actualTrip.tripPrice ??
-                  request.tripPrice ??
-                  "",
-
-                rideType:
-                  actualTrip.rideType ||
-                  request.rideType ||
-                  "",
-
                 acceptedMember:
                   actualTrip.userName ||
                   request.tripOwner ||
@@ -458,238 +337,97 @@ export default function MyRidesPage() {
                   actualTrip.userImage ||
                   request.tripOwnerImage ||
                   "",
-              };
-
-              /*
-               * IMPORTANT:
-               * Only add if this trip ID has not
-               * already been added.
-               */
-
-              if (
-                !userRides.has(
-                  tripId
-                )
-              ) {
-                userRides.set(
-                  tripId,
-                  joinedTrip
-                );
-              }
-
-              return;
+              });
             }
 
-            /* =================================================
-               FALLBACK WHEN TRIP DOCUMENT IS MISSING
-            ================================================= */
-
-            const fallbackRide: Ride = {
-              id:
-                tripId,
-
-              destination:
-                request.destination ||
-                "RideMate Trip",
-
-              userName:
-                request.tripOwner ||
-                "",
-
-              role:
-                "Rider",
-
-              tripDate:
-                request.tripDate ||
-                null,
-
-              bike:
-                request.bike ||
-                "RideMate Trip",
-
-              startLocation:
-                request.startLocation ||
-                "",
-
-              distance:
-                request.distance ||
-                "",
-
-              tripPrice:
-                request.tripPrice ||
-                "",
-
-              rideType:
-                request.rideType ||
-                "",
-
-              canEdit:
-                false,
-
-              tripOwner:
-                request.tripOwner ||
-                "",
-
-              tripOwnerImage:
-                request.tripOwnerImage ||
-                "",
-
-              acceptedMember:
-                request.tripOwner ||
-                "",
-
-              acceptedMemberImage:
-                request.tripOwnerImage ||
-                "",
-            };
-
-            if (
-              !userRides.has(
-                tripId
-              )
-            ) {
-              userRides.set(
-                tripId,
-                fallbackRide
-              );
-            }
+            return;
           }
-        );
 
-        /* =====================================================
-           CLASSIFY RIDES
-           
-           CRITICAL:
-           ONLY status === "completed"
-           means History.
-           
-           The trip date is NOT used to mark
-           a trip as completed.
-        ===================================================== */
+          // Fallback if the original trip document is unavailable.
+          if (!userRides.has(tripId)) {
+            userRides.set(tripId, {
+              id: tripId,
+              destination:
+                request.destination || "RideMate Trip",
+              userName: request.tripOwner || "",
+              role: "Rider",
+              tripDate: request.tripDate || null,
+              bike: request.bike || "RideMate Trip",
+              startLocation: request.startLocation || "",
+              distance: request.distance || "",
+              tripPrice: request.tripPrice || "",
+              rideType: request.rideType || "",
+              canEdit: false,
+              tripOwner: request.tripOwner || "",
+              tripOwnerImage: request.tripOwnerImage || "",
+              acceptedMember: request.tripOwner || "",
+              acceptedMemberImage: request.tripOwnerImage || "",
+            });
+          }
+        });
 
+        // Classify rides.
         const upcoming: Ride[] = [];
         const history: Ride[] = [];
 
-        userRides.forEach(
-          (ride) => {
-            if (
-              ride.status ===
-              "completed"
-            ) {
-              history.push(
-                ride
-              );
-            } else {
-              upcoming.push(
-                ride
-              );
-            }
+        userRides.forEach((ride) => {
+          if (ride.status === "completed") {
+            history.push(ride);
+          } else {
+            upcoming.push(ride);
           }
-        );
+        });
 
-        /* =====================================================
-           SORT
-           
-           Upcoming:
-           earliest trip first.
-           
-           History:
-           newest trip first.
-        ===================================================== */
+        // Sort dates.
+        const getTime = (value: any) => {
+          if (!value) return 0;
 
-        const getTime =
-          (value: any) => {
-            if (!value) {
-              return 0;
+          try {
+            if (typeof value.toDate === "function") {
+              return value.toDate().getTime();
             }
 
-            try {
-              if (
-                typeof value ===
-                  "object" &&
-                typeof value.toDate ===
-                  "function"
-              ) {
-                return value
-                  .toDate()
-                  .getTime();
-              }
-
-              if (
-                typeof value ===
-                  "object" &&
-                value.seconds !==
-                  undefined
-              ) {
-                return (
-                  Number(
-                    value.seconds
-                  ) * 1000
-                );
-              }
-
-              const date =
-                new Date(
-                  value
-                );
-
-              return isNaN(
-                date.getTime()
-              )
-                ? 0
-                : date.getTime();
-            } catch {
-              return 0;
+            if (value.seconds !== undefined) {
+              return Number(value.seconds) * 1000;
             }
-          };
+
+            const date = new Date(value);
+
+            return isNaN(date.getTime())
+              ? 0
+              : date.getTime();
+          } catch {
+            return 0;
+          }
+        };
 
         upcoming.sort(
           (a, b) =>
-            getTime(
-              a.tripDate
-            ) -
-            getTime(
-              b.tripDate
-            )
+            getTime(a.tripDate) - getTime(b.tripDate)
         );
 
         history.sort(
           (a, b) =>
             getTime(
               b.completionVerifiedAt ||
-                b.tripDate ||
-                b.createdAt
+              b.tripDate ||
+              b.createdAt
             ) -
             getTime(
               a.completionVerifiedAt ||
-                a.tripDate ||
-                a.createdAt
+              a.tripDate ||
+              a.createdAt
             )
         );
 
-        console.log(
-          "Upcoming rides:",
-          upcoming
-        );
+        console.log("Upcoming rides:", upcoming);
+        console.log("Ride history:", history);
 
-        console.log(
-          "Ride history:",
-          history
-        );
+        setUpcomingRides(upcoming);
+        setRideHistory(history);
 
-        setUpcomingRides(
-          upcoming
-        );
-
-        setRideHistory(
-          history
-        );
       } catch (error) {
-        console.error(
-          "Failed to load rides:",
-          error
-        );
-
+        console.error("Failed to load rides:", error);
         setUpcomingRides([]);
         setRideHistory([]);
       } finally {
