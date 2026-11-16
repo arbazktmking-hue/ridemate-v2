@@ -353,57 +353,41 @@ useEffect(() => {
          LOAD REQUESTS
       =============================================== */
 
-      const snapshot =
-        await getDocs(
-          collection(
-            db,
-            "rideRequests"
-          )
-        );
+      
+const [receivedSnapshot, sentSnapshot] =
+  await Promise.all([
+    getDocs(
+      query(
+        collection(db, "rideRequests"),
+        where("tripOwnerUid", "==", activeUid)
+      )
+    ),
 
-      const received: any[] = [];
-      const sent: any[] = [];
+    getDocs(
+      query(
+        collection(db, "rideRequests"),
+        where("requesterUid", "==", activeUid)
+      )
+    ),
+  ]);
 
-      snapshot.forEach((docSnap) => {
-        const request =
-          docSnap.data();
+const received: any[] = [];
+const sent: any[] = [];
 
-        /* =========================================
-           REQUESTS RECEIVED
+receivedSnapshot.forEach((docSnap) => {
+  received.push({
+    id: docSnap.id,
+    ...docSnap.data(),
+  });
+});
 
-           The trip owner must match
-           the authenticated Firebase UID.
-        ========================================= */
+sentSnapshot.forEach((docSnap) => {
+  sent.push({
+    id: docSnap.id,
+    ...docSnap.data(),
+  });
+});
 
-        if (
-          request.tripOwnerUid &&
-          request.tripOwnerUid ===
-            activeUid
-        ) {
-          received.push({
-            id: docSnap.id,
-            ...request,
-          });
-        }
-
-        /* =========================================
-           REQUESTS SENT
-
-           The requester must match
-           the authenticated Firebase UID.
-        ========================================= */
-
-        if (
-          request.requesterUid &&
-          request.requesterUid ===
-            activeUid
-        ) {
-          sent.push({
-            id: docSnap.id,
-            ...request,
-          });
-        }
-      });
 
       setReceivedRequests(
         received
@@ -572,26 +556,25 @@ if (
       =============================================== */
 
      await addDoc(
-  collection(
-    db,
-    "notifications"
-  ),
+  collection(db, "notifications"),
   {
-    user:
-      request.requester,
+    user: request.requester,
 
-    userUid:
-      request.requesterUid || "",
+    // Recipient: person who requested the ride
+    recipientUid: request.requesterUid || "",
+
+    // Keep this for backward compatibility
+    userUid: request.requesterUid || "",
+
+    // Actor: trip owner approving/rejecting
+    actorUid: firebaseUser.uid,
 
     text:
-      status ===
-      "approved"
+      status === "approved"
         ? `🎉 ${request.tripOwner} approved your ride request to ${request.destination}`
         : `❌ ${request.tripOwner} rejected your ride request to ${request.destination}`,
 
-    createdAt:
-      Date.now(),
-
+    createdAt: Date.now(),
     read: false,
   }
 );
