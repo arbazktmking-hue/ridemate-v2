@@ -653,12 +653,12 @@ export default function LoginPage() {
               currentSlide + 1
             }`}
             className="
-              w-full
-              h-full
-              object-cover
-              select-none
-              pointer-events-none
-            "
+  w-full
+  h-full
+  object-contain
+  select-none
+  pointer-events-none
+"
           />
 
           {/* =================================================
