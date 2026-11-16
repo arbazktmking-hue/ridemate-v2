@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -19,27 +20,31 @@ import {
   Loader2,
 } from "lucide-react";
 
+type Rider = {
+  uid: string;
+  name: string;
+  image: string;
+};
+
 export default function SearchPage() {
   const [search, setSearch] = useState("");
-  const [riders, setRiders] = useState<any[]>([]);
+  const [riders, setRiders] = useState<Rider[]>([]);
   const [loading, setLoading] = useState(true);
 
-  /*
-   =========================================================
-   LOAD ALL REGISTERED USERS
-   =========================================================
-  */
+  /* =========================================================
+     LOAD ALL REGISTERED USERS
+  ========================================================= */
 
   useEffect(() => {
+    let mounted = true;
+
     const loadRiders = async () => {
       try {
         const snapshot = await getDocs(
           collection(db, "users")
         );
 
-        const riderMap: {
-          [key: string]: any;
-        } = {};
+        const loadedRiders: Rider[] = [];
 
         snapshot.forEach((userDoc) => {
           const user = userDoc.data();
@@ -53,86 +58,88 @@ export default function SearchPage() {
             return;
           }
 
-          const cleanUsername =
-            username.trim();
+          const cleanUsername = username.trim();
 
-          const key =
-            cleanUsername.toLowerCase();
-
-          /*
-           Prevent duplicate usernames
-          */
-
-          if (!riderMap[key]) {
-            riderMap[key] = {
-              name: cleanUsername,
-              image: user.image || "",
-            };
+          if (!cleanUsername) {
+            return;
           }
+
+          loadedRiders.push({
+            // Exact Firebase UID from the Firestore document ID.
+            uid: userDoc.id,
+
+            name: cleanUsername,
+
+            image:
+              typeof user.image === "string"
+                ? user.image
+                : "",
+          });
         });
 
-        const loadedRiders =
-          Object.values(riderMap);
+        /* SORT ALPHABETICALLY */
 
-        /*
-         Sort riders alphabetically
-        */
+        loadedRiders.sort((a, b) => {
+          const nameComparison =
+            a.name.localeCompare(b.name);
 
-        loadedRiders.sort(
-          (a: any, b: any) =>
-            a.name.localeCompare(b.name)
-        );
+          if (nameComparison !== 0) {
+            return nameComparison;
+          }
 
-        setRiders(loadedRiders);
+          return a.uid.localeCompare(b.uid);
+        });
+
+        if (mounted) {
+          setRiders(loadedRiders);
+        }
       } catch (error) {
         console.error(
           "Failed to load riders:",
           error
         );
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
     loadRiders();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  /*
-   =========================================================
-   FILTER RIDERS
-   =========================================================
-  */
+  /* =========================================================
+     FILTER RIDERS
+  ========================================================= */
 
-  const filteredRiders =
-    riders.filter((rider) => {
-      const riderName =
-        rider.name?.toLowerCase() || "";
+  const filteredRiders = riders.filter((rider) => {
+    const riderName =
+      rider.name.toLowerCase();
 
-      const searchText =
-        search.trim().toLowerCase();
+    const searchText =
+      search.trim().toLowerCase();
 
-      return riderName.includes(searchText);
-    });
+    return riderName.includes(searchText);
+  });
 
-  /*
-   =========================================================
-   CLEAR SEARCH
-   =========================================================
-  */
+  /* =========================================================
+     CLEAR SEARCH
+  ========================================================= */
 
   const clearSearch = () => {
     setSearch("");
   };
 
-  /*
-   =========================================================
-   RENDER
-   =========================================================
-  */
+  /* =========================================================
+     RENDER
+  ========================================================= */
 
   return (
     <PageBackground>
-
       <main
         className="
           w-full
@@ -145,15 +152,11 @@ export default function SearchPage() {
           pb-10
         "
       >
-
         <div className="max-w-4xl mx-auto">
 
-          {/* =================================================
-              HEADING
-          ================================================= */}
+          {/* HEADING */}
 
           <div className="mb-7 sm:mb-9">
-
             <h1
               className="
                 text-4xl
@@ -176,16 +179,11 @@ export default function SearchPage() {
             >
               Find riders registered on RideMate.
             </p>
-
           </div>
 
-
-          {/* =================================================
-              SEARCH BAR
-          ================================================= */}
+          {/* SEARCH BAR */}
 
           <div className="relative mb-7">
-
             <Search
               size={21}
               className="
@@ -224,8 +222,6 @@ export default function SearchPage() {
               "
             />
 
-            {/* CLEAR SEARCH */}
-
             {search && (
               <button
                 type="button"
@@ -243,13 +239,9 @@ export default function SearchPage() {
                 <X size={20} />
               </button>
             )}
-
           </div>
 
-
-          {/* =================================================
-              RIDER HEADER
-          ================================================= */}
+          {/* RIDER HEADER */}
 
           <div
             className="
@@ -260,7 +252,6 @@ export default function SearchPage() {
               px-1
             "
           >
-
             <h2
               className="
                 text-sm
@@ -289,13 +280,9 @@ export default function SearchPage() {
                   : "riders"}
               </span>
             )}
-
           </div>
 
-
-          {/* =================================================
-              LOADING
-          ================================================= */}
+          {/* LOADING */}
 
           {loading && (
             <div
@@ -308,7 +295,6 @@ export default function SearchPage() {
                 text-center
               "
             >
-
               <Loader2
                 size={32}
                 className="
@@ -326,171 +312,147 @@ export default function SearchPage() {
               >
                 Loading RideMate riders...
               </p>
-
             </div>
           )}
 
-
-          {/* =================================================
-              RIDER LIST
-          ================================================= */}
+          {/* RIDER LIST */}
 
           {!loading &&
             filteredRiders.length > 0 && (
-
               <div className="space-y-3">
+                {filteredRiders.map((rider) => (
+                  <Link
+                    key={rider.uid}
+                    href={`/rider/${encodeURIComponent(
+                      rider.name
+                    )}?uid=${encodeURIComponent(
+                      rider.uid
+                    )}`}
+                    className="
+                      group
+                      flex
+                      items-center
+                      gap-4
+                      p-4
+                      rounded-2xl
+                      bg-zinc-900
+                      border
+                      border-zinc-800
+                      hover:border-orange-500
+                      hover:bg-zinc-900/80
+                      transition-all
+                      duration-200
+                    "
+                  >
 
-                {filteredRiders.map(
-                  (rider, index) => (
+                    {/* PROFILE IMAGE */}
 
-                    <Link
-                      key={`${rider.name}-${index}`}
-                      href={`/rider/${encodeURIComponent(
-                        rider.name
-                      )}`}
+                    <div
                       className="
-                        group
-                        flex
-                        items-center
-                        gap-4
-                        p-4
-                        rounded-2xl
-                        bg-zinc-900
+                        relative
+                        flex-shrink-0
+                        w-14
+                        h-14
+                        sm:w-16
+                        sm:h-16
+                        rounded-full
+                        overflow-hidden
+                        bg-zinc-800
                         border
-                        border-zinc-800
-                        hover:border-orange-500
-                        hover:bg-zinc-900/80
-                        transition-all
-                        duration-200
+                        border-zinc-700
+                        group-hover:border-orange-500
+                        transition
                       "
                     >
-
-                      {/* =================================================
-                          PROFILE IMAGE
-                      ================================================= */}
-
                       <div
                         className="
-                          flex-shrink-0
-                          w-14
-                          h-14
-                          sm:w-16
-                          sm:h-16
-                          rounded-full
-                          overflow-hidden
-                          bg-zinc-800
-                          border
-                          border-zinc-700
-                          group-hover:border-orange-500
+                          absolute
+                          inset-0
+                          flex
+                          items-center
+                          justify-center
+                          text-zinc-500
+                        "
+                      >
+                        <UserRound size={27} />
+                      </div>
+
+                      {rider.image && (
+                        <img
+                          src={rider.image}
+                          alt={rider.name}
+                          className="
+                            relative
+                            w-full
+                            h-full
+                            object-cover
+                          "
+                          onError={(e) => {
+                            e.currentTarget.style.display =
+                              "none";
+                          }}
+                        />
+                      )}
+                    </div>
+
+                    {/* RIDER NAME */}
+
+                    <div
+                      className="
+                        min-w-0
+                        flex-1
+                      "
+                    >
+                      <h3
+                        className="
+                          text-base
+                          sm:text-lg
+                          font-black
+                          text-white
+                          truncate
+                          group-hover:text-orange-400
                           transition
                         "
                       >
-{/* Default icon stays behind the profile image */}
-<div
-  className="
-    absolute
-    inset-0
-    flex
-    items-center
-    justify-center
-    text-zinc-500
-  "
->
-  <UserRound size={27} />
-</div>
+                        {rider.name}
+                      </h3>
 
-{/* Display profile image when available */}
-{rider.image && (
-  <img
-    src={rider.image}
-    alt={rider.name}
-    className="
-      relative
-      w-full
-      h-full
-      object-cover
-    "
-    onError={(e) => {
-      e.currentTarget.style.display = "none";
-    }}
-  />
-)}
-
-                      </div>
-
-
-                      {/* =================================================
-                          RIDER NAME
-                      ================================================= */}
-
-                      <div
+                      <p
                         className="
-                          min-w-0
-                          flex-1
-                        "
-                      >
-
-                        <h3
-                          className="
-                            text-base
-                            sm:text-lg
-                            font-black
-                            text-white
-                            truncate
-                            group-hover:text-orange-400
-                            transition
-                          "
-                        >
-                          {rider.name}
-                        </h3>
-
-                        <p
-                          className="
-                            text-xs
-                            sm:text-sm
-                            text-zinc-600
-                            mt-0.5
-                          "
-                        >
-                          RideMate rider
-                        </p>
-
-                      </div>
-
-
-                      {/* =================================================
-                          ARROW
-                      ================================================= */}
-
-                      <div
-                        className="
-                          flex-shrink-0
+                          text-xs
+                          sm:text-sm
                           text-zinc-600
-                          group-hover:text-orange-500
-                          transition
+                          mt-0.5
                         "
                       >
-                        <span className="text-xl">
-                          →
-                        </span>
-                      </div>
+                        RideMate rider
+                      </p>
+                    </div>
 
-                    </Link>
+                    {/* ARROW */}
 
-                  )
-                )}
+                    <div
+                      className="
+                        flex-shrink-0
+                        text-zinc-600
+                        group-hover:text-orange-500
+                        transition
+                      "
+                    >
+                      <span className="text-xl">
+                        →
+                      </span>
+                    </div>
 
+                  </Link>
+                ))}
               </div>
             )}
 
-
-          {/* =================================================
-              NO RIDERS / NO SEARCH RESULTS
-          ================================================= */}
+          {/* NO RIDERS / NO SEARCH RESULTS */}
 
           {!loading &&
             filteredRiders.length === 0 && (
-
               <div
                 className="
                   py-16
@@ -502,7 +464,6 @@ export default function SearchPage() {
                   rounded-2xl
                 "
               >
-
                 <div className="text-5xl mb-4">
                   🏍️
                 </div>
@@ -529,14 +490,11 @@ export default function SearchPage() {
                     ? `No rider matches "${search}".`
                     : "No riders have registered yet."}
                 </p>
-
               </div>
             )}
 
         </div>
-
       </main>
-
     </PageBackground>
   );
 }

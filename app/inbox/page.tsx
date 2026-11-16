@@ -8,9 +8,13 @@ import PageBackground from "../components/PageBackground";
 import {
   collection,
   getDocs,
+  getDoc,
+  doc,
+  query,
+  where,
 } from "firebase/firestore";
 
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 
 import {
   MessageCircle,
@@ -207,81 +211,79 @@ export default function InboxPage() {
 
         }
 
+/* =====================================================
+   LOAD ONLY THIS USER'S MESSAGES
+===================================================== */
 
-        /* =====================================================
-           LOAD ALL MESSAGES
-        ===================================================== */
+// Wait until Firebase has restored the login session.
+await auth.authStateReady();
 
-        const messageSnapshot =
-          await getDocs(
-            collection(
-              db,
-              "messages"
-            )
-          );
+const authenticatedUid = auth.currentUser?.uid;
 
+// In admin mode, inspect the selected rider's UID.
+// In normal mode, use the currently authenticated user's UID.
+const targetUid =
+  activeAdminView?.active
+    ? activeAdminView.userId
+    : authenticatedUid;
 
-        const riderNames: string[] =
-          [];
+if (!targetUid) {
+  throw new Error(
+    "Unable to identify the authenticated user or selected rider UID."
+  );
+}
 
+// Fetch messages sent and received by this UID.
+// Firestore Security Rules can verify both queries.
+const [sentSnapshot, receivedSnapshot] =
+  await Promise.all([
+    getDocs(
+      query(
+        collection(db, "messages"),
+        where("senderUid", "==", targetUid)
+      )
+    ),
 
-        messageSnapshot.forEach(
-          (messageDoc) => {
+    getDocs(
+      query(
+        collection(db, "messages"),
+        where("receiverUid", "==", targetUid)
+      )
+    ),
+  ]);
 
-            const message =
-              messageDoc.data();
+// Combine both results without duplicate messages.
+const messagesById = new Map<string, any>();
 
+sentSnapshot.forEach((messageDoc) => {
+  messagesById.set(messageDoc.id, messageDoc.data());
+});
 
-            /* =================================================
-               CURRENT USER SENT MESSAGE
-            ================================================= */
+receivedSnapshot.forEach((messageDoc) => {
+  messagesById.set(messageDoc.id, messageDoc.data());
+});
 
-            if (
-              message.sender ===
-              currentUserName
-            ) {
+const riderNames: string[] = [];
 
-              if (
-                message.receiver &&
-                message.receiver !==
-                  currentUserName
-              ) {
+messagesById.forEach((message) => {
+  // Messages sent by the selected user.
+  if (
+    message.sender === currentUserName &&
+    message.receiver &&
+    message.receiver !== currentUserName
+  ) {
+    riderNames.push(message.receiver);
+  }
 
-                riderNames.push(
-                  message.receiver
-                );
-
-              }
-
-            }
-
-
-            /* =================================================
-               CURRENT USER RECEIVED MESSAGE
-            ================================================= */
-
-            if (
-              message.receiver ===
-              currentUserName
-            ) {
-
-              if (
-                message.sender &&
-                message.sender !==
-                  currentUserName
-              ) {
-
-                riderNames.push(
-                  message.sender
-                );
-
-              }
-
-            }
-
-          }
-        );
-
+  // Messages received by the selected user.
+  if (
+    message.receiver === currentUserName &&
+    message.sender &&
+    message.sender !== currentUserName
+  ) {
+    riderNames.push(message.sender);
+  }
+});
 
         /* =====================================================
            REMOVE DUPLICATES

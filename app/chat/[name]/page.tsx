@@ -8,6 +8,8 @@ import {
   collection,
   addDoc,
   getDocs,
+  query,
+  where,
 } from "firebase/firestore";
 
 import { db } from "../../firebase";
@@ -337,148 +339,138 @@ export default function ChatPage() {
      SEND MESSAGE
   ========================================================= */
 
-  const sendMessage = async () => {
+  
+const sendMessage = async () => {
+  /*
+   * Admin investigation mode is READ ONLY.
+   */
+  if (isAdminView) {
+    alert(
+      "Messaging is disabled while using Admin Investigation Mode."
+    );
+    return;
+  }
 
-    /*
-     * IMPORTANT:
-     *
-     * Admin investigation mode is READ ONLY.
-     *
-     * Never allow an admin to send a message
-     * from the investigated user's chat.
-     */
+  if (!currentUser) {
+    return;
+  }
 
-    if (isAdminView) {
+  if (!message.trim()) {
+    return;
+  }
 
-      alert(
-        "Messaging is disabled while using Admin Investigation Mode."
-      );
+  // Ensure the logged-in user has a Firebase UID.
+  const senderUid = currentUser.uid;
 
+  if (!senderUid) {
+    alert("Your login session is missing. Please login again.");
+    return;
+  }
+
+  try {
+    // Find the receiver's Firebase UID using their username.
+    const receiverQuery = query(
+  collection(db, "users"),
+  where("username", "==", riderName)
+);
+
+const usersSnapshot = await getDocs(receiverQuery);
+
+const receiverDoc = usersSnapshot.docs[0];
+
+    if (!receiverDoc) {
+      alert("Unable to find this rider's account.");
       return;
-
     }
 
+    const receiverUid = receiverDoc.id;
 
-    if (!currentUser) {
+    // Prevent sending a message to yourself.
+    if (senderUid === receiverUid) {
+      alert("You cannot send a message to yourself.");
       return;
     }
 
+    // Save the message with both Firebase UIDs.
+    await addDoc(
+      collection(db, "messages"),
+      {
+        sender: currentUser.name,
+        receiver: riderName,
 
-    if (!message.trim()) {
-      return;
+        // Firebase UIDs for account deletion
+        senderUid: senderUid,
+        receiverUid: receiverUid,
+
+        text: message.trim(),
+        createdAt: Date.now(),
+      }
+    );
+
+    setMessage("");
+
+    // Reload only messages involving the logged-in user.
+const sentMessagesQuery = query(
+  collection(db, "messages"),
+  where("senderUid", "==", senderUid)
+);
+
+const receivedMessagesQuery = query(
+  collection(db, "messages"),
+  where("receiverUid", "==", senderUid)
+);
+
+const [sentSnapshot, receivedSnapshot] = await Promise.all([
+  getDocs(sentMessagesQuery),
+  getDocs(receivedMessagesQuery),
+]);
+
+const conversationMessages: any[] = [];
+
+const messageMap = new Map();
+
+const addConversationMessages = (snapshot: any) => {
+  snapshot.forEach((messageDoc: any) => {
+    const msg = messageDoc.data();
+
+    const belongsToThisConversation =
+      (
+        msg.senderUid === senderUid &&
+        msg.receiverUid === receiverUid
+      ) ||
+      (
+        msg.senderUid === receiverUid &&
+        msg.receiverUid === senderUid
+      );
+
+    if (belongsToThisConversation) {
+      messageMap.set(messageDoc.id, {
+        id: messageDoc.id,
+        ...msg,
+      });
     }
+  });
+};
 
+addConversationMessages(sentSnapshot);
+addConversationMessages(receivedSnapshot);
 
-    try {
+conversationMessages.push(...messageMap.values());
 
-      await addDoc(
-        collection(
-          db,
-          "messages"
-        ),
-        {
+conversationMessages.sort(
+  (a, b) =>
+    (a.createdAt || 0) - (b.createdAt || 0)
+);
 
-          sender:
-            currentUser.name,
+setMessages(conversationMessages);
+  } catch (error) {
+    console.error("Failed to send message:", error);
 
-          receiver:
-            riderName,
-
-          text:
-            message.trim(),
-
-          createdAt:
-            Date.now(),
-
-        }
-      );
-
-
-      setMessage("");
-
-
-      /* =====================================================
-         RELOAD MESSAGES
-      ===================================================== */
-
-      const snapshot =
-        await getDocs(
-          collection(
-            db,
-            "messages"
-          )
-        );
-
-
-      const allMessages: any[] =
-        [];
-
-
-      snapshot.forEach(
-        (messageDoc) => {
-
-          const msg =
-            messageDoc.data();
-
-
-          if (
-
-            (
-              msg.sender ===
-                currentUser.name &&
-
-              msg.receiver ===
-                riderName
-            )
-
-            ||
-
-            (
-              msg.sender ===
-                riderName &&
-
-              msg.receiver ===
-                currentUser.name
-            )
-
-          ) {
-
-            allMessages.push(
-              msg
-            );
-
-          }
-
-        }
-      );
-
-
-      allMessages.sort(
-        (a, b) =>
-          (a.createdAt || 0) -
-          (b.createdAt || 0)
-      );
-
-
-      setMessages(
-        allMessages
-      );
-
-    } catch (error) {
-
-      console.error(
-        "Failed to send message:",
-        error
-      );
-
-      alert(
-        "Failed to send message. Please try again."
-      );
-
-    }
-
-  };
-
+    alert(
+      "Failed to send message. Please try again."
+    );
+  }
+};
 
   /* =========================================================
      LOADING STATE
