@@ -7,7 +7,7 @@ import {
 
 import {
   doc,
-  updateDoc,
+  setDoc,
 } from "firebase/firestore";
 
 import {
@@ -91,20 +91,14 @@ export default function TermsPage() {
         // SAVE ACCEPTANCE TO FIRESTORE
         // ---------------------------------------------------
 
-        await updateDoc(
-          doc(
-            db,
-            "users",
-            uid
-          ),
-          {
-            termsAccepted:
-              true,
-
-            termsAcceptedAt:
-              Date.now(),
-          }
-        );
+        await setDoc(
+  doc(db, "users", uid),
+  {
+    termsAccepted: true,
+    termsAcceptedAt: Date.now(),
+  },
+  { merge: true }
+);
 
         // ---------------------------------------------------
         // SAVE USER-SPECIFIC LOCAL FLAG
