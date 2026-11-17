@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useParams } from "next/navigation";
@@ -7,165 +8,133 @@ import Link from "next/link";
 import {
   collection,
   getDocs,
+  query,
+  where,
 } from "firebase/firestore";
 
 import { db } from "../../../firebase";
 
-export default function FollowingPage() {
+type FollowingRider = {
+  id: string;
+  name: string;
+};
 
+export default function FollowingPage() {
   const params = useParams();
 
   const riderName = decodeURIComponent(
     params.name as string
   );
 
-  const [following, setFollowing] =
-    useState<any[]>([]);
+  const [following, setFollowing] = useState<FollowingRider[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-
     const loadFollowing = async () => {
-
       try {
+        setLoading(true);
 
-        const snapshot = await getDocs(
+        // Find the profile being viewed.
+        const usersSnapshot = await getDocs(
+          collection(db, "users")
+        );
+
+        const profile = usersSnapshot.docs.find((userDoc) => {
+          const data = userDoc.data();
+
+          return (
+            data.username === riderName ||
+            data.name === riderName
+          );
+        });
+
+        const profileUid = profile?.data().uid || profile?.id;
+
+        // Read records using UID when available.
+        const followsSnapshot = await getDocs(
           collection(db, "follows")
         );
 
-        const list: any[] = [];
+        const uniqueRiders = new Map<string, FollowingRider>();
 
-        snapshot.forEach((doc) => {
+        followsSnapshot.forEach((docSnap) => {
+          const follow = docSnap.data();
 
-          const follow = doc.data();
+          const matchesUid =
+            !!profileUid &&
+            follow.followerUid === profileUid;
 
-          if (
-            follow.follower === riderName
-          ) {
+          const matchesLegacyName =
+            !follow.followerUid &&
+            follow.follower === riderName;
 
-            list.push({
-              name: follow.following,
-            });
-
+          if (!matchesUid && !matchesLegacyName) {
+            return;
           }
 
+          const targetName = follow.following;
+
+          if (
+            typeof targetName !== "string" ||
+            !targetName.trim()
+          ) {
+            return;
+          }
+
+          const targetUid =
+            typeof follow.followingUid === "string"
+              ? follow.followingUid
+              : "";
+
+          const key = targetUid || targetName.toLowerCase();
+
+          uniqueRiders.set(key, {
+            id: key,
+            name: targetName,
+          });
         });
 
-        setFollowing(list);
-
+        setFollowing(Array.from(uniqueRiders.values()));
       } catch (error) {
-
-        console.error(
-          "Failed to load following:",
-          error
-        );
-
+        console.error("Failed to load following:", error);
+        setFollowing([]);
+      } finally {
+        setLoading(false);
       }
-
     };
 
     loadFollowing();
-
   }, [riderName]);
 
   return (
-
-    <main
-      className="
-        min-h-screen
-        bg-black
-        text-white
-        px-6
-        pt-28
-        pb-10
-      "
-    >
-
-      <div
-        className="
-          max-w-4xl
-          mx-auto
-        "
-      >
-
-        {/* =========================================
-            PAGE HEADING
-        ========================================= */}
-
-        <h1
-          className="
-            text-4xl
-            sm:text-5xl
-            font-black
-            text-orange-500
-            mb-8
-          "
-        >
+    <main className="min-h-screen bg-black text-white px-6 pt-28 pb-10">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-4xl sm:text-5xl font-black text-orange-500 mb-8">
           Following 👥
         </h1>
 
-
-        {/* =========================================
-            FOLLOWING LIST
-        ========================================= */}
-
-        <div
-          className="
-            space-y-4
-          "
-        >
-
-          {following.map(
-            (rider, index) => (
-
-              <Link
-                key={index}
-                href={`/rider/${encodeURIComponent(
-                  rider.name
-                )}`}
-                className="
-                  block
-                  bg-zinc-900
-                  p-4
-                  rounded-2xl
-                  border
-                  border-zinc-800
-                  hover:border-orange-500
-                  transition
-                "
-              >
-
-                {rider.name}
-
-              </Link>
-
-            )
-          )}
-
-
-          {/* =========================================
-              EMPTY STATE
-          ========================================= */}
-
-          {following.length === 0 && (
-
-            <div
-              className="
-                text-center
-                py-12
-                text-zinc-500
-              "
-            >
+        <div className="space-y-4">
+          {loading ? (
+            <div className="text-center py-12 text-zinc-500">
+              Loading following...
+            </div>
+          ) : following.length === 0 ? (
+            <div className="text-center py-12 text-zinc-500">
               Not following anyone yet.
             </div>
-
+          ) : (
+            following.map((rider) => (
+              <Link
+                key={rider.id}
+                href={`/rider/${encodeURIComponent(rider.name)}`}
+                className="block bg-zinc-900 p-4 rounded-2xl border border-zinc-800 hover:border-orange-500 transition"
+              >
+                {rider.name}
+              </Link>
+            ))
           )}
-
         </div>
-
       </div>
-
     </main>
-
   );
-
 }

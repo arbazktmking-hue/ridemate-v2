@@ -1157,149 +1157,155 @@ const deleteAccount = async () => {
       }
     };
 
+  
   /* =========================================================
      CURRENT USER + FOLLOW STATUS + COUNTS
-     
-     IMPORTANT:
-     localStorage is read ONLY inside useEffect.
-     
-     This prevents hydration mismatch.
-     
-     Followers and following counts load for:
-     - own profile
-     - other rider profile
-========================================================= */
+     UID-first matching with legacy username fallback.
+     Each unique rider is counted only once.
+  ========================================================= */
 
   useEffect(() => {
-    const checkFollowStatus =
-      async () => {
+    let cancelled = false;
+
+    const checkFollowStatus = async () => {
+      try {
+        let savedUser: any = {};
+
         try {
-          let savedUser: any = {};
-
-          try {
-            savedUser =
-              JSON.parse(
-                localStorage.getItem(
-                  "ridemateUser"
-                ) || "{}"
-              );
-          } catch {
-            savedUser = {};
-          }
-
-          setCurrentUser(
-            savedUser
+          savedUser = JSON.parse(
+            localStorage.getItem("ridemateUser") || "{}"
           );
-
-          /*
-           * Load own profile image from localStorage
-           * only AFTER hydration.
-           */
-
-          if (
-            savedUser?.name ===
-              riderName &&
-            savedUser?.image
-          ) {
-            setRiderImage(
-              savedUser.image
-            );
-          }
-
-         if (
-  !savedUser?.name ||
-  !savedUser?.uid ||
-  !riderUid
-) {
-  return;
-}
-
-const viewingOwnProfile =
-  savedUser.uid ===
-  riderUid;
-
-          if (viewingOwnProfile) {
-            setIsFollowing(false);
-          } else if (
-  savedUser?.uid &&
-  riderUid
-) {
-  const followId =
-    `${savedUser.uid}_${riderUid}`;
-
-  const followDoc =
-    await getDoc(
-      doc(
-        db,
-        "follows",
-        followId
-      )
-    );
-
-  setIsFollowing(
-    followDoc.exists()
-  );
-}
-
-          /*
-           * FOLLOWERS + FOLLOWING
-           */
-
-          const [
-            followersSnapshot,
-            followingSnapshot,
-          ] =
-            await Promise.all([
-              getDocs(
-                query(
-                  collection(
-                    db,
-                    "follows"
-                  ),
-                  where(
-  "followingUid",
-  "==",
-  riderUid
-)
-                )
-              ),
-
-              getDocs(
-                query(
-                  collection(
-                    db,
-                    "follows"
-                  ),
-                  where(
-  "followerUid",
-  "==",
-  riderUid
-)
-                )
-              ),
-            ]);
-
-          setFollowers(
-            followersSnapshot.size
-          );
-
-          setFollowing(
-            followingSnapshot.size
-          );
-        } catch (error) {
-          console.error(
-            "Follow status / count error:",
-            error
-          );
+        } catch {
+          savedUser = {};
         }
-      };
+
+        if (cancelled) return;
+
+        setCurrentUser(savedUser);
+
+        if (
+          savedUser?.name === riderName &&
+          savedUser?.image
+        ) {
+          setRiderImage(savedUser.image);
+        }
+
+        const followsSnapshot = await getDocs(
+          collection(db, "follows")
+        );
+
+        if (cancelled) return;
+
+        const normalizedName = (value: any) =>
+          String(value || "").trim().toLowerCase();
+
+        const targetUid = String(riderUid || "");
+        const targetName = normalizedName(riderName);
+
+        const viewerUid = String(savedUser?.uid || "");
+        const viewerName = normalizedName(savedUser?.name);
+
+        const uniqueFollowers = new Set<string>();
+        const uniqueFollowing = new Set<string>();
+
+        let viewerIsFollowing = false;
+
+        followsSnapshot.forEach((followDoc) => {
+          const follow = followDoc.data();
+
+          const followerUid = String(follow.followerUid || "");
+          const followingUid = String(follow.followingUid || "");
+
+          const followerName = normalizedName(follow.follower);
+          const followingName = normalizedName(follow.following);
+
+          // Match the target rider as the person being followed.
+          // Use username only for legacy records without a UID.
+          const matchesTargetAsFollowing = targetUid
+            ? followingUid
+              ? followingUid === targetUid
+              : followingName === targetName
+            : followingName === targetName;
+
+          // Match the target rider as the person doing the following.
+          const matchesTargetAsFollower = targetUid
+            ? followerUid
+              ? followerUid === targetUid
+              : followerName === targetName
+            : followerName === targetName;
+
+          // Collect unique followers of this rider.
+          if (matchesTargetAsFollowing) {
+            const identity =
+              followerUid ||
+              followerName ||
+              followDoc.id;
+
+            uniqueFollowers.add(identity);
+          }
+
+          // Collect unique riders this person follows.
+          if (matchesTargetAsFollower) {
+            const identity =
+              followingUid ||
+              followingName ||
+              followDoc.id;
+
+            uniqueFollowing.add(identity);
+          }
+
+          // Check whether the logged-in user follows this rider.
+          const followsByUid =
+            !!viewerUid &&
+            !!targetUid &&
+            followerUid === viewerUid &&
+            followingUid === targetUid;
+
+          // Legacy fallback when one or both UIDs are missing.
+          const followsByName =
+            !!viewerName &&
+            !!targetName &&
+            followerName === viewerName &&
+            followingName === targetName &&
+            (!followerUid || !followingUid);
+
+          if (followsByUid || followsByName) {
+            viewerIsFollowing = true;
+          }
+        });
+
+        if (cancelled) return;
+
+        const viewingOwnProfile =
+          !!viewerUid &&
+          !!targetUid &&
+          viewerUid === targetUid;
+
+        setIsFollowing(
+          viewingOwnProfile ? false : viewerIsFollowing
+        );
+
+        setFollowers(uniqueFollowers.size);
+        setFollowing(uniqueFollowing.size);
+
+      } catch (error) {
+        console.error(
+          "Follow status / count error:",
+          error
+        );
+      }
+    };
 
     checkFollowStatus();
+
+    return () => {
+      cancelled = true;
+    };
   }, [
-  riderName,
-  riderUid,
-  isAdminView,
-]);
+    riderName,
+    riderUid,
+    isAdminView,
+  ]);
 
   /* =========================================================
      LOAD RIDER DATA
