@@ -1,79 +1,159 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
 import PageBackground from "../components/PageBackground";
+
 import {
   collection,
   getDocs,
+  query,
+  where,
   updateDoc,
 } from "firebase/firestore";
-import { db } from "../firebase";
+
+import { onAuthStateChanged } from "firebase/auth";
+import { db, auth } from "../firebase";
+
+type NotificationItem = {
+  id: string;
+  text?: string;
+  read?: boolean;
+  createdAt?: any;
+  actorUid?: string;
+  recipientUid?: string;
+  user?: string;
+};
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] =
+    useState<NotificationItem[]>([]);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const loadNotifications = async () => {
-      const currentUser = JSON.parse(
-        localStorage.getItem("ridemateUser") || "{}"
-      );
+    let active = true;
 
-      if (!currentUser.name) return;
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!active) return;
 
-      const snapshot = await getDocs(
-        collection(db, "notifications")
-      );
-
-      const loaded: any[] = [];
-
-      for (const docSnap of snapshot.docs) {
-        const notification = docSnap.data();
-
-        if (notification.user === currentUser.name) {
-          loaded.push({
-            id: docSnap.id,
-            ...notification,
-          });
-
-          // Mark unread notifications as read
-          if (notification.read === false) {
-            await updateDoc(docSnap.ref, {
-              read: true,
-            });
-          }
-        }
+      if (!user) {
+        setNotifications([]);
+        setLoading(false);
+        return;
       }
 
-      // newest first
-      loaded.sort(
-        (a, b) => b.createdAt - a.createdAt
-      );
+      try {
+        setLoading(true);
+        setError("");
 
-      setNotifications(loaded);
+        // Fetch only notifications belonging to this signed-in user.
+        const notificationsQuery = query(
+          collection(db, "notifications"),
+          where("recipientUid", "==", user.uid)
+        );
+
+        const snapshot = await getDocs(notificationsQuery);
+
+        const loaded: NotificationItem[] = snapshot.docs.map(
+          (docSnap) => ({
+            id: docSnap.id,
+            ...docSnap.data(),
+          } as NotificationItem)
+        );
+
+        // Newest notifications first.
+        loaded.sort((a, b) => {
+          const getTime = (value: any) => {
+            if (value?.toMillis) return value.toMillis();
+            if (typeof value === "number") return value;
+            return 0;
+          };
+
+          return getTime(b.createdAt) - getTime(a.createdAt);
+        });
+
+        if (!active) return;
+
+        setNotifications(loaded);
+
+        // Mark unread notifications as read.
+        const unreadNotifications = snapshot.docs.filter(
+          (docSnap) => docSnap.data().read === false
+        );
+
+        await Promise.all(
+          unreadNotifications.map((docSnap) =>
+            updateDoc(docSnap.ref, { read: true })
+          )
+        );
+      } catch (err) {
+        console.error("Notifications loading error:", err);
+
+        if (active) {
+          setError(
+            "Unable to load notifications. Please refresh and try again."
+          );
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
     };
-
-    loadNotifications();
   }, []);
 
   return (
     <PageBackground>
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-5xl font-black text-orange-500 mb-8">
+      <div className="max-w-4xl mx-auto px-4 py-6">
+        <h1 className="text-4xl md:text-5xl font-black text-orange-500 mb-8">
           Notifications 🔔
         </h1>
 
         <div className="space-y-4">
-          {notifications.length === 0 ? (
-            <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
-              No notifications yet
+          {loading ? (
+            <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 text-gray-400">
+              Loading notifications...
+            </div>
+          ) : error ? (
+            <div className="bg-zinc-900 p-6 rounded-2xl border border-red-800 text-red-400">
+              {error}
+            </div>
+          ) : notifications.length === 0 ? (
+            <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 text-gray-400">
+              No notifications yet.
             </div>
           ) : (
             notifications.map((notification) => (
               <div
                 key={notification.id}
-                className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800"
+                className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800"
               >
-                {notification.text}
+                <div className="flex items-start gap-3">
+                  <div className="text-2xl">🔔</div>
+
+                  <div className="flex-1">
+                    <p className="text-white">
+                      {notification.text || "You have a new notification."}
+                    </p>
+
+                    {notification.createdAt && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        {new Date(
+                          typeof notification.createdAt === "number"
+                            ? notification.createdAt
+                            : notification.createdAt.toMillis?.() || 0
+                        ).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
             ))
           )}
