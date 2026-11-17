@@ -22,6 +22,7 @@ import {
   addDoc,
   setDoc,
   deleteDoc,
+  runTransaction,
 } from "firebase/firestore";
 
 import {
@@ -1354,130 +1355,141 @@ useEffect(() => {
      LIKE
   ========================================================= */
 
-  const likeTrip = async (
-    id: string,
-    currentLikes: number
-  ) => {
-    if (
-      blockedAdminAction(
-        "like rides"
-      )
-    ) {
+  
+  /* =========================================================
+     LIKE — ONE LIKE PER FIREBASE ACCOUNT
+  ========================================================= */
+
+  
+  const likeTrip = async (id: string) => {
+    if (blockedAdminAction("like rides")) {
+      return;
+    }
+
+    const firebaseUser = auth.currentUser;
+
+    if (!firebaseUser) {
+      alert("Please login first to like a ride.");
       return;
     }
 
     try {
-      const tripRef =
-        doc(
-          db,
-          "trips",
-          id
-        );
+      const tripRef = doc(db, "trips", id);
 
-      const newLikeCount =
-        currentLikes + 1;
+      const result = await runTransaction(
+        db,
+        async (transaction) => {
+          const tripSnapshot = await transaction.get(tripRef);
 
-      await updateDoc(
-        tripRef,
-        {
-          likes:
-            newLikeCount,
+          if (!tripSnapshot.exists()) {
+            throw new Error("Trip not found.");
+          }
+
+          const tripData = tripSnapshot.data();
+
+          const likedBy: string[] = Array.isArray(tripData.likedBy)
+            ? tripData.likedBy
+            : [];
+
+          const alreadyLiked = likedBy.includes(firebaseUser.uid);
+
+          let updatedLikedBy: string[];
+          let updatedLikes: number;
+
+          if (alreadyLiked) {
+            // Unlike: remove this account's UID.
+            updatedLikedBy = likedBy.filter(
+              (uid) => uid !== firebaseUser.uid
+            );
+
+            updatedLikes = Math.max(
+              0,
+              (Number(tripData.likes) || 0) - 1
+            );
+          } else {
+            // Like: add this account's UID only once.
+            updatedLikedBy = [
+              ...likedBy,
+              firebaseUser.uid,
+            ];
+
+            updatedLikes =
+              (Number(tripData.likes) || 0) + 1;
+          }
+
+          transaction.update(tripRef, {
+            likedBy: updatedLikedBy,
+            likes: updatedLikes,
+          });
+
+          return {
+            liked: !alreadyLiked,
+            likes: updatedLikes,
+            likedBy: updatedLikedBy,
+          };
         }
       );
-const firebaseUser =
-  auth.currentUser;
-      const currentUser =
-        JSON.parse(
-          localStorage.getItem(
-            "ridemateUser"
-          ) || "{}"
-        );
 
-      const trip =
-        trips.find(
-          (t) =>
-            t.id === id
-        );
-
-      if (
-  trip &&
-  trip.uid &&
-  firebaseUser &&
-  trip.uid !== firebaseUser.uid
-) {
-  const firebaseUser =
-  auth.currentUser;
-
-if (
-  trip &&
-  trip.uid &&
-  firebaseUser &&
-  trip.uid !== firebaseUser.uid
-) {
-  await addDoc(
-    collection(
-      db,
-      "notifications"
-    ),
-    {
-      recipientUid:
-        trip.uid,
-
-      actorUid:
-        firebaseUser.uid,
-
-      user:
-        currentUser.name ||
-        firebaseUser.displayName ||
-        "Someone",
-
-      text:
-        `${currentUser.name || firebaseUser.displayName || "Someone"} liked your trip ❤️`,
-
-      createdAt:
-        Date.now(),
-
-      read:
-        false,
-    }
-  );
-}
-}
-
-      setTrips(
-        (prevTrips) =>
-          prevTrips.map(
-            (trip) =>
-              trip.id === id
-                ? {
-                    ...trip,
-                    likes:
-                      newLikeCount,
-                  }
-                : trip
-          )
+      // Update the displayed trip count and liked status.
+      setTrips((prevTrips) =>
+        prevTrips.map((trip) =>
+          trip.id === id
+            ? {
+                ...trip,
+                likes: result.likes,
+                likedBy: result.likedBy,
+              }
+            : trip
+        )
       );
 
-      setAllTrips(
-        (prevTrips) =>
-          prevTrips.map(
-            (trip) =>
-              trip.id === id
-                ? {
-                    ...trip,
-                    likes:
-                      newLikeCount,
-                  }
-                : trip
-          )
+      setAllTrips((prevTrips) =>
+        prevTrips.map((trip) =>
+          trip.id === id
+            ? {
+                ...trip,
+                likes: result.likes,
+                likedBy: result.likedBy,
+              }
+            : trip
+        )
       );
+
+      // Notify the trip owner only when a new like is added.
+      if (result.liked) {
+        const trip = trips.find((t) => t.id === id);
+
+        if (
+          trip?.uid &&
+          trip.uid !== firebaseUser.uid
+        ) {
+          const currentUser = JSON.parse(
+            localStorage.getItem("ridemateUser") || "{}"
+          );
+
+          await addDoc(collection(db, "notifications"), {
+            recipientUid: trip.uid,
+            actorUid: firebaseUser.uid,
+            user:
+              currentUser.name ||
+              firebaseUser.displayName ||
+              "Someone",
+            text: `${
+              currentUser.name ||
+              firebaseUser.displayName ||
+              "Someone"
+            } liked your trip ❤️`,
+            createdAt: Date.now(),
+            read: false,
+          });
+        }
+      }
     } catch (error) {
-      console.error(
-        "Like error:",
-        error
-      );
+      console.error("Like/Unlike error:", error);
+      alert("Unable to update your like. Please try again.");
     }
   };
+
 
   /* =========================================================
      ADD COMMENT
@@ -3849,57 +3861,55 @@ const requestToJoin =
                         gap-3
                       "
                     >
-                      {/* LIKE */}
+                     
+  {/* LIKE / UNLIKE */}
 
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
+  <button
+    type="button"
+    onClick={(e) => {
+      e.stopPropagation();
+      likeTrip(trip.id);
+    }}
+    className={`
+      flex
+      items-center
+      gap-2
+      bg-black/50
+      border
+      border-white/10
+      px-4
+      py-3
+      rounded-full
+      transition
+      ${
+        isAdminView
+          ? "opacity-50 cursor-not-allowed"
+          : "hover:border-red-500/50"
+      }
+    `}
+  >
+    <Heart
+      size={18}
+      className={
+        auth.currentUser &&
+        Array.isArray(trip.likedBy) &&
+        trip.likedBy.includes(auth.currentUser.uid)
+          ? "text-red-500 fill-red-500"
+          : "text-white"
+      }
+    />
 
-                          likeTrip(
-                            trip.id,
-                            trip.likes || 0
-                          );
-                        }}
-                        className={`
-                          flex
-                          items-center
-                          gap-2
-                          bg-black/50
-                          border
-                          border-white/10
-                          px-4
-                          py-3
-                          rounded-full
-                          transition
-                          ${
-                            isAdminView
-                              ? "opacity-50 cursor-not-allowed"
-                              : "hover:border-red-500/50"
-                          }
-                        `}
-                      >
-                        <Heart
-                          size={18}
-                          className="text-white"
-                        />
+    <span className="text-sm font-bold">
+      {trip.likes || 0}
+    </span>
 
-                        <span
-                          className="
-                            text-sm
-                            font-bold
-                          "
-                        >
-                          {trip.likes ||
-                            0}
-                        </span>
+    {isAdminView && (
+      <span className="text-[10px] text-zinc-500">
+        🔒
+      </span>
+    )}
+  </button>
 
-                        {isAdminView && (
-                          <span className="text-[10px] text-zinc-500">
-                            🔒
-                          </span>
-                        )}
-                      </button>
 
                       {/* COMMENTS */}
 
